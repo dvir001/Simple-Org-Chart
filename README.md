@@ -78,6 +78,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 - `TOP_LEVEL_USER_ID` – Explicit Graph object ID for the root user.
 - `CORS_ALLOWED_ORIGINS` – Comma-separated list of allowed cross-origin hosts.
 - `RUN_INITIAL_UPDATE` – Set to `false` to skip automatic data refresh at startup.
+- `APP_PORT` – Port the application listens on (defaults to `5000`).
 
 ## Running the Application
 
@@ -88,7 +89,7 @@ docker compose pull
 docker compose up -d
 ```
 
-- Default port: `5000`. Adjust `docker-compose.yml` to map a different host port.
+- Default port: `APP_PORT` (defaults to `5000`). Override it in `.env` to change container and host bindings.
 - Persistent data resides in the `orgchart_data` volume. Remove it to rebuild caches from scratch.
 - Local execution outside Docker is not supported; use the provided container workflow for development and production.
 

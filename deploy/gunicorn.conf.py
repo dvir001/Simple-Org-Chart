@@ -2,7 +2,10 @@ import multiprocessing
 import os
 
 # Server socket
-bind = "0.0.0.0:5000"
+_default_port = os.getenv("APP_PORT", "5000")
+if not (_default_port.isdigit() and 1 <= int(_default_port) <= 65535):
+    _default_port = "5000"
+bind = f"0.0.0.0:{_default_port}"
 backlog = 2048
 
 # Worker processes

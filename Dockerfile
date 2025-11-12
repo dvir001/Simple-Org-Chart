@@ -9,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
+ENV APP_PORT=5000
 
 # Install system dependencies and create application user
 RUN apt-get update && apt-get install -y \
@@ -33,11 +34,11 @@ RUN mkdir -p static data data/photos && \
     chown -R app:app /app
 
 # Expose port
-EXPOSE 5000
+EXPOSE ${APP_PORT}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/ || exit 1
+    CMD curl -f http://localhost:${APP_PORT:-5000}/ || exit 1
 
 # Switch to non-root user
 USER app

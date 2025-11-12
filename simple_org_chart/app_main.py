@@ -82,6 +82,24 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def _parse_port(raw_value, fallback):
+    try:
+        port = int(raw_value)
+    except (TypeError, ValueError):
+        if raw_value:
+            logger.warning(f"Invalid APP_PORT value '{raw_value}', falling back to {fallback}")
+        return fallback
+
+    if not (1 <= port <= 65535):
+        logger.warning(f"APP_PORT {port} out of range 1-65535, falling back to {fallback}")
+        return fallback
+
+    return port
+
+DEFAULT_APP_PORT = 5000
+APP_PORT = _parse_port(os.environ.get('APP_PORT'), DEFAULT_APP_PORT)
+logger.info(f"Application port resolved to {APP_PORT}")
+
 app = Flask(
     __name__,
     static_folder=str(app_config.STATIC_DIR),
@@ -2894,4 +2912,4 @@ def force_update():
         }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    app.run(debug=True, host='0.0.0.0', port=APP_PORT)
