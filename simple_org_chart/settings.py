@@ -67,7 +67,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "hideNoTitle": True,
     "hideConsultantGroup": True,
     "ignoredEmployees": "",
-    "ignoredDepartments": "Consultant Group",
+    "ignoredDepartments": "",
     "ignoredTitles": "",
 }
 
