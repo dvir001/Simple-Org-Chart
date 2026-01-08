@@ -3593,41 +3593,85 @@ async function imageToDataUrl(url) {
     }
 }
 
+function cloneNodeDataForExport(nodeData) {
+    if (!nodeData || typeof nodeData !== 'object') {
+        return {};
+    }
+    const clone = { ...nodeData };
+    delete clone.children;
+    delete clone._children;
+    return clone;
+}
+
+function collectChildSources(node, includeCollapsed) {
+    const sources = [];
+    if (node && Array.isArray(node.children)) {
+        sources.push(...node.children);
+    }
+    if (includeCollapsed && node && Array.isArray(node._children)) {
+        sources.push(...node._children);
+    }
+    return sources;
+}
+
+function buildExportDataTree(node, includeCollapsed = false) {
+    if (!node || !node.data) {
+        return null;
+    }
+
+    const nodeId = node.data.id;
+    if (nodeId != null && hiddenNodeIds.has(nodeId)) {
+        return null;
+    }
+
+    const clone = cloneNodeDataForExport(node.data);
+    const childSources = collectChildSources(node, includeCollapsed);
+    const childClones = childSources
+        .map(child => buildExportDataTree(child, includeCollapsed))
+        .filter(Boolean);
+
+    if (childClones.length) {
+        clone.children = childClones;
+    }
+
+    return clone;
+}
+
+function buildExportHierarchy({ exportFullChart = false } = {}) {
+    if (!root) {
+        return null;
+    }
+
+    const includeCollapsed = exportFullChart;
+    const exportData = buildExportDataTree(root, includeCollapsed);
+    if (!exportData) {
+        return null;
+    }
+
+    return d3.hierarchy(exportData);
+}
+
 async function createExportSVG(exportFullChart = false) {
-    let nodesToExport, linksToExport;
-    
-    // Validate data availability
     if (!currentData) {
         throw new Error('No organizational chart data available');
     }
-    
-    if (!exportFullChart && !root) {
-        throw new Error('No visible chart data available');
-    }
-    
-    // Determine which nodes to export
-    if (exportFullChart) {
-        const fullHierarchy = d3.hierarchy(currentData);
-    const treeLayout = createTreeLayout();
-        const treeData = treeLayout(fullHierarchy);
-        nodesToExport = treeData.descendants();
-        linksToExport = treeData.links();
-    } else {
-    const treeLayout = createTreeLayout();
-        const treeData = treeLayout(root);
-        nodesToExport = treeData.descendants();
-        linksToExport = treeData.links();
+
+    const hierarchyRoot = buildExportHierarchy({ exportFullChart });
+    if (!hierarchyRoot) {
+        throw new Error('No chart nodes available for export');
     }
 
-    // Filter out hidden nodes and descendants
-    nodesToExport = nodesToExport.filter(n => !isHiddenNode(n));
-    const hiddenIdSet = new Set(nodesToExport.map(n => n.data.id));
-    linksToExport = linksToExport.filter(l => hiddenIdSet.has(l.source.data.id) && hiddenIdSet.has(l.target.data.id));
-    
-    // Validate that we have nodes to export
+    const treeLayout = createTreeLayout();
+    const treeData = treeLayout(hierarchyRoot);
+    let nodesToExport = treeData.descendants();
+    let linksToExport = treeData.links();
+
     if (!nodesToExport || nodesToExport.length === 0) {
         throw new Error('No chart nodes available for export');
     }
+
+    const visibleIdSet = new Set(nodesToExport.map(n => n.data.id));
+    linksToExport = linksToExport.filter(l => visibleIdSet.has(l.source.data.id) && visibleIdSet.has(l.target.data.id));
     
     // Adjust for horizontal layout
     if (currentLayout === 'horizontal') {
