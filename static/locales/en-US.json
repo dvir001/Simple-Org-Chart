@@ -57,7 +57,10 @@
 				"departmentShow": "Show departments",
 				"jobTitleTitle": "Toggle job title visibility",
 				"jobTitleHide": "Hide job titles",
-				"jobTitleShow": "Show job titles"
+				"jobTitleShow": "Show job titles",
+				"officeTitle": "Toggle office visibility",
+				"officeHide": "Hide office locations",
+				"officeShow": "Show office locations"
 			},
 			"controls": {
 				"zoomIn": "Zoom in",

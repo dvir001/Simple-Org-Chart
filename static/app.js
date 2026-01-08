@@ -25,6 +25,9 @@ let serverShowDepartments = null;
 const SHOW_JOB_TITLES_PREFERENCE_KEY = 'orgChart.showJobTitles';
 let userShowJobTitlesPreference = null;
 let serverShowJobTitles = null;
+const SHOW_OFFICE_PREFERENCE_KEY = 'orgChart.showOffice';
+let userShowOfficePreference = null;
+let serverShowOffice = null;
 const SHOW_NAMES_PREFERENCE_KEY = 'orgChart.showNames';
 let userShowNamesPreference = null;
 let serverShowNames = null;
@@ -550,6 +553,39 @@ function clearJobTitlePreference() {
     }
 }
 
+function loadStoredOfficePreference() {
+    userShowOfficePreference = null;
+    try {
+        const stored = localStorage.getItem(SHOW_OFFICE_PREFERENCE_KEY);
+        if (stored === 'true') {
+            userShowOfficePreference = true;
+        } else if (stored === 'false') {
+            userShowOfficePreference = false;
+        }
+    } catch (error) {
+        console.warn('Unable to access office visibility preference storage:', error);
+        userShowOfficePreference = null;
+    }
+}
+
+function storeOfficePreference(value) {
+    userShowOfficePreference = value;
+    try {
+        localStorage.setItem(SHOW_OFFICE_PREFERENCE_KEY, String(value));
+    } catch (error) {
+        console.warn('Unable to persist office visibility preference:', error);
+    }
+}
+
+function clearOfficePreference() {
+    userShowOfficePreference = null;
+    try {
+        localStorage.removeItem(SHOW_OFFICE_PREFERENCE_KEY);
+    } catch (error) {
+        console.warn('Unable to clear office visibility preference storage:', error);
+    }
+}
+
 function loadStoredNamePreference() {
     userShowNamesPreference = null;
     try {
@@ -589,6 +625,16 @@ function getEffectiveJobTitlesEnabled() {
         : (!appSettings || appSettings.showJobTitles !== false);
     if (userShowJobTitlesPreference !== null) {
         return userShowJobTitlesPreference;
+    }
+    return serverEnabled;
+}
+
+function getEffectiveOfficeEnabled() {
+    const serverEnabled = (serverShowOffice != null)
+        ? serverShowOffice
+        : Boolean(appSettings && appSettings.showOffice === true);
+    if (userShowOfficePreference !== null) {
+        return userShowOfficePreference;
     }
     return serverEnabled;
 }
@@ -640,6 +686,10 @@ function isDepartmentVisible() {
     return !appSettings || appSettings.showDepartments !== false;
 }
 
+function isOfficeVisible() {
+    return !!(appSettings && appSettings.showOffice);
+}
+
 function getVisibleJobTitleText(person, { includeFallback = true, useOverrides = true } = {}) {
     if (!isJobTitleVisible()) return '';
     const employeeId = person && (person.id || person.employeeId || person.data?.id);
@@ -681,6 +731,40 @@ function getVisibleDepartmentText(person, { includeFallback = false, fallback, u
     }
     const translation = t('index.employee.detail.departmentUnknown');
     return translation === 'index.employee.detail.departmentUnknown' ? 'Unknown department' : translation;
+}
+
+function getVisibleOfficeText(person) {
+    if (!isOfficeVisible()) {
+        return '';
+    }
+    if (!person || typeof person !== 'object') {
+        return '';
+    }
+    const rawLocation = typeof person.location === 'string' ? person.location.trim() : '';
+    if (rawLocation) {
+        return rawLocation;
+    }
+    const rawOffice = typeof person.officeLocation === 'string' ? person.officeLocation.trim() : '';
+    return rawOffice;
+}
+
+function getDepartmentDisplayText(person, options = {}) {
+    const departmentsVisible = isDepartmentVisible();
+    if (!departmentsVisible) {
+        return '';
+    }
+    const baseDepartment = getVisibleDepartmentText(person, options);
+    if (!isOfficeVisible()) {
+        return baseDepartment;
+    }
+    const officeText = getVisibleOfficeText(person);
+    if (baseDepartment && officeText) {
+        return `${baseDepartment} (${officeText})`;
+    }
+    if (!baseDepartment && officeText) {
+        return officeText;
+    }
+    return baseDepartment;
 }
 
 function persistHiddenIds() {
@@ -918,10 +1002,14 @@ async function loadSettings() {
             if (!Object.prototype.hasOwnProperty.call(appSettings, 'showNames')) {
                 appSettings.showNames = true;
             }
+            if (!Object.prototype.hasOwnProperty.call(appSettings, 'showOffice')) {
+                appSettings.showOffice = false;
+            }
             serverShowEmployeeCount = appSettings.showEmployeeCount !== false;
             serverShowProfileImages = appSettings.showProfileImages !== false;
             serverShowDepartments = appSettings.showDepartments !== false;
             serverShowJobTitles = appSettings.showJobTitles !== false;
+            serverShowOffice = appSettings.showOffice === true;
             serverShowNames = appSettings.showNames !== false;
             await applySettings();
         } else {
@@ -1060,6 +1148,11 @@ function setupStaticEventListeners() {
     const departmentBtn = document.getElementById('departmentToggleBtn');
     if (departmentBtn) {
         departmentBtn.addEventListener('click', toggleDepartmentVisibility);
+    }
+
+    const officeBtn = document.getElementById('officeToggleBtn');
+    if (officeBtn) {
+        officeBtn.addEventListener('click', toggleOfficeVisibility);
     }
 
     const jobTitleBtn = document.getElementById('jobTitleToggleBtn');
@@ -1316,6 +1409,19 @@ async function applySettings() {
         departmentBtn.setAttribute('aria-label', departmentTitle);
     }
 
+    const showOffice = getEffectiveOfficeEnabled();
+    appSettings.showOffice = showOffice;
+    const officeBtn = document.getElementById('officeToggleBtn');
+    if (officeBtn) {
+        officeBtn.classList.toggle('active', showOffice);
+        officeBtn.setAttribute('aria-pressed', String(showOffice));
+        const officeHide = t('index.toolbar.layout.officeHide', { defaultValue: 'Hide office locations' });
+        const officeShow = t('index.toolbar.layout.officeShow', { defaultValue: 'Show office locations' });
+        const officeTitle = showOffice ? officeHide : officeShow;
+        officeBtn.title = officeTitle;
+        officeBtn.setAttribute('aria-label', officeTitle);
+    }
+
     const showJobTitles = getEffectiveJobTitlesEnabled();
     appSettings.showJobTitles = showJobTitles;
     const titleBtn = document.getElementById('jobTitleToggleBtn');
@@ -1466,6 +1572,18 @@ async function updateAuthDependentUI() {
         departmentBtn.setAttribute('aria-label', departmentTitle);
     }
 
+    const officeBtn = document.getElementById('officeToggleBtn');
+    if (officeBtn) {
+        const showOffice = getEffectiveOfficeEnabled();
+        officeBtn.classList.toggle('active', showOffice);
+        officeBtn.setAttribute('aria-pressed', String(showOffice));
+        const officeHide = t('index.toolbar.layout.officeHide', { defaultValue: 'Hide office locations' });
+        const officeShow = t('index.toolbar.layout.officeShow', { defaultValue: 'Show office locations' });
+        const officeTitle = showOffice ? officeHide : officeShow;
+        officeBtn.title = officeTitle;
+        officeBtn.setAttribute('aria-label', officeTitle);
+    }
+
     const jobTitleBtn = document.getElementById('jobTitleToggleBtn');
     if (jobTitleBtn) {
         const showTitles = getEffectiveJobTitlesEnabled();
@@ -1505,6 +1623,7 @@ async function init() {
         loadStoredProfileImagePreference();
         loadStoredNamePreference();
         loadStoredDepartmentPreference();
+        loadStoredOfficePreference();
         loadStoredJobTitlePreference();
         loadSessionHighlightPreference();
 
@@ -1882,6 +2001,44 @@ async function toggleDepartmentVisibility() {
     await updateAuthDependentUI();
 }
 
+async function toggleOfficeVisibility() {
+    await waitForTranslations();
+    const btn = document.getElementById('officeToggleBtn');
+    const currentValue = getEffectiveOfficeEnabled();
+    const newValue = !currentValue;
+
+    if (!appSettings) {
+        appSettings = {};
+    }
+
+    appSettings.showOffice = newValue;
+
+    if (serverShowOffice != null && newValue === serverShowOffice) {
+        clearOfficePreference();
+    } else {
+        storeOfficePreference(newValue);
+    }
+
+    if (btn) {
+        btn.classList.toggle('active', newValue);
+        btn.setAttribute('aria-pressed', String(newValue));
+        const officeHide = t('index.toolbar.layout.officeHide', { defaultValue: 'Hide office locations' });
+        const officeShow = t('index.toolbar.layout.officeShow', { defaultValue: 'Show office locations' });
+        const officeTitle = newValue ? officeHide : officeShow;
+        btn.title = officeTitle;
+        btn.setAttribute('aria-label', officeTitle);
+    }
+
+    if (root) {
+        update(root);
+    }
+
+    refreshSearchResultsPresentation();
+    refreshEmployeeDetailPanel();
+
+    await updateAuthDependentUI();
+}
+
 async function toggleJobTitleVisibility() {
     await waitForTranslations();
     const btn = document.getElementById('jobTitleToggleBtn');
@@ -2028,6 +2185,7 @@ function displayTopUserResults(employees, container, input) {
         item.dataset.name = employee.name || '';
         item.dataset.title = employee.title || '';
         item.dataset.department = employee.department || '';
+        item.dataset.location = employee.location || employee.officeLocation || '';
 
         const nameDiv = document.createElement('div');
         nameDiv.className = 'search-result-name';
@@ -2037,7 +2195,7 @@ function displayTopUserResults(employees, container, input) {
 
         const metaDiv = document.createElement('div');
         metaDiv.className = 'search-result-title';
-    populateResultMeta(metaDiv, employee);
+        populateResultMeta(metaDiv, employee);
 
         item.appendChild(nameDiv);
         item.appendChild(metaDiv);
@@ -2058,7 +2216,7 @@ function displayTopUserResults(employees, container, input) {
 function populateResultMeta(element, data, { includeTitleFallback = true, includeDepartmentFallback = false } = {}) {
     if (!element) return;
     const titleText = getVisibleJobTitleText(data, { includeFallback: includeTitleFallback });
-    const departmentText = getVisibleDepartmentText(data, { includeFallback: includeDepartmentFallback });
+    const departmentText = getDepartmentDisplayText(data, { includeFallback: includeDepartmentFallback });
     const segments = [];
     if (titleText) segments.push(titleText);
     if (departmentText) segments.push(departmentText);
@@ -2577,10 +2735,10 @@ function update(source) {
             .attr('x', getLabelOffsetX())
             .attr('y', initialDepartmentY)
             .attr('text-anchor', getLabelAnchor())
-            .style('font-size', d => getDepartmentFontSizePx(getVisibleDepartmentText(d.data, { includeFallback: true, fallback: 'Not specified' })))
+            .style('font-size', d => getDepartmentFontSizePx(getDepartmentDisplayText(d.data, { includeFallback: true, fallback: 'Not specified' })))
             .style('font-style', 'italic')
             .style('fill', '#666')
-            .text(d => getVisibleDepartmentText(d.data, { includeFallback: true, fallback: 'Not specified' }));
+            .text(d => getDepartmentDisplayText(d.data, { includeFallback: true, fallback: 'Not specified' }));
     }
 
     const countGroup = nodeEnter.append('g')
@@ -2785,7 +2943,7 @@ function update(source) {
                     .style('font-style', 'italic')
                     .style('fill', '#666');
             }
-            const departmentText = getVisibleDepartmentText(d.data, { includeFallback: true, fallback: 'Not specified' });
+            const departmentText = getDepartmentDisplayText(d.data, { includeFallback: true, fallback: 'Not specified' });
             departmentSelection
                 .attr('x', getLabelOffsetX())
                 .attr('y', departmentY)
@@ -3758,7 +3916,7 @@ async function createExportSVG(exportFullChart = false) {
         }
 
         // Department
-        const departmentText = getVisibleDepartmentText(d.data, { includeFallback: true, fallback: 'Not specified' });
+        const departmentText = getDepartmentDisplayText(d.data, { includeFallback: true, fallback: 'Not specified' });
         if (departmentsVisible && departmentText) {
             const deptText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             deptText.setAttribute('class', 'node-department');
@@ -4125,7 +4283,7 @@ function showEmployeeDetail(employee) {
     const jobTitleDisplay = getVisibleJobTitleText(detailEmployee, { includeFallback: true });
     const baseTitle = getVisibleJobTitleText(detailEmployee, { includeFallback: true, useOverrides: false });
     const titleOverrideActive = isTitleOverridden(detailEmployee.id);
-    const departmentDisplay = getVisibleDepartmentText(detailEmployee, { includeFallback: true, fallback: departmentUnknown });
+    const departmentDisplay = getDepartmentDisplayText(detailEmployee, { includeFallback: true, fallback: departmentUnknown });
     const baseDepartment = getVisibleDepartmentText(detailEmployee, { includeFallback: true, useOverrides: false, fallback: departmentUnknown });
     const departmentOverrideActive = isDepartmentOverridden(detailEmployee.id);
     const namesVisible = isNameVisible();
@@ -4481,6 +4639,7 @@ function displaySearchResults(results) {
         item.dataset.name = emp.name || '';
         item.dataset.title = emp.title || '';
         item.dataset.department = emp.department || '';
+        item.dataset.location = emp.location || emp.officeLocation || '';
 
         const name = document.createElement('div');
         name.className = 'search-result-name';
@@ -4490,7 +4649,7 @@ function displaySearchResults(results) {
 
         const title = document.createElement('div');
         title.className = 'search-result-title';
-    populateResultMeta(title, emp);
+        populateResultMeta(title, emp);
 
         item.appendChild(name);
         item.appendChild(title);
@@ -4511,7 +4670,8 @@ function refreshSearchResultsPresentation() {
                 : {
                     id: employeeId,
                     title: item.dataset.title || '',
-                    department: item.dataset.department || ''
+                    department: item.dataset.department || '',
+                    location: item.dataset.location || ''
                 };
             populateResultMeta(meta, metaSource);
             if (nameElement) {
@@ -4537,7 +4697,8 @@ function refreshSearchResultsPresentation() {
                 : {
                     id: employeeId,
                     title: item.dataset.title || '',
-                    department: item.dataset.department || ''
+                    department: item.dataset.department || '',
+                    location: item.dataset.location || ''
                 };
             populateResultMeta(meta, metaSource);
             if (nameElement) {

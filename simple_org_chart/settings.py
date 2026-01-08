@@ -39,6 +39,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "showNames": True,
     "showDepartments": True,
     "showJobTitles": True,
+    "showOffice": False,
     "showEmployeeCount": True,
     "showProfileImages": True,
     "printOrientation": "landscape",
