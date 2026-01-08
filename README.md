@@ -104,7 +104,42 @@ docker compose up -d
    - Employees hired in the last 365 days
    - Users hidden by filters
 - **Export Options**: SVG/PNG/PDF snapshots and XLSX exports for reports and chart data.
+- **MicroSIP Directory Feed**: Serve a MicroSIP contacts JSON at /contacts.json using cached employee data.
 - **Caching & Scheduling**: JSON caches regenerate nightly; manual refresh endpoints keep data current on demand.
+
+## MicroSIP Directory
+
+SimpleOrgChart publishes a MicroSIP-compatible directory export at /contacts.json.
+
+- The feed reuses the cached employee list; trigger a manual refresh if the response is empty.
+- Response headers disable caching so MicroSIP always retrieves the latest contacts.
+- Fields include number, name, firstname, lastname, phone, mobile, email, address, city, state, comment, presence, starred, and info.
+- Contacts without a desk or mobile number are skipped to keep the directory free of unreachable entries.
+- Add extra entries from the Configure → Custom MicroSIP Contacts textarea (one Name,Number pair per line) when you need off-chart contacts in the feed.
+
+Example payload:
+
+```json
+{
+   "refresh": 1736073600,
+   "items": [
+      {
+         "number": "5551234567",
+         "name": "Ada Lovelace",
+         "firstname": "Ada",
+         "lastname": "Lovelace",
+         "phone": "555-123-4567",
+         "mobile": "555-987-6543",
+         "email": "ada@example.com",
+         "city": "London",
+         "state": "",
+         "comment": "Engineering - Research",
+         "presence": 0,
+         "starred": 0
+      }
+   ]
+}
+```
 
 ## Reporting Caches
 

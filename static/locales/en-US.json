@@ -178,11 +178,22 @@
 			"behavior": {
 				"title": "⚙️ Behavior Settings"
 			},
+			"directory": {
+				"title": "📇 Directory Integrations"
+			},
 			"export": {
 				"title": "📄 Export to XLSX Options"
 			},
 			"data": {
 				"title": "📊 Data Management"
+			}
+		},
+		"directory": {
+			"customContacts": {
+				"label": "Custom MicroSIP Contacts",
+				"description": "Add contacts that should appear in the MicroSIP feed even if they are not in the org chart. Use one entry per line in the format Name,Number.",
+				"placeholder": "Ada Lovelace,555-123-4567",
+				"hint": "Lines starting with # are ignored. Numbers accept digits, spaces, and punctuation."
 			}
 		},
 		"appearance": {

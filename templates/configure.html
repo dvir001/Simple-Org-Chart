@@ -290,6 +290,20 @@
                 </div>
             </div>
 
+            <h2 class="section-heading" data-i18n="configure.sections.directory.title">📇 Directory Integrations</h2>
+
+            <div class="config-group">
+                <div class="config-item">
+                    <label class="config-label" data-i18n="configure.directory.customContacts.label">Custom MicroSIP Contacts</label>
+                    <div class="config-description" data-i18n="configure.directory.customContacts.description">Add contacts that should appear in the MicroSIP feed even if they are not in the org chart. Use one entry per line in the format Name,Number.</div>
+                    <div class="config-controls config-controls--stacked">
+                        <textarea id="customDirectoryContacts" rows="6" class="config-textarea" placeholder="Ada Lovelace,555-123-4567" data-i18n-placeholder="configure.directory.customContacts.placeholder"></textarea>
+                        <div class="config-hint" data-i18n="configure.directory.customContacts.hint">Lines starting with # are ignored. Numbers accept digits, spaces, and punctuation.</div>
+                        <button class="btn btn-secondary" type="button" data-config-action="reset-custom-directory-contacts" data-i18n="configure.buttons.resetDefault">Reset to Default</button>
+                    </div>
+                </div>
+            </div>
+
             <h2 class="section-heading" data-i18n="configure.sections.export.title">📄 Export to XLSX Options</h2>
 
             <div class="config-group">

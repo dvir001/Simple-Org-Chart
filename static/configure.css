@@ -156,6 +156,37 @@ body:not(.is-loading) .header {
     flex-wrap: wrap;
 }
 
+.config-controls--stacked {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.config-textarea {
+    width: 100%;
+    min-height: 140px;
+    padding: 12px 14px;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.96);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    resize: vertical;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.config-textarea:focus {
+    outline: none;
+    border-color: rgba(0, 120, 212, 0.55);
+    box-shadow: 0 0 0 4px rgba(0, 120, 212, 0.12);
+    background: #fff;
+}
+
+.config-hint {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
 .tag-picker-row {
     align-items: flex-start;
 }

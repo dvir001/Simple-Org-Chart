@@ -882,6 +882,18 @@ function applySettings(settings) {
         if (el2) el2.value = settings.multiLineChildrenThreshold;
     }
 
+    const customContactsField = document.getElementById('customDirectoryContacts');
+    if (customContactsField) {
+        const rawValue = settings.customDirectoryContacts;
+        if (typeof rawValue === 'string') {
+            customContactsField.value = rawValue;
+        } else if (Array.isArray(rawValue)) {
+            customContactsField.value = rawValue.join('\n');
+        } else {
+            customContactsField.value = '';
+        }
+    }
+
     applyExportColumnSettings(settings);
 }
 
@@ -1257,6 +1269,15 @@ function resetIgnoredEmployees() {
     markUnsavedChange();
 }
 
+function resetCustomDirectoryContacts() {
+    const textarea = document.getElementById('customDirectoryContacts');
+    if (!textarea) {
+        return;
+    }
+    textarea.value = '';
+    markUnsavedChange();
+}
+
 function resetAllSettings() {
     resetChartTitle();
     resetHeaderColor();
@@ -1269,6 +1290,7 @@ function resetAllSettings() {
     resetIgnoredTitles();
     resetIgnoredEmployees();
     resetExportColumns();
+    resetCustomDirectoryContacts();
 
     document.getElementById('searchAutoExpand').checked = true;
     document.getElementById('searchHighlight').checked = true;
@@ -1343,7 +1365,8 @@ async function saveAllSettings() {
         printOrientation: document.getElementById('printOrientation').value,
         printSize: document.getElementById('printSize').value,
         multiLineChildrenThreshold: parseInt(document.getElementById('multiLineChildrenThreshold')?.value || '20', 10),
-        exportXlsxColumns: getExportColumnSettings()
+        exportXlsxColumns: getExportColumnSettings(),
+        customDirectoryContacts: (document.getElementById('customDirectoryContacts')?.value || '').trim()
     };
 
     try {
@@ -1448,6 +1471,7 @@ function registerConfigActions() {
         'reset-ignored-titles': resetIgnoredTitles,
         'reset-ignored-departments': resetIgnoredDepartments,
     'reset-ignored-employees': resetIgnoredEmployees,
+        'reset-custom-directory-contacts': resetCustomDirectoryContacts,
         'reset-multiline-settings': resetMultiLineSettings,
         'reset-export-columns': resetExportColumns,
         'trigger-update': triggerUpdate,
