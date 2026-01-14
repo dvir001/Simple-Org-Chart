@@ -63,7 +63,6 @@ cp .env.template .env
 - `AZURE_TENANT_ID` – Directory (tenant) ID.
 - `AZURE_CLIENT_ID` – Application (client) ID.
 - `AZURE_CLIENT_SECRET` – Client secret value.
-- `TOP_LEVEL_USER_EMAIL` – Email for the org chart root user.
 - `ADMIN_PASSWORD` – Protects `/configure` and `/reports`.
 - `SECRET_KEY` – 64+ character random string for Flask sessions.
 
@@ -75,7 +74,6 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 **Optional values**
 
-- `TOP_LEVEL_USER_ID` – Explicit Graph object ID for the root user.
 - `CORS_ALLOWED_ORIGINS` – Comma-separated list of allowed cross-origin hosts.
 - `RUN_INITIAL_UPDATE` – Set to `false` to skip automatic data refresh at startup.
 - `APP_PORT` – Port the application listens on (defaults to `5000`).

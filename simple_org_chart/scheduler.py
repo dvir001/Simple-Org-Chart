@@ -92,9 +92,20 @@ def _schedule_loop() -> None:
     schedule.clear()
     settings = load_settings()
 
-    if os.environ.get("RUN_INITIAL_UPDATE", "true").lower() == "true":
-        logger.info("[%s] Running initial employee data update on startup...", datetime.now())
-        update_callback()
+    run_initial = os.environ.get("RUN_INITIAL_UPDATE", "auto").lower()
+    if run_initial == "true":
+        logger.info("[%s] Running initial employee data update on startup (RUN_INITIAL_UPDATE=true)...", datetime.now())
+        update_callback(source='startup')
+    elif run_initial == "auto":
+        # Only run initial update if no cached data exists
+        from simple_org_chart.config import DATA_FILE
+        if not os.path.exists(DATA_FILE):
+            logger.info("[%s] No cached data found; running initial employee data update...", datetime.now())
+            update_callback(source='startup-no-cache')
+        else:
+            logger.info("[%s] Cached data exists; skipping initial update (set RUN_INITIAL_UPDATE=true to force)", datetime.now())
+    else:
+        logger.info("[%s] Initial update skipped (RUN_INITIAL_UPDATE=%s)", datetime.now(), run_initial)
 
     update_time = _parse_time_string(settings.get("updateTime"))
     tz = _resolve_timezone(settings.get("updateTimezone"))

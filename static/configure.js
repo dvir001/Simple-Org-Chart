@@ -32,6 +32,7 @@ const EXPORT_COLUMN_DEFAULTS = {
 };
 
 const tagPickers = {};
+let topLevelUserPicker = null;
 let filterMetadata = { jobTitles: [], departments: [], employees: [] };
 
 let hasUnsavedChanges = false;
@@ -53,6 +54,38 @@ const NODE_COLOR_DEFAULTS = {
     level6: '#FAD7FF',
     level7: '#D7F8FF'
 };
+
+function resolveTranslation(key, fallback) {
+    return getTranslation(key, fallback);
+}
+
+function updateLastUpdatedDisplay(value) {
+    const lastUpdatedEl = document.getElementById('dataLastUpdated');
+    if (!lastUpdatedEl) {
+        return;
+    }
+    if (value) {
+        const text = typeof value === 'string' ? value.trim() : `${value}`;
+        if (text) {
+            lastUpdatedEl.textContent = text;
+            return;
+        }
+    }
+    lastUpdatedEl.textContent = resolveTranslation('configure.data.manualUpdate.lastUpdatedPending', 'Pending');
+}
+
+function setUpdateStatus(key, fallback) {
+    const statusEl = document.getElementById('updateStatus');
+    if (!statusEl) {
+        return;
+    }
+    statusEl.title = '';
+    if (!key) {
+        statusEl.textContent = fallback || '';
+        return;
+    }
+    statusEl.textContent = resolveTranslation(key, fallback);
+}
 
 function getTranslation(key, fallbackText) {
     try {
@@ -577,6 +610,270 @@ class TagPicker {
     }
 }
 
+/**
+ * SingleUserPicker - a picker for selecting a single employee (e.g. top-level user)
+ * Similar to TagPicker but only allows one selection at a time.
+ */
+class SingleUserPicker {
+    constructor({ pickerId, hiddenInputId, hiddenUserIdInputId, options = [], placeholder = '' }) {
+        this.root = document.getElementById(pickerId);
+        this.hiddenInput = document.getElementById(hiddenInputId);
+        this.hiddenUserIdInput = hiddenUserIdInputId ? document.getElementById(hiddenUserIdInputId) : null;
+        if (!this.root || !this.hiddenInput) {
+            this.enabled = false;
+            return;
+        }
+
+        this.enabled = true;
+        // Options can be strings or objects with { label, email, id }
+        this.options = [];
+        this.optionsMap = new Map(); // email/label -> { label, email, id }
+        this.setOptions(options);
+
+        this.selectedContainer = this.root.querySelector('[data-role="selected-user"]');
+        this.dropdown = this.root.querySelector('[data-role="dropdown"]');
+        this.input = this.root.querySelector('.single-user-picker__input');
+        if (placeholder && this.input) {
+            this.input.placeholder = placeholder;
+        }
+
+        this.selectedValue = null; // { label, email, id }
+        this.filteredOptions = [];
+
+        this.handleDocumentClick = this.handleDocumentClick.bind(this);
+        this.handleDropdownClick = this.handleDropdownClick.bind(this);
+        this.handleRemoveClick = this.handleRemoveClick.bind(this);
+        this.handleInput = this.handleInput.bind(this);
+        this.handleKeyDown = this.handleKeyDown.bind(this);
+
+        if (this.selectedContainer) {
+            this.selectedContainer.addEventListener('click', this.handleRemoveClick);
+        }
+        if (this.dropdown) {
+            this.dropdown.addEventListener('click', this.handleDropdownClick);
+        }
+        if (this.input) {
+            this.input.addEventListener('input', this.handleInput);
+            this.input.addEventListener('focus', () => this.openDropdown());
+            this.input.addEventListener('keydown', this.handleKeyDown);
+        }
+
+        document.addEventListener('click', this.handleDocumentClick);
+        this.renderSelected();
+        this.closeDropdown();
+        this.updateHiddenInputs();
+    }
+
+    destroy() {
+        if (!this.enabled) return;
+        document.removeEventListener('click', this.handleDocumentClick);
+        this.enabled = false;
+    }
+
+    setOptions(options) {
+        if (!this.enabled && this.root) return;
+        this.options = [];
+        this.optionsMap = new Map();
+
+        (Array.isArray(options) ? options : []).forEach(opt => {
+            if (!opt) return;
+            let entry;
+            if (typeof opt === 'object' && opt.label) {
+                entry = { label: opt.label, email: opt.email || '', id: opt.id || '' };
+            } else if (typeof opt === 'string') {
+                // Parse "Name <email>" format
+                const match = opt.match(/^(.+?)\s*<([^>]+)>$/);
+                if (match) {
+                    entry = { label: opt, email: match[2].trim(), id: '' };
+                } else {
+                    entry = { label: opt, email: opt, id: '' };
+                }
+            } else {
+                return;
+            }
+            const key = (entry.email || entry.label).toLowerCase();
+            if (!this.optionsMap.has(key)) {
+                this.options.push(entry);
+                this.optionsMap.set(key, entry);
+            }
+        });
+
+        this.options.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+        this.refreshDropdown();
+    }
+
+    setValue(email, userId = '') {
+        if (!this.enabled) return;
+        const normalizedEmail = (email || '').trim().toLowerCase();
+        if (!normalizedEmail) {
+            this.selectedValue = null;
+        } else {
+            // Try to find in options map
+            const found = this.optionsMap.get(normalizedEmail);
+            if (found) {
+                this.selectedValue = { ...found, id: userId || found.id };
+            } else {
+                // Create a simple entry
+                this.selectedValue = { label: email, email: email, id: userId };
+            }
+        }
+        this.renderSelected();
+        this.updateHiddenInputs();
+        if (this.input) {
+            this.input.value = '';
+        }
+        this.closeDropdown();
+    }
+
+    getValue() {
+        if (!this.enabled) return { email: '', id: '' };
+        return this.selectedValue
+            ? { email: this.selectedValue.email, id: this.selectedValue.id }
+            : { email: '', id: '' };
+    }
+
+    clear() {
+        this.setValue('');
+        markUnsavedChange();
+    }
+
+    handleInput() {
+        this.refreshDropdown();
+        this.openDropdown();
+    }
+
+    handleKeyDown(event) {
+        if ((event.key === 'Enter' || event.key === 'Tab') && this.input) {
+            const query = this.input.value.trim();
+            if (!query) return;
+            if (this.filteredOptions.length > 0) {
+                this.selectOption(this.filteredOptions[0]);
+            }
+            event.preventDefault();
+        }
+    }
+
+    handleDropdownClick(event) {
+        const option = event.target.closest('[data-email]');
+        if (!option) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const email = option.getAttribute('data-email') || '';
+        const id = option.getAttribute('data-id') || '';
+        const label = option.getAttribute('data-label') || email;
+        this.selectOption({ label, email, id });
+    }
+
+    handleRemoveClick(event) {
+        const removeBtn = event.target.closest('.single-user-picker__remove');
+        if (!removeBtn) return;
+        this.clear();
+    }
+
+    handleDocumentClick(event) {
+        if (!this.root) return;
+        if (!this.root.contains(event.target)) {
+            this.closeDropdown();
+        }
+    }
+
+    selectOption(entry) {
+        if (!this.enabled || !entry) return;
+        this.selectedValue = { label: entry.label, email: entry.email, id: entry.id || '' };
+        this.renderSelected();
+        this.updateHiddenInputs();
+        if (this.input) {
+            this.input.value = '';
+        }
+        this.closeDropdown();
+        markUnsavedChange();
+    }
+
+    renderSelected() {
+        if (!this.selectedContainer) return;
+        this.selectedContainer.innerHTML = '';
+        if (!this.selectedValue) {
+            if (this.input) this.input.style.display = '';
+            return;
+        }
+        // Hide input when user is selected
+        if (this.input) this.input.style.display = 'none';
+
+        const tag = document.createElement('span');
+        tag.className = 'single-user-picker__tag';
+
+        const label = document.createElement('span');
+        label.textContent = this.selectedValue.label;
+        tag.appendChild(label);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'single-user-picker__remove';
+        removeBtn.setAttribute('aria-label', 'Remove selection');
+        removeBtn.innerHTML = '&times;';
+        tag.appendChild(removeBtn);
+
+        this.selectedContainer.appendChild(tag);
+    }
+
+    refreshDropdown() {
+        if (!this.dropdown) return;
+        const query = this.input ? this.input.value.trim().toLowerCase() : '';
+
+        let filtered = this.options;
+        if (query) {
+            filtered = this.options.filter(opt =>
+                opt.label.toLowerCase().includes(query) ||
+                opt.email.toLowerCase().includes(query)
+            );
+        }
+        this.filteredOptions = filtered.slice(0, 60);
+
+        this.dropdown.innerHTML = '';
+        if (this.filteredOptions.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'single-user-picker__option single-user-picker__option--empty';
+            empty.textContent = query ? 'No matches found' : 'No options available';
+            this.dropdown.appendChild(empty);
+            return;
+        }
+
+        this.filteredOptions.forEach(opt => {
+            const optionElement = document.createElement('div');
+            optionElement.className = 'single-user-picker__option';
+            optionElement.dataset.email = opt.email;
+            optionElement.dataset.id = opt.id || '';
+            optionElement.dataset.label = opt.label;
+
+            const title = document.createElement('span');
+            title.className = 'single-user-picker__option-title';
+            title.textContent = opt.label;
+            optionElement.appendChild(title);
+
+            this.dropdown.appendChild(optionElement);
+        });
+    }
+
+    openDropdown() {
+        if (!this.dropdown) return;
+        this.dropdown.hidden = false;
+    }
+
+    closeDropdown() {
+        if (!this.dropdown) return;
+        this.dropdown.hidden = true;
+    }
+
+    updateHiddenInputs() {
+        if (this.hiddenInput) {
+            this.hiddenInput.value = this.selectedValue ? this.selectedValue.email : '';
+        }
+        if (this.hiddenUserIdInput) {
+            this.hiddenUserIdInput.value = this.selectedValue ? (this.selectedValue.id || '') : '';
+        }
+    }
+}
+
 async function loadFilterMetadata() {
     try {
         const response = await fetch(`${API_BASE_URL}/api/metadata/options`, { credentials: 'same-origin' });
@@ -615,6 +912,15 @@ function initializeTagPickers(metadata) {
         hiddenInputId: 'ignoredEmployeesInput',
         options: metadata.employees,
         placeholder: document.getElementById('ignoredEmployeesSearch')?.getAttribute('placeholder') || ''
+    });
+
+    // Initialize single user picker for top-level user
+    topLevelUserPicker = new SingleUserPicker({
+        pickerId: 'topLevelUserPicker',
+        hiddenInputId: 'topLevelUserInput',
+        hiddenUserIdInputId: 'topLevelUserIdInput',
+        options: metadata.employees,
+        placeholder: document.getElementById('topLevelUserSearch')?.getAttribute('placeholder') || ''
     });
 }
 
@@ -869,6 +1175,14 @@ function applySettings(settings) {
         }
     }
 
+    // Apply top-level user setting
+    if (topLevelUserPicker && topLevelUserPicker.enabled) {
+        topLevelUserPicker.setOptions(filterMetadata.employees || []);
+        const email = settings.topLevelUserEmail || '';
+        const userId = settings.topLevelUserId || '';
+        topLevelUserPicker.setValue(email, userId);
+    }
+
     if (settings.printOrientation) {
         document.getElementById('printOrientation').value = settings.printOrientation;
     }
@@ -892,6 +1206,24 @@ function applySettings(settings) {
         } else {
             customContactsField.value = '';
         }
+    }
+
+    const updateMeta = settings.dataUpdateStatus || {};
+    if (updateMeta.state === 'running') {
+        updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
+        setUpdateStatus('configure.data.manualUpdate.statusUpdating', 'Updating...');
+        startUpdatePolling();
+    } else {
+        updateLastUpdatedDisplay(settings.dataLastUpdatedAt);
+        if (updateMeta.success === false) {
+            setUpdateStatus('configure.data.manualUpdate.statusFailed', '✗ Update failed');
+        } else {
+            setUpdateStatus(null, '');
+        }
+    }
+    const statusEl = document.getElementById('updateStatus');
+    if (statusEl) {
+        statusEl.title = updateMeta.error || '';
     }
 
     applyExportColumnSettings(settings);
@@ -1269,6 +1601,18 @@ function resetIgnoredEmployees() {
     markUnsavedChange();
 }
 
+function resetTopLevelUser() {
+    if (topLevelUserPicker && typeof topLevelUserPicker.clear === 'function') {
+        topLevelUserPicker.clear();
+    } else {
+        const emailEl = document.getElementById('topLevelUserInput');
+        const idEl = document.getElementById('topLevelUserIdInput');
+        if (emailEl) emailEl.value = '';
+        if (idEl) idEl.value = '';
+    }
+    markUnsavedChange();
+}
+
 function resetCustomDirectoryContacts() {
     const textarea = document.getElementById('customDirectoryContacts');
     if (!textarea) {
@@ -1365,6 +1709,8 @@ async function saveAllSettings() {
         printOrientation: document.getElementById('printOrientation').value,
         printSize: document.getElementById('printSize').value,
         multiLineChildrenThreshold: parseInt(document.getElementById('multiLineChildrenThreshold')?.value || '20', 10),
+        topLevelUserEmail: document.getElementById('topLevelUserInput')?.value || '',
+        topLevelUserId: document.getElementById('topLevelUserIdInput')?.value || '',
         exportXlsxColumns: getExportColumnSettings(),
         customDirectoryContacts: (document.getElementById('customDirectoryContacts')?.value || '').trim()
     };
@@ -1430,23 +1776,100 @@ async function saveAllSettings() {
     }
 }
 
+let _updatePollingInterval = null;
+
+function stopUpdatePolling() {
+    if (_updatePollingInterval) {
+        clearInterval(_updatePollingInterval);
+        _updatePollingInterval = null;
+    }
+}
+
+async function pollUpdateStatus() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/settings`);
+        if (!response.ok) {
+            return;
+        }
+        const settings = await response.json();
+        const status = settings.dataUpdateStatus || {};
+
+        if (status.state !== 'running') {
+            stopUpdatePolling();
+
+            if (status.success === true) {
+                setUpdateStatus('configure.data.manualUpdate.statusComplete', '✔ Update complete');
+                setTimeout(() => {
+                    setUpdateStatus(null, '');
+                }, 5000);
+            } else if (status.success === false) {
+                setUpdateStatus('configure.data.manualUpdate.statusFailed', '✗ Update failed');
+                const statusEl = document.getElementById('updateStatus');
+                if (statusEl) {
+                    statusEl.title = status.error || '';
+                }
+            } else {
+                setUpdateStatus(null, '');
+            }
+
+            updateLastUpdatedDisplay(settings.dataLastUpdatedAt);
+            currentSettings = settings;
+        }
+    } catch (error) {
+        console.warn('Failed to poll update status:', error);
+    }
+}
+
+function startUpdatePolling() {
+    stopUpdatePolling();
+    _updatePollingInterval = setInterval(pollUpdateStatus, 3000);
+}
+
 async function triggerUpdate() {
-    const statusEl = document.getElementById('updateStatus');
-    statusEl.textContent = 'Updating...';
+    const previousTimestamp = currentSettings?.dataLastUpdatedAt || null;
+    setUpdateStatus('configure.data.manualUpdate.statusUpdating', 'Updating...');
+    updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
+    if (!currentSettings || typeof currentSettings !== 'object') {
+        currentSettings = {};
+    }
+    currentSettings.dataUpdateStatus = {
+        state: 'running',
+        startedAt: new Date().toISOString(),
+    };
 
     try {
         const response = await fetch(`${API_BASE_URL}/api/update-now`, { method: 'POST' });
 
         if (response.ok) {
-            statusEl.textContent = '✔ Update started';
-            setTimeout(() => {
-                statusEl.textContent = '';
-            }, 3000);
+            setUpdateStatus('configure.data.manualUpdate.statusUpdating', 'Updating...');
+            startUpdatePolling();
+        } else if (response.status === 409) {
+            setUpdateStatus('configure.data.manualUpdate.statusInProgress', 'Update already in progress');
+            updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
+            const statusEl = document.getElementById('updateStatus');
+            if (statusEl) {
+                statusEl.title = resolveTranslation('configure.data.manualUpdate.statusInProgress', 'Update already in progress');
+            }
+            startUpdatePolling();
         } else {
-            statusEl.textContent = '✗ Update failed';
+            setUpdateStatus('configure.data.manualUpdate.statusFailed', '✗ Update failed');
+            const errorData = await response.json().catch(() => ({}));
+            const detail = errorData.error || '';
+            if (detail) {
+                const statusEl = document.getElementById('updateStatus');
+                if (statusEl) {
+                    statusEl.title = detail;
+                }
+            }
+            updateLastUpdatedDisplay(previousTimestamp);
         }
     } catch (error) {
-        statusEl.textContent = '✗ Update failed';
+        setUpdateStatus('configure.data.manualUpdate.statusFailed', '✗ Update failed');
+        const statusEl = document.getElementById('updateStatus');
+        if (statusEl) {
+            statusEl.title = error?.message || '';
+        }
+        updateLastUpdatedDisplay(previousTimestamp);
     }
 }
 
@@ -1471,6 +1894,7 @@ function registerConfigActions() {
         'reset-ignored-titles': resetIgnoredTitles,
         'reset-ignored-departments': resetIgnoredDepartments,
     'reset-ignored-employees': resetIgnoredEmployees,
+        'reset-top-level-user': resetTopLevelUser,
         'reset-custom-directory-contacts': resetCustomDirectoryContacts,
         'reset-multiline-settings': resetMultiLineSettings,
         'reset-export-columns': resetExportColumns,

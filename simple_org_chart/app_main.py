@@ -7,6 +7,10 @@ import atexit
 import json
 import os
 from datetime import datetime, timedelta, timezone
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - Python < 3.9 fallback
+    ZoneInfo = None  # type: ignore[assignment]
 import threading
 import time
 from io import BytesIO
@@ -32,8 +36,6 @@ import simple_org_chart.config as app_config
 from simple_org_chart.auth import login_required, require_auth, sanitize_next_path
 from simple_org_chart.settings import (
     DEFAULT_SETTINGS,
-    TOP_LEVEL_USER_EMAIL,
-    TOP_LEVEL_USER_ID,
     department_is_ignored,
     employee_is_ignored,
     load_settings,
@@ -154,8 +156,127 @@ DISABLED_USERS_FILE = str(app_config.DISABLED_USERS_FILE)
 LAST_LOGIN_FILE = str(app_config.LAST_LOGIN_FILE)
 RECENTLY_DISABLED_FILE = str(app_config.RECENTLY_DISABLED_FILE)
 RECENTLY_HIRED_FILE = str(app_config.RECENTLY_HIRED_FILE)
+DATA_UPDATE_STATUS_FILE = os.path.join(DATA_DIR, 'data_update_status.json')
 
 logger.info(f"DATA_DIR set to: {DATA_DIR}")
+
+_DATA_UPDATE_STATUS_LOCK = threading.Lock()
+_CURRENT_DATA_UPDATE_STATUS = {'state': 'idle'}
+
+
+def _write_data_update_status(payload):
+    global _CURRENT_DATA_UPDATE_STATUS
+    with _DATA_UPDATE_STATUS_LOCK:
+        _CURRENT_DATA_UPDATE_STATUS = payload
+        try:
+            with open(DATA_UPDATE_STATUS_FILE, 'w') as status_file:
+                json.dump(payload, status_file, indent=2)
+        except Exception as error:
+            logger.warning("Failed to write data update status: %s", error)
+    return payload
+
+
+_APP_STARTUP_COMPLETE = False
+
+
+def load_data_update_status():
+    global _CURRENT_DATA_UPDATE_STATUS, _APP_STARTUP_COMPLETE
+    stale_override = None
+    with _DATA_UPDATE_STATUS_LOCK:
+        if os.path.exists(DATA_UPDATE_STATUS_FILE):
+            try:
+                with open(DATA_UPDATE_STATUS_FILE, 'r') as status_file:
+                    data = json.load(status_file)
+                if isinstance(data, dict):
+                    _CURRENT_DATA_UPDATE_STATUS = data
+            except Exception as error:
+                logger.warning("Failed to load data update status: %s", error)
+
+        state = (_CURRENT_DATA_UPDATE_STATUS or {}).get('state')
+        if state == 'running':
+            # On first load after app startup, any "running" status is stale
+            # because the previous process is gone after a restart
+            if not _APP_STARTUP_COMPLETE:
+                stale_override = {
+                    'state': 'idle',
+                    'success': False,
+                    'finishedAt': datetime.now(timezone.utc).isoformat(),
+                    'error': 'Previous update was interrupted by application restart.',
+                }
+            else:
+                # During normal operation, check elapsed time
+                started_text = (_CURRENT_DATA_UPDATE_STATUS or {}).get('startedAt')
+                try:
+                    started_dt = datetime.fromisoformat(started_text) if started_text else None
+                    if started_dt and started_dt.tzinfo is None:
+                        started_dt = started_dt.replace(tzinfo=timezone.utc)
+                except Exception:
+                    started_dt = None
+
+                if started_dt:
+                    elapsed = datetime.now(timezone.utc) - started_dt.astimezone(timezone.utc)
+                    if elapsed > timedelta(hours=2):
+                        stale_override = {
+                            'state': 'idle',
+                            'success': False,
+                            'finishedAt': datetime.now(timezone.utc).isoformat(),
+                            'error': 'Previous update status appeared stuck; automatically reset.',
+                        }
+                else:
+                    stale_override = {
+                        'state': 'idle',
+                        'success': False,
+                        'finishedAt': datetime.now(timezone.utc).isoformat(),
+                        'error': 'Previous update status was invalid; automatically reset.',
+                    }
+
+        if stale_override:
+            last_success = (_CURRENT_DATA_UPDATE_STATUS or {}).get('lastSuccessAt')
+            if last_success:
+                stale_override['lastSuccessAt'] = last_success
+            _CURRENT_DATA_UPDATE_STATUS = stale_override
+
+        current_snapshot = dict(_CURRENT_DATA_UPDATE_STATUS)
+
+    if stale_override:
+        _write_data_update_status(stale_override)
+
+    return current_snapshot
+
+
+def mark_data_update_running(source='unknown'):
+    previous_status = load_data_update_status()
+    status = {
+        'state': 'running',
+        'source': source,
+        'startedAt': datetime.now(timezone.utc).isoformat(),
+    }
+    if isinstance(previous_status, dict) and previous_status.get('lastSuccessAt'):
+        status['lastSuccessAt'] = previous_status['lastSuccessAt']
+    return _write_data_update_status(status)
+
+
+def mark_data_update_finished(success=True, error=None, source='unknown'):
+    status = {
+        'state': 'idle',
+        'success': bool(success),
+        'finishedAt': datetime.now(timezone.utc).isoformat(),
+        'source': source,
+    }
+    if error:
+        status['error'] = str(error)
+    if success:
+        status['lastSuccessAt'] = status['finishedAt']
+    else:
+        previous_status = load_data_update_status()
+        last_success = previous_status.get('lastSuccessAt') if isinstance(previous_status, dict) else None
+        if last_success:
+            status['lastSuccessAt'] = last_success
+    return _write_data_update_status(status)
+
+
+load_data_update_status()
+_APP_STARTUP_COMPLETE = True
 
 # Configuration for file uploads (removed SVG for security)
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
@@ -270,25 +391,23 @@ def build_org_hierarchy(employees, *, top_user_email_override=None, settings=Non
     if settings is None:
         settings = load_settings()
 
-    settings_top_user = (settings.get('topUserEmail') or '').strip()
-    env_top_user = (TOP_LEVEL_USER_EMAIL or '').strip()
+    # Read from settings (topLevelUserEmail / topLevelUserId)
+    settings_top_user_email = (settings.get('topLevelUserEmail') or '').strip()
+    settings_top_user_id = (settings.get('topLevelUserId') or '').strip()
 
     if top_user_email_override is not None:
         chosen_top_user = (top_user_email_override or '').strip()
-    elif env_top_user:
-        chosen_top_user = env_top_user
     else:
-        chosen_top_user = settings_top_user
+        chosen_top_user = settings_top_user_email
 
     top_user_email = (chosen_top_user or '').strip() or None
 
     # Debug logging
-    logger.info(f"Settings topUserEmail: '{settings_top_user}'")
-    logger.info(f"Environment TOP_LEVEL_USER_EMAIL: '{env_top_user}'")
+    logger.info(f"Settings topLevelUserEmail: '{settings_top_user_email}'")
+    logger.info(f"Settings topLevelUserId: '{settings_top_user_id}'")
     if top_user_email_override is not None:
         logger.info(f"Session override topUserEmail: '{top_user_email_override}'")
     logger.info(f"Final top_user_email: '{top_user_email}'")
-    logger.info(f"TOP_LEVEL_USER_ID: '{TOP_LEVEL_USER_ID}'")
     
     emp_dict = {emp['id']: emp.copy() for emp in employees}
     
@@ -297,7 +416,6 @@ def build_org_hierarchy(employees, *, top_user_email_override=None, settings=Non
             emp_dict[emp_id]['children'] = []
     
     # First, check if a specific top-level user is configured
-    # Prioritize settings file email over environment variables
     root = None
     if top_user_email:
         logger.info(f"Searching for user with email: '{top_user_email}' among {len(employees)} employees")
@@ -309,10 +427,10 @@ def build_org_hierarchy(employees, *, top_user_email_override=None, settings=Non
         else:
             logger.warning(f"Could not find user with email '{top_user_email}' in employee list")
     
-    # Fallback to environment variable ID if no email-based selection was made
-    if not root and TOP_LEVEL_USER_ID and TOP_LEVEL_USER_ID in emp_dict:
-        root = emp_dict[TOP_LEVEL_USER_ID]
-        logger.info(f"Using fallback environment top-level user by ID: {root['name']}")
+    # Fallback to settings user ID if no email-based selection was made
+    if not root and settings_top_user_id and settings_top_user_id in emp_dict:
+        root = emp_dict[settings_top_user_id]
+        logger.info(f"Using fallback settings top-level user by ID: {root['name']}")
     
     if root:
         # If a specific root is configured, build hierarchy with that person at the top
@@ -411,9 +529,7 @@ def collect_missing_manager_records(employees, hierarchy_root=None, settings=Non
     if top_user_email_override is not None:
         top_user_email = (top_user_email_override or '').strip().lower() or None
     elif settings:
-        top_user_email = (settings.get('topUserEmail') or '').strip().lower() or None
-    elif TOP_LEVEL_USER_EMAIL:
-        top_user_email = (TOP_LEVEL_USER_EMAIL or '').strip().lower() or None
+        top_user_email = (settings.get('topLevelUserEmail') or '').strip().lower() or None
 
     missing_records = []
 
@@ -473,7 +589,18 @@ def collect_missing_manager_records(employees, hierarchy_root=None, settings=Non
     return missing_records
 
 
-def update_employee_data():
+def update_employee_data(source='unknown'):
+    success = False
+    error_message = None
+    existing_status = load_data_update_status()
+    if existing_status.get('state') == 'running':
+        logger.info(
+            "Data update already running (current source: %s); skipping %s request",
+            existing_status.get('source', 'unknown'),
+            source,
+        )
+        return
+    mark_data_update_running(source=source)
     try:
         # Ensure data directory exists and is writable
         if not os.path.exists(DATA_DIR):
@@ -488,6 +615,7 @@ def update_employee_data():
             os.remove(test_file)
         except Exception as e:
             logger.error(f"Cannot write to data directory {DATA_DIR}: {e}")
+            error_message = f"Cannot write to data directory {DATA_DIR}: {e}"
             return
 
         logger.info(f"[{datetime.now()}] Starting employee data update...")
@@ -495,6 +623,7 @@ def update_employee_data():
         token = get_access_token()
         if not token:
             logger.error("Unable to refresh employee data because access token retrieval failed")
+            error_message = "Access token retrieval failed"
             return
 
         settings = load_settings()
@@ -692,8 +821,15 @@ def update_employee_data():
             )
         except Exception as report_error:
             logger.error(f"Failed to write recently disabled employees report cache: {report_error}")
+        success = True
     except Exception as e:
+        error_message = str(e)
         logger.error(f"[{datetime.now()}] Error updating employee data: {e}")
+    finally:
+        if success:
+            mark_data_update_finished(success=True, source=source)
+        else:
+            mark_data_update_finished(success=False, error=error_message or 'Unknown error', source=source)
 
 
 configure_scheduler(update_employee_data)
@@ -1191,7 +1327,7 @@ def get_employees():
         logger.info("API request for /api/employees received")
         if not os.path.exists(DATA_FILE):
             logger.info("Data file does not exist, attempting to create it...")
-            update_employee_data()
+            update_employee_data(source='api-employees')
             
         # Double check the file exists after update attempt
         if not os.path.exists(DATA_FILE):
@@ -1206,7 +1342,7 @@ def get_employees():
 
         session_override_present = 'topUserEmail' in session
         session_top_user = (session.get('topUserEmail') or '').strip() if session_override_present else None
-        env_top_user = (TOP_LEVEL_USER_EMAIL or '').strip()
+        settings_top_user_email = (settings.get('topLevelUserEmail') or '').strip()
 
         requested_top_user = None
         override_reason = None
@@ -1214,11 +1350,11 @@ def get_employees():
         if session_override_present:
             requested_top_user = session_top_user
             override_reason = 'session override'
-        elif env_top_user:
+        elif settings_top_user_email:
             current_root_email = (data or {}).get('email') or ''
-            if current_root_email.strip().lower() != env_top_user.lower():
-                requested_top_user = env_top_user
-                override_reason = 'environment default enforcement'
+            if current_root_email.strip().lower() != settings_top_user_email.lower():
+                requested_top_user = settings_top_user_email
+                override_reason = 'settings default enforcement'
 
         if requested_top_user is not None:
             employees = load_cached_employees()
@@ -1245,7 +1381,7 @@ def get_employees():
                 if override_hierarchy:
                     data = override_hierarchy
 
-                    if override_reason == 'environment default enforcement':
+                    if override_reason == 'settings default enforcement':
                         try:
                             with open(DATA_FILE, 'w') as data_file:
                                 json.dump(data, data_file, indent=2)
@@ -1336,7 +1472,7 @@ def get_microsip_directory():
     if not employees:
         logger.warning("No cached employees available for MicroSIP directory; attempting refresh")
         try:
-            update_employee_data()
+            update_employee_data(source='contacts-refresh')
         except Exception as refresh_error:
             logger.error(f"Failed to refresh employee cache for MicroSIP directory: {refresh_error}")
         employees = get_employee_list_for_metadata()
@@ -1363,6 +1499,25 @@ def handle_settings():
         settings = load_settings()
         if 'topUserEmail' in session:
             settings['topUserEmail'] = session.get('topUserEmail') or ''
+        data_last_updated = None
+        try:
+            if os.path.exists(DATA_FILE):
+                tz_name = settings.get('updateTimezone') or 'UTC'
+                tz = timezone.utc
+                if ZoneInfo:
+                    try:
+                        tz = ZoneInfo(tz_name)
+                    except Exception:
+                        logger.warning("Invalid timezone '%s'; defaulting to UTC", tz_name)
+                modified_at = datetime.fromtimestamp(os.path.getmtime(DATA_FILE), tz=timezone.utc)
+                localized = modified_at.astimezone(tz)
+                data_last_updated = localized.strftime('%Y-%m-%d %H:%M')
+        except Exception as timestamp_error:
+            logger.warning("Failed to compute data last updated timestamp: %s", timestamp_error)
+
+        settings['dataLastUpdatedAt'] = data_last_updated
+        settings['dataUpdateStatus'] = load_data_update_status()
+
         return jsonify(settings)
     
     elif request.method == 'POST':
@@ -1471,19 +1626,8 @@ def test_hierarchy(email):
         if not target_user:
             return jsonify({'error': f'User with email {email} not found'}), 404
             
-        # Temporarily set the environment variable
-        original_email = os.environ.get('TOP_LEVEL_USER_EMAIL')
-        os.environ['TOP_LEVEL_USER_EMAIL'] = email
-        
-        try:
-            # Build hierarchy
-            hierarchy = build_org_hierarchy(employees)
-        finally:
-            # Restore original
-            if original_email:
-                os.environ['TOP_LEVEL_USER_EMAIL'] = original_email
-            else:
-                os.environ.pop('TOP_LEVEL_USER_EMAIL', None)
+        # Build hierarchy with specified top-level user
+        hierarchy = build_org_hierarchy(employees, top_user_email_override=email)
         
         if hierarchy:
             return jsonify({
@@ -1737,7 +1881,7 @@ def export_xlsx():
     try:
         # Load employee data
         if not os.path.exists(DATA_FILE):
-            update_employee_data()
+            update_employee_data(source='export-xlsx')
         
         with open(DATA_FILE, 'r') as f:
             data = json.load(f)
@@ -2905,7 +3049,7 @@ def search_employees():
     try:
         if not os.path.exists(DATA_FILE):
             logger.warning(f"Data file {DATA_FILE} not found, attempting to fetch data")
-            update_employee_data()
+            update_employee_data(source='search')
         
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, 'r') as f:
@@ -2993,11 +3137,21 @@ def get_employee(employee_id):
 @limiter.limit("1 per minute")
 def trigger_update():
     try:
-        threading.Thread(target=update_employee_data).start()
+        current_status = load_data_update_status()
+        if current_status.get('state') == 'running':
+            return jsonify({'error': 'Update already in progress'}), 409
+
+        worker = threading.Thread(
+            target=update_employee_data,
+            kwargs={'source': 'manual'},
+            daemon=True,
+        )
+        worker.start()
         logger.info(f"Manual update triggered by user: {session.get('username')}")
         return jsonify({'message': 'Update started'}), 200
     except Exception as e:
         logger.error(f"Error triggering update: {e}")
+        mark_data_update_finished(success=False, error=str(e), source='manual')
         return jsonify({'error': 'Update failed'}), 500
 
 @app.route('/search-test')
@@ -3065,7 +3219,7 @@ def force_update():
     """Force an immediate update and wait for completion"""
     try:
         logger.info("Force update requested")
-        update_employee_data()
+        update_employee_data(source='force-update')
         
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, 'r') as f:

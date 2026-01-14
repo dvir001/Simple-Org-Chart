@@ -249,8 +249,9 @@
 		"behavior": {
 			"autoUpdate": {
 				"label": "Auto-Update Schedule",
-				"description": "Set the time zone and daily schedule for automatic data updates",
+				"description": "Set the time and daily schedule for automatic data updates",
 				"enable": "Enable Auto-Update",
+				"timeLabel": "Time",
 				"timezoneLabel": "Time zone"
 			},
 			"collapseLevel": {
@@ -276,6 +277,12 @@
 				"month3": "3 months",
 				"month6": "6 months",
 				"month12": "12 months"
+			},
+			"topLevelUser": {
+				"label": "Top-Level User",
+				"description": "Select the root user of the organizational chart (CEO, MD, Chief exec, etc.). Leave empty to auto-detect.",
+				"selectLabel": "Top-level user",
+				"placeholder": "Search for user..."
 			},
 			"filtering": {
 				"label": "Employee Filtering",
@@ -334,13 +341,22 @@
 		"data": {
 			"manualUpdate": {
 				"label": "Manual Data Update",
-				"description": "Trigger an immediate update of employee data from Azure AD"
+				"description": "Trigger an immediate update of employee data from Azure AD",
+				"lastUpdatedLabel": "Last updated:",
+				"lastUpdatedPending": "Pending",
+				"lastUpdatedUpdating": "Updating...",
+				"statusUpdating": "Updating...",
+				"statusStarted": "✔ Update started",
+				"statusComplete": "✔ Update complete",
+				"statusFailed": "✗ Update failed",
+				"statusInProgress": "Update already in progress"
 			}
 		},
 		"buttons": {
 			"resetDefault": "Reset to Default",
 			"resetAllNodeColors": "Reset All Node Colors",
 			"resetColumns": "Reset Columns to Default",
+			"clear": "Clear",
 			"updateNow": "Update Now",
 			"discard": "Discard Changes",
 			"saveAll": "Save All Settings",

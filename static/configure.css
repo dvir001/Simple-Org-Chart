@@ -319,6 +319,122 @@ body:not(.is-loading) .header {
     align-self: center;
 }
 
+/* Single User Picker (for top-level user selection) */
+.single-user-picker {
+    position: relative;
+    width: 100%;
+}
+
+.single-user-picker__control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.single-user-picker__control:focus-within {
+    border-color: rgba(0, 120, 212, 0.45);
+    box-shadow: 0 0 0 4px rgba(0, 120, 212, 0.12);
+    background: #fff;
+}
+
+.single-user-picker__selected {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.single-user-picker__selected:empty {
+    display: none;
+}
+
+.single-user-picker__tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08);
+    color: #1f2937;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.single-user-picker__remove {
+    border: none;
+    background: transparent;
+    color: rgba(15, 23, 42, 0.6);
+    font-size: 0.85rem;
+    cursor: pointer;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.single-user-picker__remove:hover {
+    color: rgba(220, 38, 38, 0.9);
+}
+
+.single-user-picker__input {
+    flex: 1;
+    min-width: 150px;
+    border: none;
+    background: transparent;
+    font-size: 0.93rem;
+    padding: 6px 4px;
+    color: inherit;
+}
+
+.single-user-picker__input:focus {
+    outline: none;
+}
+
+.single-user-picker__dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+    z-index: 20;
+}
+
+.single-user-picker__option {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.single-user-picker__option:hover,
+.single-user-picker__option[aria-selected="true"] {
+    background: rgba(0, 120, 212, 0.12);
+}
+
+.single-user-picker__option-title {
+    font-weight: 600;
+    color: #0f172a;
+    font-size: 0.92rem;
+}
+
+.single-user-picker__option-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
 input[type="text"],
 input[type="color"],
 input[type="number"],
@@ -749,6 +865,48 @@ input[id$="ColorHex"] {
     font-weight: 600;
 }
 
+/* Unified schedule row styling */
+.schedule-row {
+    align-items: flex-end;
+    gap: 24px;
+}
+
+.schedule-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.schedule-field__label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.schedule-field__select {
+    min-width: 200px;
+}
+
+.inline-time-picker--wide {
+    min-width: 200px;
+}
+
+.inline-time-picker--wide .timezone-select {
+    width: 100%;
+    min-width: 180px;
+}
+
+.schedule-row__btn {
+    align-self: flex-end;
+}
+
+.time-separator {
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
 .text-input-wide {
     min-width: 360px;
     flex: 1 1 320px;
@@ -766,6 +924,56 @@ input[id$="ColorHex"] {
     margin-left: 16px;
     color: var(--text-muted);
     font-size: 0.85rem;
+}
+
+/* Data update card styling */
+.data-update-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-top: 12px;
+}
+
+.data-update-card__info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.data-update-card__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.data-update-card__value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.data-update-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+@media (max-width: 600px) {
+    .data-update-card {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+    .data-update-card__actions {
+        justify-content: flex-start;
+    }
 }
 
 .export-columns-grid {

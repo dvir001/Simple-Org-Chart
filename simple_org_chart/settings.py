@@ -12,9 +12,6 @@ from .config import SETTINGS_FILE
 
 logger = logging.getLogger(__name__)
 
-TOP_LEVEL_USER_EMAIL = os.environ.get("TOP_LEVEL_USER_EMAIL", "")
-TOP_LEVEL_USER_ID = os.environ.get("TOP_LEVEL_USER_ID")
-
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "chartTitle": "DB Auto Org Chart",
     "headerColor": "#0078D4",
@@ -58,7 +55,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "office": "show",
         "manager": "show",
     },
-    "topUserEmail": TOP_LEVEL_USER_EMAIL.strip(),
+    "topLevelUserEmail": "",
+    "topLevelUserId": "",
     "newEmployeeMonths": 3,
     "multiLineChildrenEnabled": True,
     "multiLineChildrenThreshold": 20,
@@ -113,9 +111,8 @@ def translate_placeholder(key: str, default: str | None = None, **kwargs: Any) -
 
 
 def _apply_environment_overrides(settings: Dict[str, Any]) -> Dict[str, Any]:
-    updated = settings.copy()
-    updated["topUserEmail"] = TOP_LEVEL_USER_EMAIL.strip() if TOP_LEVEL_USER_EMAIL else updated.get("topUserEmail", "")
-    return updated
+    """Apply environment variable overrides (currently a pass-through)."""
+    return settings.copy()
 
 
 def load_settings() -> Dict[str, Any]:
@@ -279,8 +276,6 @@ def employee_is_ignored(name: str | None, email: str | None, user_principal_name
 
 __all__ = [
     "DEFAULT_SETTINGS",
-    "TOP_LEVEL_USER_EMAIL",
-    "TOP_LEVEL_USER_ID",
     "department_is_ignored",
     "employee_is_ignored",
     "load_settings",

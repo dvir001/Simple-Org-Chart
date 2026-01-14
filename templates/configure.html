@@ -127,23 +127,31 @@
             <div class="config-group">
                 <div class="config-item">
                     <label class="config-label" data-i18n="configure.behavior.autoUpdate.label">Auto-Update Schedule</label>
-                    <div class="config-description" data-i18n="configure.behavior.autoUpdate.description">Set the time for daily automatic data updates</div>
+                    <div class="config-description" data-i18n="configure.behavior.autoUpdate.description">Set the time and daily schedule for automatic data updates</div>
                     <div class="config-controls">
                         <label class="toggle-switch">
                             <input type="checkbox" id="autoUpdateEnabled" checked>
                             <span class="slider"></span>
                         </label>
                         <span data-i18n="configure.behavior.autoUpdate.enable">Enable Auto-Update</span>
-                        <div id="updateTimePicker" class="inline-time-picker">
-                            <select id="updateHour" class="time-select"></select> :
-                            <select id="updateMinute" class="time-select"></select>
-                            <input type="hidden" id="updateTime" value="20:00">
+                    </div>
+                    <div class="config-controls config-controls--spaced schedule-row">
+                        <div class="schedule-field">
+                            <span class="schedule-field__label" data-i18n="configure.behavior.autoUpdate.timeLabel">Time</span>
+                            <div id="updateTimePicker" class="inline-time-picker">
+                                <select id="updateHour" class="time-select"></select>
+                                <span class="time-separator">:</span>
+                                <select id="updateMinute" class="time-select"></select>
+                                <input type="hidden" id="updateTime" value="20:00">
+                            </div>
                         </div>
-                        <div class="timezone-picker">
-                            <span class="label-prefix" data-i18n="configure.behavior.autoUpdate.timezoneLabel">Time zone</span>
-                            <select id="updateTimezone" class="time-select timezone-select"></select>
+                        <div class="schedule-field">
+                            <span class="schedule-field__label" data-i18n="configure.behavior.autoUpdate.timezoneLabel">Time zone</span>
+                            <div class="inline-time-picker inline-time-picker--wide">
+                                <select id="updateTimezone" class="time-select timezone-select"></select>
+                            </div>
                         </div>
-                        <button class="btn btn-secondary" type="button" data-config-action="reset-update-time" data-i18n="configure.buttons.resetDefault">Reset to Default</button>
+                        <button class="btn btn-secondary schedule-row__btn" type="button" data-config-action="reset-update-time" data-i18n="configure.buttons.resetDefault">Reset to Default</button>
                     </div>
                 </div>
 
@@ -192,6 +200,26 @@
                             <option value="6" data-i18n="configure.behavior.newEmployees.month6">6 months</option>
                             <option value="12" data-i18n="configure.behavior.newEmployees.month12">12 months</option>
                         </select>
+                    </div>
+                </div>
+
+                <div class="config-item">
+                    <label class="config-label" data-i18n="configure.behavior.topLevelUser.label">Top-Level User</label>
+                    <div class="config-description" data-i18n="configure.behavior.topLevelUser.description">Select the root user of the organizational chart (CEO, MD, Chief exec, etc.). Leave empty to auto-detect.</div>
+                    <div class="config-controls config-controls--spaced tag-picker-row">
+                        <div class="tag-picker-field">
+                            <span class="label-prefix" data-i18n="configure.behavior.topLevelUser.selectLabel">Top-level user</span>
+                            <div class="single-user-picker" id="topLevelUserPicker" data-target-input="topLevelUserInput">
+                                <div class="single-user-picker__control">
+                                    <div class="single-user-picker__selected" data-role="selected-user"></div>
+                                    <input type="text" class="single-user-picker__input" id="topLevelUserSearch" autocomplete="off" placeholder="Search for user..." data-i18n-placeholder="configure.behavior.topLevelUser.placeholder">
+                                </div>
+                                <div class="single-user-picker__dropdown" data-role="dropdown" hidden></div>
+                            </div>
+                            <input type="hidden" id="topLevelUserInput">
+                            <input type="hidden" id="topLevelUserIdInput">
+                        </div>
+                        <button class="btn btn-secondary" type="button" data-config-action="reset-top-level-user" data-i18n="configure.buttons.clear">Clear</button>
                     </div>
                 </div>
 
@@ -420,9 +448,15 @@
                 <div class="config-item">
                     <label class="config-label" data-i18n="configure.data.manualUpdate.label">Manual Data Update</label>
                     <div class="config-description" data-i18n="configure.data.manualUpdate.description">Trigger an immediate update of employee data from Azure AD</div>
-                    <div class="config-controls">
-                        <button class="btn btn-primary" type="button" data-config-action="trigger-update" data-i18n="configure.buttons.updateNow">Update Now</button>
-                        <span id="updateStatus" class="update-status"></span>
+                    <div class="data-update-card">
+                        <div class="data-update-card__info">
+                            <span class="data-update-card__label" data-i18n="configure.data.manualUpdate.lastUpdatedLabel">Last updated:</span>
+                            <span id="dataLastUpdated" class="data-update-card__value" data-i18n="configure.data.manualUpdate.lastUpdatedPending">Pending</span>
+                        </div>
+                        <div class="data-update-card__actions">
+                            <button class="btn btn-primary" type="button" data-config-action="trigger-update" data-i18n="configure.buttons.updateNow">Update Now</button>
+                            <span id="updateStatus" class="update-status"></span>
+                        </div>
                     </div>
                 </div>
 
