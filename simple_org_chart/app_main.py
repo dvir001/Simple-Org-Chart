@@ -126,6 +126,27 @@ DEFAULT_APP_PORT = 5000
 APP_PORT = _parse_port(os.environ.get('APP_PORT'), DEFAULT_APP_PORT)
 logger.info(f"Application port resolved to {APP_PORT}")
 
+# Environment-configurable settings
+SESSION_TYPE = os.environ.get('SESSION_TYPE', 'filesystem')
+MAX_FILE_SIZE = int(os.environ.get('MAX_FILE_SIZE_MB', '5')) * 1024 * 1024
+ALLOWED_EXTENSIONS = set(ext.strip().lower() for ext in os.environ.get('ALLOWED_LOGO_EXTENSIONS', 'png,jpg,jpeg').split(',') if ext.strip())
+FAVICON_ALLOWED_EXTENSIONS = set(ext.strip().lower() for ext in os.environ.get('ALLOWED_FAVICON_EXTENSIONS', 'ico,png,jpg,jpeg').split(',') if ext.strip())
+PHOTO_CACHE_SECONDS = int(os.environ.get('PHOTO_CACHE_SECONDS', '3600'))
+PHOTO_CACHE_FILE_SECONDS = int(os.environ.get('PHOTO_CACHE_FILE_SECONDS', '86400'))
+RATE_LIMIT_DEFAULT = os.environ.get('RATE_LIMIT_DEFAULT', '200 per day,50 per hour')
+RATE_LIMIT_LOGIN = os.environ.get('RATE_LIMIT_LOGIN', '5 per minute')
+RATE_LIMIT_PHOTO = os.environ.get('RATE_LIMIT_PHOTO', '500 per hour')
+RATE_LIMIT_SETTINGS = os.environ.get('RATE_LIMIT_SETTINGS', '20 per minute')
+RATE_LIMIT_UPLOAD = os.environ.get('RATE_LIMIT_UPLOAD', '5 per minute')
+RATE_LIMIT_REFRESH = os.environ.get('RATE_LIMIT_REFRESH', '1 per minute')
+
+# Security headers (configurable via .env)
+SECURITY_HEADER_CONTENT_TYPE_OPTIONS = os.environ.get('SECURITY_HEADER_CONTENT_TYPE_OPTIONS', 'nosniff')
+SECURITY_HEADER_FRAME_OPTIONS = os.environ.get('SECURITY_HEADER_FRAME_OPTIONS', 'DENY')
+SECURITY_HEADER_XSS_PROTECTION = os.environ.get('SECURITY_HEADER_XSS_PROTECTION', '1; mode=block')
+SECURITY_HEADER_HSTS = os.environ.get('SECURITY_HEADER_HSTS', 'max-age=31536000; includeSubDomains')
+SECURITY_HEADER_CSP = os.environ.get('SECURITY_HEADER_CSP', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;")
+
 app = Flask(
     __name__,
     static_folder=str(app_config.STATIC_DIR),
@@ -138,7 +159,7 @@ if _allowed_origins:
 
 # Security Configuration
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_TYPE'] = SESSION_TYPE
 app.config['SESSION_PERMANENT'] = False
 
 # Initialize extensions
@@ -146,7 +167,7 @@ Session(app)
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=[limit.strip() for limit in RATE_LIMIT_DEFAULT.split(',') if limit.strip()],
     storage_uri="memory://"
 )
 
@@ -160,11 +181,11 @@ if ADMIN_PASSWORD in {'admin123', 'your-admin-password-here'}:
 # Security headers
 @app.after_request
 def add_security_headers(response):
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+    response.headers['X-Content-Type-Options'] = SECURITY_HEADER_CONTENT_TYPE_OPTIONS
+    response.headers['X-Frame-Options'] = SECURITY_HEADER_FRAME_OPTIONS
+    response.headers['X-XSS-Protection'] = SECURITY_HEADER_XSS_PROTECTION
+    response.headers['Strict-Transport-Security'] = SECURITY_HEADER_HSTS
+    response.headers['Content-Security-Policy'] = SECURITY_HEADER_CSP
     return response
 app_config.ensure_directories()
 
@@ -183,10 +204,6 @@ RECENTLY_HIRED_FILE = str(app_config.RECENTLY_HIRED_FILE)
 DATA_UPDATE_STATUS_FILE = os.path.join(DATA_DIR, 'data_update_status.json')
 
 logger.info(f"DATA_DIR set to: {DATA_DIR}")
-
-# Configuration for file uploads (removed SVG for security)
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB limit for logo uploads
 
 TENANT_ID = os.environ.get('AZURE_TENANT_ID')
 CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')
@@ -253,7 +270,7 @@ def get_template(template_name):
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit("5 per minute")
+@limiter.limit(RATE_LIMIT_LOGIN)
 def login():
     next_page = sanitize_next_path(request.args.get('next', ''))
 
@@ -367,7 +384,7 @@ def serve_custom_logo(file_hash):
         return send_file(custom_logo, 
                        mimetype='image/png',
                        as_attachment=False,
-                       max_age=3600)  # Cache for 1 hour
+                       max_age=PHOTO_CACHE_SECONDS)
     else:
         return "Logo not found", 404
 
@@ -389,7 +406,7 @@ def serve_custom_favicon(file_hash, ext):
         return send_file(custom_favicon, 
                        mimetype=mimetype,
                        as_attachment=False,
-                       max_age=3600)  # Cache for 1 hour
+                       max_age=PHOTO_CACHE_SECONDS)
     else:
         return "Favicon not found", 404
 
@@ -399,7 +416,7 @@ def serve_static(filename):
     return send_from_directory(app.static_folder, filename)
 
 @app.route('/api/photo/<user_id>')
-@limiter.limit("500 per hour")  # Higher limit for photo endpoint due to org chart loading
+@limiter.limit(RATE_LIMIT_PHOTO)
 def get_employee_photo(user_id):
     """Serve employee photo from Microsoft Graph API with caching"""
     try:
@@ -412,11 +429,11 @@ def get_employee_photo(user_id):
         photo_file = os.path.join(photos_dir, f"{user_id}.jpg")
         
         if os.path.exists(photo_file):
-            # Check if cache is less than 1 day old
-            if time.time() - os.path.getmtime(photo_file) < 86400:  # 24 hours
+            # Check if cache is still valid
+            if time.time() - os.path.getmtime(photo_file) < PHOTO_CACHE_FILE_SECONDS:
                 response = send_file(photo_file, mimetype='image/jpeg')
                 # Add cache headers to prevent browser caching issues
-                response.headers['Cache-Control'] = 'public, max-age=3600'
+                response.headers['Cache-Control'] = f'public, max-age={PHOTO_CACHE_SECONDS}'
                 response.headers['Last-Modified'] = datetime.fromtimestamp(os.path.getmtime(photo_file)).strftime('%a, %d %b %Y %H:%M:%S GMT')
                 return response
         
@@ -435,7 +452,7 @@ def get_employee_photo(user_id):
                     mimetype='image/jpeg',
                     as_attachment=False
                 )
-                response.headers['Cache-Control'] = 'public, max-age=3600'
+                response.headers['Cache-Control'] = f'public, max-age={PHOTO_CACHE_SECONDS}'
                 return response
         
         # Fallback to default user icon
@@ -683,7 +700,7 @@ def get_metadata_options():
     })
 
 @app.route('/api/set-top-user', methods=['POST'])
-@limiter.limit("20 per minute")
+@limiter.limit(RATE_LIMIT_SETTINGS)
 def set_top_user():
     """Store the caller's preferred top-level user in their session"""
     try:
@@ -706,7 +723,7 @@ def set_top_user():
 
 @app.route('/api/set-multiline-enabled', methods=['POST'])
 @require_auth
-@limiter.limit("20 per minute")
+@limiter.limit(RATE_LIMIT_SETTINGS)
 def set_multiline_enabled():
     """Public endpoint to toggle multi-line children layout (Compact Teams)."""
     try:
@@ -727,7 +744,7 @@ def set_multiline_enabled():
 
 @app.route('/api/test-hierarchy/<email>')
 @require_auth
-@limiter.limit("5 per minute")
+@limiter.limit(RATE_LIMIT_UPLOAD)
 def test_hierarchy(email):
     """Test endpoint to check hierarchy building with specific email"""
     try:
@@ -779,7 +796,7 @@ def test_hierarchy(email):
 
 @app.route('/api/upload-logo', methods=['POST'])
 @require_auth
-@limiter.limit("5 per minute")
+@limiter.limit(RATE_LIMIT_UPLOAD)
 def upload_logo():
     try:
         if 'logo' not in request.files:
@@ -852,6 +869,7 @@ def reset_logo():
 
 @app.route('/api/upload-favicon', methods=['POST'])
 @require_auth
+@limiter.limit(RATE_LIMIT_UPLOAD)
 def upload_favicon():
     try:
         if 'favicon' not in request.files:
@@ -861,21 +879,19 @@ def upload_favicon():
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
         
-        # Validate file size (5MB limit)
-        MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+        # Validate file size
         file.seek(0, os.SEEK_END)
         file_size = file.tell()
         file.seek(0)
         
         if file_size > MAX_FILE_SIZE:
-            return jsonify({'error': 'File size exceeds 5MB limit'}), 400
+            return jsonify({'error': f'File size exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit'}), 400
         
         # Check file extension
         filename = secure_filename(file.filename)
         file_ext = filename.lower().split('.')[-1] if '.' in filename else ''
-        allowed_extensions = {'ico', 'png', 'jpg', 'jpeg'}
         
-        if file_ext in allowed_extensions or file.content_type in ['image/x-icon', 'image/png', 'image/jpeg']:
+        if file_ext in FAVICON_ALLOWED_EXTENSIONS or file.content_type in ['image/x-icon', 'image/png', 'image/jpeg']:
             # Create unique filename
             import hashlib
             file_content = file.read()
@@ -2241,7 +2257,7 @@ def get_employee(employee_id):
 
 @app.route('/api/update-now', methods=['POST'])
 @require_auth
-@limiter.limit("1 per minute")
+@limiter.limit(RATE_LIMIT_REFRESH)
 def trigger_update():
     try:
         current_status = load_data_update_status()
@@ -2321,7 +2337,7 @@ def debug_search():
 
 @app.route('/api/force-update', methods=['POST'])
 @require_auth
-@limiter.limit("1 per minute")
+@limiter.limit(RATE_LIMIT_REFRESH)
 def force_update():
     """Force an immediate update and wait for completion"""
     try:

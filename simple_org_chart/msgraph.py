@@ -23,8 +23,9 @@ from simple_org_chart.settings import (
 
 logger = logging.getLogger(__name__)
 
-GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
-GRAPH_API_BETA_ENDPOINT = "https://graph.microsoft.com/beta"
+# Graph API endpoints (configurable via .env)
+GRAPH_API_ENDPOINT = os.environ.get('GRAPH_API_ENDPOINT', 'https://graph.microsoft.com/v1.0')
+GRAPH_API_BETA_ENDPOINT = os.environ.get('GRAPH_API_BETA_ENDPOINT', 'https://graph.microsoft.com/beta')
 
 EmployeeTriple = Tuple[list[dict], list[dict], list[dict]]
 FallbackLoader = Callable[[], EmployeeTriple]

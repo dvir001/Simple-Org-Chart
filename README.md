@@ -74,9 +74,30 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 **Optional values**
 
-- `CORS_ALLOWED_ORIGINS` – Comma-separated list of allowed cross-origin hosts.
-- `RUN_INITIAL_UPDATE` – Set to `false` to skip automatic data refresh at startup.
-- `APP_PORT` – Port the application listens on (defaults to `5000`).
+| Variable | Default | Description |
+| --- | --- | --- |
+| `APP_PORT` | `5000` | Port the application listens on. |
+| `CORS_ALLOWED_ORIGINS` | *(none)* | Comma-separated list of allowed cross-origin hosts. |
+| `RUN_INITIAL_UPDATE` | `auto` | Set to `true` to force data refresh at startup, `false` to skip. |
+| `SESSION_TYPE` | `filesystem` | Flask session backend type. |
+| `MAX_FILE_SIZE_MB` | `5` | Maximum upload size (MB) for logos and favicons. |
+| `ALLOWED_LOGO_EXTENSIONS` | `png,jpg,jpeg` | Comma-separated list of allowed logo image formats. |
+| `ALLOWED_FAVICON_EXTENSIONS` | `ico,png,jpg,jpeg` | Comma-separated list of allowed favicon formats. |
+| `PHOTO_CACHE_SECONDS` | `3600` | Browser cache duration (seconds) for profile photos. |
+| `PHOTO_CACHE_FILE_SECONDS` | `86400` | File cache duration (seconds) for profile photos on disk. |
+| `RATE_LIMIT_DEFAULT` | `200 per day,50 per hour` | Default rate limits for all endpoints. |
+| `RATE_LIMIT_LOGIN` | `5 per minute` | Rate limit for the login endpoint. |
+| `RATE_LIMIT_PHOTO` | `500 per hour` | Rate limit for the photo endpoint. |
+| `RATE_LIMIT_SETTINGS` | `20 per minute` | Rate limit for settings endpoints. |
+| `RATE_LIMIT_UPLOAD` | `5 per minute` | Rate limit for file upload endpoints. |
+| `RATE_LIMIT_REFRESH` | `1 per minute` | Rate limit for data refresh endpoints. |
+| `SECURITY_HEADER_CONTENT_TYPE_OPTIONS` | `nosniff` | `X-Content-Type-Options` header value. |
+| `SECURITY_HEADER_FRAME_OPTIONS` | `DENY` | `X-Frame-Options` header value. |
+| `SECURITY_HEADER_XSS_PROTECTION` | `1; mode=block` | `X-XSS-Protection` header value. |
+| `SECURITY_HEADER_HSTS` | `max-age=31536000; includeSubDomains` | `Strict-Transport-Security` header value. |
+| `SECURITY_HEADER_CSP` | `default-src 'self'; ...` | `Content-Security-Policy` header value. |
+| `GRAPH_API_ENDPOINT` | `https://graph.microsoft.com/v1.0` | Microsoft Graph API v1.0 endpoint. |
+| `GRAPH_API_BETA_ENDPOINT` | `https://graph.microsoft.com/beta` | Microsoft Graph API beta endpoint. |
 
 ## Running the Application
 
