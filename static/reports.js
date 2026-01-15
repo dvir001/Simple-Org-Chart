@@ -795,6 +795,7 @@ function applyReportContext(config) {
 function toggleLoading(isLoading, config, records = []) {
     const refreshBtn = qs('refreshReportBtn');
     const exportBtn = qs('exportReportBtn');
+    const exportPdfBtn = qs('exportPdfBtn');
     const statusEl = qs('tableStatus');
     const t = getTranslator();
 
@@ -804,6 +805,9 @@ function toggleLoading(isLoading, config, records = []) {
     }
     if (exportBtn) {
         exportBtn.disabled = isLoading || records.length === 0;
+    }
+    if (exportPdfBtn) {
+        exportPdfBtn.disabled = isLoading || records.length === 0;
     }
     if (statusEl) {
         statusEl.textContent = isLoading
@@ -1026,6 +1030,207 @@ async function exportReport() {
     }
 }
 
+async function exportReportToPDF() {
+    console.log('exportReportToPDF called');
+    const config = REPORT_CONFIGS[currentReportKey] || REPORT_CONFIGS['missing-manager'];
+    const t = getTranslator();
+    clearError();
+
+    try {
+        console.log('Checking jspdf availability:', typeof window.jspdf);
+        if (typeof window.jspdf === 'undefined') {
+            console.error('jsPDF library not loaded');
+            showError('reports.errors.pdfLibraryMissing');
+            return;
+        }
+
+        console.log('latestRecords length:', latestRecords.length);
+        if (latestRecords.length === 0) {
+            showError('reports.errors.noDataToExport');
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        console.log('Creating PDF...');
+        const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape for tables
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 15;
+        let yPos = margin;
+
+        // Add report title
+        const reportTitle = t(config.tableTitleKey) || 'Report';
+        console.log('Adding title:', reportTitle);
+        pdf.setFontSize(16);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(reportTitle, margin, yPos);
+        yPos += 10;
+
+        // Add record count
+        pdf.setFontSize(10);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text('Total records: ' + latestRecords.length, margin, yPos);
+        yPos += 8;
+
+        // Add active filters
+        const filterState = reportFiltersState[currentReportKey] || {};
+        const activeFilters = [];
+        
+        if (config && config.filters) {
+            config.filters.forEach(filter => {
+                const value = filterState[filter.key];
+                if (value !== undefined && value !== null) {
+                    const filterLabel = t(filter.labelKey);
+                    if (filter.type === 'toggle') {
+                        activeFilters.push(filterLabel + ': ' + (value ? 'Yes' : 'No'));
+                    } else if (filter.type === 'segmented' && filter.options) {
+                        const selectedOption = filter.options.find(opt => (opt.value ?? null) === value);
+                        if (selectedOption) {
+                            activeFilters.push(filterLabel + ': ' + t(selectedOption.labelKey));
+                        }
+                    }
+                }
+            });
+        }
+
+        if (activeFilters.length > 0) {
+            pdf.setFontSize(8);
+            pdf.setTextColor(80, 80, 80);
+            pdf.text('Filters: ' + activeFilters.join(' | '), margin, yPos);
+            yPos += 6;
+        }
+
+        yPos += 2; // Add spacing before table
+
+        // Get table headers and data from the DOM
+        const thead = document.getElementById('reportTableHead');
+        const tbody = document.getElementById('reportTableBody');
+        console.log('Table head element:', thead);
+        console.log('Table body element:', tbody);
+        if (!thead || !tbody) {
+            showError('reports.errors.noTableToExport');
+            return;
+        }
+
+        const headers = [];
+        const headerCells = thead.querySelectorAll('th');
+        console.log('Header cells found:', headerCells.length);
+        headerCells.forEach(th => {
+            headers.push(th.textContent.trim());
+        });
+
+        const rows = [];
+        const bodyRows = tbody.querySelectorAll('tr:not(.empty-row)');
+        console.log('Body rows found:', bodyRows.length);
+        bodyRows.forEach(tr => {
+            const row = [];
+            tr.querySelectorAll('td').forEach(td => {
+                row.push(td.textContent.trim());
+            });
+            if (row.length > 0) {
+                rows.push(row);
+            }
+        });
+
+        console.log('Headers:', headers);
+        console.log('Rows count:', rows.length);
+
+        // Calculate column widths to fit within page
+        const availableWidth = pageWidth - (2 * margin);
+        const colCount = headers.length || 1;
+        
+        // Equal width columns that fit the page
+        const colWidth = availableWidth / colCount;
+        const maxCharsPerCol = Math.floor(colWidth / 2.2); // ~2.2mm per character at 6pt
+
+        const rowHeight = 5;
+        const headerHeight = 6;
+
+        // Draw header background
+        pdf.setFillColor(66, 66, 66);
+        pdf.rect(margin, yPos, availableWidth, headerHeight, 'F');
+        
+        // Draw header text
+        pdf.setFontSize(6);
+        pdf.setTextColor(255, 255, 255);
+        for (let i = 0; i < headers.length; i++) {
+            const x = margin + (i * colWidth) + 1;
+            const headerText = headers[i].substring(0, maxCharsPerCol);
+            pdf.text(headerText, x, yPos + 4);
+        }
+        yPos += headerHeight;
+
+        // Draw rows
+        pdf.setFontSize(5.5);
+        const maxY = pageHeight - margin - 15;
+
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+            if (yPos + rowHeight > maxY) {
+                pdf.addPage();
+                yPos = margin;
+                
+                // Redraw header on new page
+                pdf.setFillColor(66, 66, 66);
+                pdf.rect(margin, yPos, availableWidth, headerHeight, 'F');
+                pdf.setFontSize(6);
+                pdf.setTextColor(255, 255, 255);
+                for (let i = 0; i < headers.length; i++) {
+                    const x = margin + (i * colWidth) + 1;
+                    pdf.text(headers[i].substring(0, maxCharsPerCol), x, yPos + 4);
+                }
+                yPos += headerHeight;
+                pdf.setFontSize(5.5);
+            }
+
+            // Alternate row background
+            if (rowIndex % 2 === 0) {
+                pdf.setFillColor(245, 245, 245);
+                pdf.rect(margin, yPos, availableWidth, rowHeight, 'F');
+            }
+
+            pdf.setTextColor(30, 30, 30);
+            const row = rows[rowIndex];
+            for (let i = 0; i < row.length; i++) {
+                const x = margin + (i * colWidth) + 1;
+                const cellText = (row[i] || '').substring(0, maxCharsPerCol);
+                pdf.text(cellText, x, yPos + 3.5);
+            }
+            yPos += rowHeight;
+        }
+
+        console.log('Adding timestamp...');
+        
+        // Add timestamp on every page
+        const totalPages = pdf.internal.getNumberOfPages();
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const timestamp = 'Generated: ' + year + '-' + month + '-' + day + ' ' + hours + ':' + minutes;
+
+        for (let i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            pdf.setFontSize(8);
+            pdf.setTextColor(128, 128, 128);
+            pdf.text(timestamp, pageWidth - margin - 60, pageHeight - 5);
+            pdf.text('Page ' + i + ' of ' + totalPages, margin, pageHeight - 5);
+        }
+
+        console.log('Saving PDF...');
+        const fileName = 'report-' + currentReportKey + '-' + now.toISOString().split('T')[0] + '.pdf';
+        pdf.save(fileName);
+        console.log('PDF exported successfully:', fileName);
+
+    } catch (error) {
+        console.error('Error exporting PDF:', error);
+        console.error('Error stack:', error.stack);
+        showError('reports.errors.pdfExportFailed', error.message);
+    }
+}
+
 async function initializeReportsPage() {
     const htmlElement = document.documentElement;
     const i18nReadyPromise = window.i18n?.ready;
@@ -1068,6 +1273,18 @@ async function initializeReportsPage() {
             const t = getTranslator();
             exportBtn.title = t('reports.buttons.exportTooltip');
             exportBtn.disabled = true;
+        }
+
+        const exportPdfBtn = qs('exportPdfBtn');
+        console.log('exportPdfBtn element:', exportPdfBtn);
+        if (exportPdfBtn) {
+            exportPdfBtn.addEventListener('click', () => {
+                console.log('Export PDF button clicked');
+                exportReportToPDF();
+            });
+            const t = getTranslator();
+            exportPdfBtn.title = t('reports.buttons.exportPdfTooltip');
+            exportPdfBtn.disabled = true;
         }
 
         const initialConfig = REPORT_CONFIGS[currentReportKey] || REPORT_CONFIGS['missing-manager'];

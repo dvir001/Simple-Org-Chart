@@ -30,6 +30,7 @@
             <div class="header-actions">
                 <button type="button" class="btn btn-secondary" id="refreshReportBtn" data-i18n="reports.buttons.refresh">Refresh Data</button>
                 <button type="button" class="btn btn-primary" id="exportReportBtn" data-i18n="reports.buttons.export">Export XLSX</button>
+                <button type="button" class="btn btn-primary" id="exportPdfBtn" data-i18n="reports.buttons.exportPdf">Export PDF</button>
             </div>
         </header>
 
@@ -81,6 +82,7 @@
         <div id="errorBanner" class="error-banner is-hidden"></div>
     </div>
 
+    <script src="/static/jspdf.umd.min.js"></script>
     <script src="/static/i18n.js" defer></script>
     <script src="/static/reports.js" defer></script>
 </body>

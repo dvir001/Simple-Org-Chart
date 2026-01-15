@@ -3547,6 +3547,20 @@ async function exportToPDF(exportFullChart = false) {
             pdf.addImage(pngDataUrl, 'PNG', x, y, finalWidth, finalHeight);
         }
 
+        // Add timestamp in the bottom-right corner
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const timestamp = `${year}-${month}-${day} ${hours}:${minutes}`;
+        pdf.setFontSize(8);
+        pdf.setTextColor(128, 128, 128);
+        const timestampText = `Generated: ${timestamp}`;
+        const textWidth = pdf.getTextWidth(timestampText);
+        pdf.text(timestampText, pageWidth - margin - textWidth, pageHeight - 5);
+
         const fileName = `org-chart-${new Date().toISOString().split('T')[0]}.pdf`;
         pdf.save(fileName);
         console.log('PDF exported successfully:', fileName);

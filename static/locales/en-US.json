@@ -384,7 +384,9 @@
 			"refresh": "Refresh Data",
 			"refreshTooltip": "Regenerate the report with the latest directory data",
 			"export": "Export XLSX",
-			"exportTooltip": "Download this report as an Excel workbook"
+			"exportTooltip": "Download this report as an Excel workbook",
+			"exportPdf": "Export PDF",
+			"exportPdfTooltip": "Download this report as a PDF document"
 		},
 		"filters": {
 			"title": "Filters",
@@ -537,7 +539,11 @@
 		"errors": {
 			"loadFailed": "Unable to load the report.",
 			"exportFailed": "Unable to export the report.",
-			"initializationFailed": "Failed to initialize the reports page."
+			"initializationFailed": "Failed to initialize the reports page.",
+			"pdfLibraryMissing": "PDF export library is not available. Please refresh the page.",
+			"noDataToExport": "No data available to export.",
+			"noTableToExport": "No table data found to export.",
+			"pdfExportFailed": "PDF export failed: {message}"
 		}
 	},
 	"searchTest": {
