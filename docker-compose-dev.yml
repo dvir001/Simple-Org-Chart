@@ -1,7 +1,7 @@
 services:
   orgchart_dev:
     build: .
-    container_name: OrgChart-Dev
+    container_name: orgchart-dev
     restart: unless-stopped
     ports:
       - "5002:${APP_PORT:-5000}"
