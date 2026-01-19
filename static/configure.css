@@ -958,6 +958,7 @@ input[id$="ColorHex"] {
     border-radius: 14px;
     padding: 16px 20px;
     margin-top: 12px;
+    position: relative;
 }
 
 .data-update-card__info {
@@ -982,8 +983,17 @@ input[id$="ColorHex"] {
 
 .data-update-card__actions {
     display: flex;
+    flex-direction: row-reverse;
     align-items: center;
     gap: 16px;
+    margin-left: auto;
+}
+
+.update-status {
+    font-size: 0.85rem;
+    color: #dc2626;
+    white-space: nowrap;
+    min-width: 120px;
 }
 
 @media (max-width: 600px) {

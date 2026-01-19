@@ -137,18 +137,11 @@
                     </div>
                     <div class="config-controls config-controls--spaced schedule-row">
                         <div class="schedule-field">
-                            <span class="schedule-field__label" data-i18n="configure.behavior.autoUpdate.timeLabel">Time</span>
                             <div id="updateTimePicker" class="inline-time-picker">
                                 <select id="updateHour" class="time-select"></select>
                                 <span class="time-separator">:</span>
                                 <select id="updateMinute" class="time-select"></select>
                                 <input type="hidden" id="updateTime" value="20:00">
-                            </div>
-                        </div>
-                        <div class="schedule-field">
-                            <span class="schedule-field__label" data-i18n="configure.behavior.autoUpdate.timezoneLabel">Time zone</span>
-                            <div class="inline-time-picker inline-time-picker--wide">
-                                <select id="updateTimezone" class="time-select timezone-select"></select>
                             </div>
                         </div>
                         <button class="btn btn-secondary schedule-row__btn" type="button" data-config-action="reset-update-time" data-i18n="configure.buttons.resetDefault">Reset to Default</button>

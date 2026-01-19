@@ -1302,9 +1302,18 @@ async function applySettings() {
     logo.style.display = '';
 
     if (appSettings.updateTime) {
-        const timeZone = appSettings.updateTimezone || 'UTC';
+        let displayTime = appSettings.updateTime;
+        // Convert UTC time to user's local timezone for display
+        try {
+            const [hours, minutes] = appSettings.updateTime.split(':').map(Number);
+            const now = new Date();
+            const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes));
+            displayTime = utcDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+        } catch (e) {
+            console.warn('Failed to convert update time to local timezone', e);
+        }
         const timeText = appSettings.autoUpdateEnabled
-            ? t('index.header.autoUpdate.enabled', { time: appSettings.updateTime, timeZone })
+            ? t('index.header.autoUpdate.enabled', { time: displayTime })
             : t('index.header.autoUpdate.disabled');
         const headerP = document.querySelector('.header-text p');
         if (headerP) headerP.textContent = timeText;

@@ -42,7 +42,6 @@ let isInitializing = true;
 let beforeUnloadBound = false;
 const unsavedReasons = new Set();
 const DEFAULT_UPDATE_TIME = '20:00';
-const DEFAULT_UPDATE_TIMEZONE = 'UTC';
 const DEFAULT_HEADER_COLOR = '#0078D4';
 const NODE_COLOR_DEFAULTS = {
     level0: '#90EE90',
@@ -67,6 +66,21 @@ function updateLastUpdatedDisplay(value) {
     if (value) {
         const text = typeof value === 'string' ? value.trim() : `${value}`;
         if (text) {
+            // Try to parse as ISO date and convert to local time
+            try {
+                const date = new Date(text);
+                if (!isNaN(date.getTime())) {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                    lastUpdatedEl.textContent = `${year}-${month}-${day} ${hours}:${minutes}`;
+                    return;
+                }
+            } catch (e) {
+                // Fall through to display raw text
+            }
             lastUpdatedEl.textContent = text;
             return;
         }
@@ -1002,52 +1016,20 @@ function initTimePicker() {
     syncHidden();
 }
 
-function initTimezonePicker() {
-    const tzSelect = document.getElementById('updateTimezone');
-    if (!tzSelect) {
-        return;
-    }
+// Convert local time (HH:MM) to UTC time string
+function localTimeToUtc(localTimeStr) {
+    const [hours, minutes] = localTimeStr.split(':').map(Number);
+    const now = new Date();
+    now.setHours(hours, minutes, 0, 0);
+    return `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
+}
 
-    let zones = [];
-    if (typeof Intl !== 'undefined' && typeof Intl.supportedValuesOf === 'function') {
-        try {
-            zones = Intl.supportedValuesOf('timeZone');
-        } catch (error) {
-            console.warn('Failed to enumerate time zones via Intl.supportedValuesOf', error);
-        }
-    }
-
-    if (!zones || zones.length === 0) {
-        zones = [
-            'UTC',
-            'America/New_York',
-            'America/Chicago',
-            'America/Denver',
-            'America/Los_Angeles',
-            'Europe/London',
-            'Europe/Berlin',
-            'Asia/Tokyo',
-            'Australia/Sydney'
-        ];
-    }
-
-    const fragment = document.createDocumentFragment();
-    zones.forEach(zone => {
-        const option = document.createElement('option');
-        option.value = zone;
-        option.textContent = zone;
-        fragment.appendChild(option);
-    });
-
-    tzSelect.innerHTML = '';
-    tzSelect.appendChild(fragment);
-
-    const desired = DEFAULT_UPDATE_TIMEZONE;
-    if (zones.includes(desired)) {
-        tzSelect.value = desired;
-    } else if (zones.length) {
-        tzSelect.value = zones[0];
-    }
+// Convert UTC time (HH:MM) to local time string
+function utcTimeToLocal(utcTimeStr) {
+    const [hours, minutes] = utcTimeStr.split(':').map(Number);
+    const now = new Date();
+    const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes));
+    return `${utcDate.getHours().toString().padStart(2, '0')}:${utcDate.getMinutes().toString().padStart(2, '0')}`;
 }
 
 function applySettings(settings) {
@@ -1093,7 +1075,9 @@ function applySettings(settings) {
     }
 
     if (settings.updateTime) {
-        const [h, m] = settings.updateTime.split(':');
+        // Convert stored UTC time to local for display
+        const localTime = utcTimeToLocal(settings.updateTime);
+        const [h, m] = localTime.split(':');
         const hourSel = document.getElementById('updateHour');
         const minSel = document.getElementById('updateMinute');
         if (hourSel && minSel) {
@@ -1102,18 +1086,6 @@ function applySettings(settings) {
         }
         const hidden = document.getElementById('updateTime');
         if (hidden) hidden.value = `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
-    }
-
-    const timezoneSelect = document.getElementById('updateTimezone');
-    if (timezoneSelect) {
-        const desiredTimezone = settings.updateTimezone || DEFAULT_UPDATE_TIMEZONE;
-        if (!Array.from(timezoneSelect.options).some(option => option.value === desiredTimezone)) {
-            const option = document.createElement('option');
-            option.value = desiredTimezone;
-            option.textContent = desiredTimezone;
-            timezoneSelect.appendChild(option);
-        }
-        timezoneSelect.value = desiredTimezone;
     }
 
     if (settings.collapseLevel) {
@@ -1229,7 +1201,7 @@ function applySettings(settings) {
     const updateMeta = settings.dataUpdateStatus || {};
     if (updateMeta.state === 'running') {
         updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
-        setUpdateStatus('configure.data.manualUpdate.statusUpdating', 'Updating...');
+        setUpdateStatus(null, '');  // Don't show duplicate status text
         startUpdatePolling();
     } else {
         updateLastUpdatedDisplay(settings.dataLastUpdatedAt);
@@ -1570,10 +1542,6 @@ function resetUpdateTime() {
     if (minSel) minSel.value = defaultMinute;
     const hidden = document.getElementById('updateTime');
     if (hidden) hidden.value = DEFAULT_UPDATE_TIME;
-    const tzSelect = document.getElementById('updateTimezone');
-    if (tzSelect) {
-        tzSelect.value = DEFAULT_UPDATE_TIMEZONE;
-    }
     document.getElementById('autoUpdateEnabled').checked = true;
     markUnsavedChange();
 }
@@ -1712,8 +1680,7 @@ async function saveAllSettings() {
             return accumulator;
         }, {}),
         autoUpdateEnabled: document.getElementById('autoUpdateEnabled').checked,
-        updateTime: document.getElementById('updateTime').value,
-    updateTimezone: document.getElementById('updateTimezone').value,
+        updateTime: localTimeToUtc(document.getElementById('updateTime').value),
         collapseLevel: document.getElementById('collapseLevel').value,
         searchAutoExpand: document.getElementById('searchAutoExpand').checked,
         searchHighlight: document.getElementById('searchHighlight').checked,
@@ -1849,7 +1816,7 @@ function startUpdatePolling() {
 
 async function triggerUpdate() {
     const previousTimestamp = currentSettings?.dataLastUpdatedAt || null;
-    setUpdateStatus('configure.data.manualUpdate.statusUpdating', 'Updating...');
+    setUpdateStatus(null, '');  // Clear status, only show in Last Updated field
     updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
     if (!currentSettings || typeof currentSettings !== 'object') {
         currentSettings = {};
@@ -1863,15 +1830,9 @@ async function triggerUpdate() {
         const response = await fetch(`${API_BASE_URL}/api/update-now`, { method: 'POST' });
 
         if (response.ok) {
-            setUpdateStatus('configure.data.manualUpdate.statusUpdating', 'Updating...');
             startUpdatePolling();
         } else if (response.status === 409) {
-            setUpdateStatus('configure.data.manualUpdate.statusInProgress', 'Update already in progress');
             updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
-            const statusEl = document.getElementById('updateStatus');
-            if (statusEl) {
-                statusEl.title = resolveTranslation('configure.data.manualUpdate.statusInProgress', 'Update already in progress');
-            }
             startUpdatePolling();
         } else {
             setUpdateStatus('configure.data.manualUpdate.statusFailed', '✗ Update failed');
@@ -1937,7 +1898,6 @@ function registerConfigActions() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     initTimePicker();
-    initTimezonePicker();
     registerConfigActions();
     attachUnsavedListeners();
     registerNavigationGuards();

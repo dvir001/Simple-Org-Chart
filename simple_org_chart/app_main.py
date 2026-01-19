@@ -730,16 +730,8 @@ def handle_settings():
         data_last_updated = None
         try:
             if os.path.exists(DATA_FILE):
-                tz_name = settings.get('updateTimezone') or 'UTC'
-                tz = timezone.utc
-                if ZoneInfo:
-                    try:
-                        tz = ZoneInfo(tz_name)
-                    except Exception:
-                        logger.warning("Invalid timezone '%s'; defaulting to UTC", tz_name)
                 modified_at = datetime.fromtimestamp(os.path.getmtime(DATA_FILE), tz=timezone.utc)
-                localized = modified_at.astimezone(tz)
-                data_last_updated = localized.strftime('%Y-%m-%d %H:%M')
+                data_last_updated = modified_at.isoformat()
         except Exception as timestamp_error:
             logger.warning("Failed to compute data last updated timestamp: %s", timestamp_error)
 
@@ -760,7 +752,7 @@ def handle_settings():
             current_settings.update(new_settings)
             
             if save_settings(current_settings):
-                if ('updateTime' in new_settings or 'autoUpdateEnabled' in new_settings or 'updateTimezone' in new_settings):
+                if ('updateTime' in new_settings or 'autoUpdateEnabled' in new_settings):
                     threading.Thread(target=restart_scheduler).start()
                 
                 return jsonify({'success': True})

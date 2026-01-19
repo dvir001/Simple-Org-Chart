@@ -29,7 +29,6 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     },
     "autoUpdateEnabled": True,
     "updateTime": "20:00",
-    "updateTimezone": "UTC",
     "collapseLevel": "2",
     "searchAutoExpand": True,
     "searchHighlight": True,

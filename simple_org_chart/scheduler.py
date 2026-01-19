@@ -108,15 +108,14 @@ def _schedule_loop() -> None:
         logger.info("[%s] Initial update skipped (RUN_INITIAL_UPDATE=%s)", datetime.now(), run_initial)
 
     update_time = _parse_time_string(settings.get("updateTime"))
-    tz = _resolve_timezone(settings.get("updateTimezone"))
+    tz = timezone.utc
     next_run_utc: Optional[datetime]
     if settings.get("autoUpdateEnabled", True):
         next_run_utc = _compute_next_run(update_time, tz)
         logger.info(
-            "Scheduled daily updates for %s (%s); next run at %s",
+            "Scheduled daily updates for %s UTC; next run at %s",
             update_time.strftime("%H:%M"),
-            getattr(tz, "key", str(tz)),
-            next_run_utc.astimezone(tz).strftime("%Y-%m-%d %H:%M %Z"),
+            next_run_utc.strftime("%Y-%m-%d %H:%M UTC"),
         )
     else:
         next_run_utc = None
@@ -124,7 +123,7 @@ def _schedule_loop() -> None:
 
     while _scheduler_running:
         if next_run_utc is not None and datetime.now(timezone.utc) >= next_run_utc:
-            logger.info("Executing scheduled update at %s", datetime.now(tz).strftime("%Y-%m-%d %H:%M %Z"))
+            logger.info("Executing scheduled update at %s UTC", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
             try:
                 update_callback()
             except Exception as exc:  # noqa: BLE001 - log and continue running loop
@@ -132,13 +131,13 @@ def _schedule_loop() -> None:
 
             settings = load_settings()
             update_time = _parse_time_string(settings.get("updateTime"))
-            tz = _resolve_timezone(settings.get("updateTimezone"))
+            tz = timezone.utc
 
             if settings.get("autoUpdateEnabled", True):
                 next_run_utc = _compute_next_run(update_time, tz)
                 logger.info(
-                    "Next scheduled update at %s",
-                    next_run_utc.astimezone(tz).strftime("%Y-%m-%d %H:%M %Z"),
+                    "Next scheduled update at %s UTC",
+                    next_run_utc.strftime("%Y-%m-%d %H:%M"),
                 )
             else:
                 next_run_utc = None
