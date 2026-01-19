@@ -994,6 +994,65 @@ function applyProfileImageAttributes(selection) {
         });
 }
 
+function formatLastUpdatedTime(value) {
+    if (!value) return null;
+    const text = typeof value === 'string' ? value.trim() : `${value}`;
+    if (!text) return null;
+    
+    try {
+        const date = new Date(text);
+        if (!isNaN(date.getTime())) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}`;
+        }
+    } catch (e) {
+        // Return null if parsing fails
+    }
+    return null;
+}
+
+function updateHeaderSubtitle(syncing = false) {
+    const headerP = document.querySelector('.header-text p');
+    if (!headerP) return;
+    
+    if (syncing) {
+        headerP.textContent = t('index.header.autoUpdate.syncing', { defaultValue: 'Syncing...' });
+        return;
+    }
+    
+    if (!appSettings.updateTime) return;
+    
+    let displayTime = appSettings.updateTime;
+    // Convert UTC time to user's local timezone for display
+    try {
+        const [hours, minutes] = appSettings.updateTime.split(':').map(Number);
+        const now = new Date();
+        const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes));
+        displayTime = utcDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch (e) {
+        console.warn('Failed to convert update time to local timezone', e);
+    }
+    
+    // Format last updated time
+    const lastUpdated = formatLastUpdatedTime(appSettings.dataLastUpdatedAt);
+    
+    let timeText;
+    if (lastUpdated) {
+        timeText = appSettings.autoUpdateEnabled
+            ? t('index.header.autoUpdate.enabledWithLastUpdate', { time: displayTime, lastUpdate: lastUpdated })
+            : t('index.header.autoUpdate.disabledWithLastUpdate', { lastUpdate: lastUpdated });
+    } else {
+        timeText = appSettings.autoUpdateEnabled
+            ? t('index.header.autoUpdate.enabled', { time: displayTime })
+            : t('index.header.autoUpdate.disabled');
+    }
+    headerP.textContent = timeText;
+}
+
 async function loadSettings() {
     try {
         const response = await fetch(`${API_BASE_URL}/api/settings`);
@@ -1090,6 +1149,13 @@ function setupStaticEventListeners() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', () => {
             logout();
+        });
+    }
+
+    const syncBtn = document.getElementById('syncBtn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', () => {
+            triggerDataSync();
         });
     }
 
@@ -1301,23 +1367,7 @@ async function applySettings() {
     logo.classList.remove('loading'); // Show logo after src is set
     logo.style.display = '';
 
-    if (appSettings.updateTime) {
-        let displayTime = appSettings.updateTime;
-        // Convert UTC time to user's local timezone for display
-        try {
-            const [hours, minutes] = appSettings.updateTime.split(':').map(Number);
-            const now = new Date();
-            const utcDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes));
-            displayTime = utcDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-        } catch (e) {
-            console.warn('Failed to convert update time to local timezone', e);
-        }
-        const timeText = appSettings.autoUpdateEnabled
-            ? t('index.header.autoUpdate.enabled', { time: displayTime })
-            : t('index.header.autoUpdate.disabled');
-        const headerP = document.querySelector('.header-text p');
-        if (headerP) headerP.textContent = timeText;
-    }
+    updateHeaderSubtitle();
     
     // Show header content after settings are applied to prevent flash of default content
     const headerContent = document.querySelector('.header-content');
@@ -1447,6 +1497,14 @@ async function applySettings() {
     await ensureIdentityFieldMinimum({ source: 'apply-settings', skipUpdateAuth: true });
 
     await updateAuthDependentUI();
+
+    // Check if a sync is already in progress and show the syncing state
+    const updateStatus = appSettings.dataUpdateStatus || {};
+    if (updateStatus.state === 'running' && isAuthenticated) {
+        setSyncButtonState(true);
+        updateHeaderSubtitle(true); // Show syncing in header
+        startSyncPolling();
+    }
 }
 
 function adjustColor(color, amount) {
@@ -1481,6 +1539,11 @@ function updateAdminActions() {
     const loginBtn = document.getElementById('loginBtn');
     if (loginBtn) {
         loginBtn.classList.toggle('is-hidden', isAuthenticated);
+    }
+
+    const syncBtn = document.getElementById('syncBtn');
+    if (syncBtn) {
+        syncBtn.classList.toggle('is-hidden', !isAuthenticated);
     }
 
     const reportsBtn = document.getElementById('reportsBtn');
@@ -1682,6 +1745,30 @@ async function init() {
         }
     } finally {
         htmlElement.classList.remove('i18n-loading');
+    }
+}
+
+async function refreshOrgChart() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/employees`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        currentData = await response.json();
+        window.currentOrgData = currentData;
+        
+        if (currentData) {
+            employeeById.clear();
+            allEmployees = flattenTree(currentData);
+            const validIds = allEmployees.map(emp => emp.id).filter(Boolean);
+            pruneTitleOverrides(validIds);
+            pruneDepartmentOverrides(validIds);
+            initializeTopUserSearch();
+            preloadEmployeeImages(allEmployees);
+            renderOrgChart(currentData);
+        }
+    } catch (error) {
+        console.error('Error refreshing org chart:', error);
     }
 }
 
@@ -4893,6 +4980,106 @@ async function exportToXLSX() {
     } catch (error) {
         console.error('Export error:', error);
         alert(t('index.alerts.xlsxExportError'));
+    }
+}
+
+// Data sync functionality
+let _syncPollingInterval = null;
+
+function setSyncButtonState(syncing, statusText = null) {
+    const syncBtn = document.getElementById('syncBtn');
+    if (!syncBtn) return;
+    
+    syncBtn.classList.toggle('is-syncing', syncing);
+    
+    if (syncing) {
+        syncBtn.innerHTML = `<span class="sync-spinner"></span>${statusText || t('buttons.syncing', { defaultValue: 'Syncing...' })}`;
+    } else if (statusText) {
+        syncBtn.textContent = statusText;
+        // Reset to default after 3 seconds
+        setTimeout(() => {
+            syncBtn.textContent = t('buttons.sync', { defaultValue: 'Sync' });
+        }, 3000);
+    } else {
+        syncBtn.textContent = t('buttons.sync', { defaultValue: 'Sync' });
+    }
+}
+
+function stopSyncPolling() {
+    if (_syncPollingInterval) {
+        clearInterval(_syncPollingInterval);
+        _syncPollingInterval = null;
+    }
+}
+
+async function pollSyncStatus() {
+    try {
+        const response = await fetch('/api/settings');
+        if (!response.ok) return;
+        
+        const settings = response.headers.get('content-type')?.includes('application/json')
+            ? await response.json()
+            : null;
+        
+        if (!settings) return;
+        
+        const status = settings.dataUpdateStatus;
+        if (!status || status.state !== 'running') {
+            stopSyncPolling();
+            
+            if (status?.state === 'completed') {
+                setSyncButtonState(false, t('buttons.syncComplete', { defaultValue: 'Sync complete' }));
+                // Update appSettings with new last updated time and refresh header
+                appSettings.dataLastUpdatedAt = settings.dataLastUpdatedAt;
+                updateHeaderSubtitle();
+                // Reload the org chart data
+                refreshOrgChart();
+            } else if (status?.state === 'failed') {
+                setSyncButtonState(false, t('buttons.syncFailed', { defaultValue: 'Sync failed' }));
+                // Restore header subtitle after failed sync
+                appSettings.dataLastUpdatedAt = settings.dataLastUpdatedAt;
+                updateHeaderSubtitle();
+            } else {
+                setSyncButtonState(false);
+                // Restore header subtitle when sync finished (idle state)
+                appSettings.dataLastUpdatedAt = settings.dataLastUpdatedAt;
+                updateHeaderSubtitle();
+            }
+        }
+    } catch (error) {
+        console.warn('Sync status poll error:', error);
+    }
+}
+
+function startSyncPolling() {
+    stopSyncPolling();
+    _syncPollingInterval = setInterval(pollSyncStatus, 3000);
+}
+
+async function triggerDataSync() {
+    const syncBtn = document.getElementById('syncBtn');
+    if (!syncBtn || syncBtn.classList.contains('is-syncing')) return;
+    
+    setSyncButtonState(true);
+    updateHeaderSubtitle(true); // Show syncing in header
+    
+    try {
+        const response = await fetch('/api/update-now', { method: 'POST' });
+        
+        if (response.ok) {
+            startSyncPolling();
+        } else if (response.status === 409) {
+            // Update already in progress
+            setSyncButtonState(true, t('buttons.syncing', { defaultValue: 'Syncing...' }));
+            startSyncPolling();
+        } else {
+            setSyncButtonState(false, t('buttons.syncFailed', { defaultValue: 'Sync failed' }));
+            updateHeaderSubtitle(); // Restore normal header
+        }
+    } catch (error) {
+        console.error('Sync trigger error:', error);
+        setSyncButtonState(false, t('buttons.syncFailed', { defaultValue: 'Sync failed' }));
+        updateHeaderSubtitle(); // Restore normal header
     }
 }
 

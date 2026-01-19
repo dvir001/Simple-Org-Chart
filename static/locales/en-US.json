@@ -5,7 +5,11 @@
 		"save": "Save",
 		"reset": "Reset",
 		"reports": "Reports",
-		"adminLogin": "Admin Login"
+		"adminLogin": "Admin Login",
+		"sync": "Sync",
+		"syncing": "Syncing...",
+		"syncComplete": "Sync complete",
+		"syncFailed": "Sync failed"
 	},
 	"index": {
 		"pageTitle": "Organization Chart",
@@ -15,7 +19,10 @@
 			"subtitle": "Updates daily @ 8:00 PM",
 			"autoUpdate": {
 				"enabled": "Updates daily @ {time}",
-				"disabled": "Auto-update disabled"
+				"enabledWithLastUpdate": "Updates daily @ {time} · Last synced: {lastUpdate}",
+				"disabled": "Auto-update disabled",
+				"disabledWithLastUpdate": "Auto-update disabled · Last synced: {lastUpdate}",
+				"syncing": "Syncing..."
 			}
 		},
 		"search": {
@@ -186,9 +193,6 @@
 			},
 			"export": {
 				"title": "📄 Export to XLSX Options"
-			},
-			"data": {
-				"title": "📊 Data Management"
 			}
 		},
 		"directory": {
@@ -207,8 +211,7 @@
 				"description": "Add contacts that should appear in the directory feeds even if they are not in the org chart. Use one entry per line in the format Name,Number.",
 				"placeholder": "Ada Lovelace,555-123-4567",
 				"hint": "Lines starting with # are ignored. Numbers accept digits, spaces, and punctuation."
-			},
-			"disabled": "This directory feed is disabled. Enable it in the Configure page."
+			}
 		},
 		"appearance": {
 			"chartTitle": {
@@ -349,16 +352,10 @@
 		},
 		"data": {
 			"manualUpdate": {
-				"label": "Manual Data Update",
-				"description": "Trigger an immediate update of employee data from Azure AD",
-				"lastUpdatedLabel": "Last updated:",
 				"lastUpdatedPending": "Pending",
 				"lastUpdatedUpdating": "Updating...",
-				"statusUpdating": "Updating...",
-				"statusStarted": "✔ Update started",
 				"statusComplete": "✔ Update complete",
-				"statusFailed": "✗ Update failed",
-				"statusInProgress": "Update already in progress"
+				"statusFailed": "✗ Update failed"
 			}
 		},
 		"buttons": {
@@ -366,7 +363,6 @@
 			"resetAllNodeColors": "Reset All Node Colors",
 			"resetColumns": "Reset Columns to Default",
 			"clear": "Clear",
-			"updateNow": "Update Now",
 			"discard": "Discard Changes",
 			"saveAll": "Save All Settings",
 			"resetAll": "Reset Everything to Defaults",
@@ -426,12 +422,6 @@
 			"includeUnlicensed": {
 				"label": "Unlicensed"
 			},
-			"licensedOnly": {
-				"label": "Licensed"
-			},
-			"filteredLicensedOnly": {
-				"label": "Licensed"
-			},
 			"inactiveDays": {
 				"label": "Inactive for at least",
 				"options": {
@@ -473,7 +463,6 @@
 		"table": {
 			"title": "Employees without managers",
 			"loading": "Loading report...",
-			"updated": "Report loaded",
 			"countSummary": "Showing {count} employees without managers",
 			"empty": "No users are currently missing manager information. Great job!",
 			"columns": {
@@ -522,10 +511,6 @@
 				"countSummary": "Showing {count} employees hired in the last 365 days"
 			},
 			"filteredLicensed": {
-				"summaryLabel": "Licensed users hidden by filters",
-				"tableTitle": "Licensed users hidden by org chart filters",
-				"empty": "No licensed users are currently hidden by your filters.",
-				"countSummary": "Showing {count} hidden licensed users holding {licenses} licenses",
 				"columns": {
 					"filterReasons": "Reason"
 				},
