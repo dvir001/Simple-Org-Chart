@@ -124,17 +124,24 @@ docker compose up -d
    - Users hidden by filters
 - **Export Options**: SVG/PNG/PDF snapshots and XLSX exports for reports and chart data.
 - **MicroSIP Directory Feed**: Serve a MicroSIP contacts JSON at /contacts.json using cached employee data.
+- **Desk Phone Directory**: Yealink-compatible XML phonebook at /contacts.xml for T31P, T33G, T46U, and similar models.
 - **Caching & Scheduling**: JSON caches regenerate nightly; manual refresh endpoints keep data current on demand.
 
 ## MicroSIP Directory
 
-SimpleOrgChart publishes a MicroSIP-compatible directory export at /contacts.json.
+SimpleOrgChart can publish a MicroSIP-compatible directory export. **Disabled by default.**
+
+1. Navigate to `/configure` and enable **MicroSIP Directory (JSON)**
+2. Optionally change the filename (default: `contacts` → `/contacts.json`)
+3. Save settings
+
+Once enabled:
 
 - The feed reuses the cached employee list; trigger a manual refresh if the response is empty.
 - Response headers disable caching so MicroSIP always retrieves the latest contacts.
 - Fields include number, name, firstname, lastname, phone, mobile, email, address, city, state, comment, presence, starred, and info.
 - Contacts without a desk or mobile number are skipped to keep the directory free of unreachable entries.
-- Add extra entries from the Configure → Custom MicroSIP Contacts textarea (one Name,Number pair per line) when you need off-chart contacts in the feed.
+- Add extra entries from the Configure → Custom Directory Contacts textarea (one Name,Number pair per line) when you need off-chart contacts in the feed.
 
 Example payload:
 
@@ -158,6 +165,49 @@ Example payload:
       }
    ]
 }
+```
+
+## Desk Phone Directory (Yealink XML)
+
+SimpleOrgChart can provide a Yealink-compatible remote phonebook. **Disabled by default.**
+
+1. Navigate to `/configure` and enable **Desk Phone Directory (XML)**
+2. Optionally change the filename (default: `contacts` → `/contacts.xml`)
+3. Save settings
+
+Once enabled:
+
+- Compatible with Yealink T31P, T33G, T46U, and other models supporting remote XML phonebooks.
+- Reuses the same cached employee list and custom contacts as the MicroSIP directory.
+- Contacts without a desk or mobile number are omitted.
+- Employees with both office and mobile phones will have both numbers listed.
+- The phonebook title is derived from your configured Chart Title.
+
+### Yealink Phone Configuration
+
+1. Access your phone's web interface (typically `http://<phone-ip>`)
+2. Navigate to **Directory** → **Remote Phone Book**
+3. Add a new remote phonebook entry:
+   - **Remote URL**: `http://<your-server>:5000/<filename>.xml` (use your configured filename)
+   - **Display Name**: `Company Directory`
+4. Save and reboot the phone if required
+
+Example XML structure:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<YealinkIPPhoneDirectory>
+  <Title>Organization Directory</Title>
+  <DirectoryEntry>
+    <Name>Ada Lovelace</Name>
+    <Telephone>555-123-4567</Telephone>
+    <Telephone>555-987-6543</Telephone>
+  </DirectoryEntry>
+  <DirectoryEntry>
+    <Name>Charles Babbage</Name>
+    <Telephone>555-111-2222</Telephone>
+  </DirectoryEntry>
+</YealinkIPPhoneDirectory>
 ```
 
 ## Reporting Caches

@@ -161,6 +161,27 @@ body:not(.is-loading) .header {
     align-items: stretch;
 }
 
+.config-controls--inline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.config-input--short {
+    width: 140px;
+    padding: 6px 10px;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    font-size: 0.9rem;
+}
+
+.config-input--short:focus {
+    outline: none;
+    border-color: rgba(0, 120, 212, 0.55);
+    box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.12);
+}
+
 .config-textarea {
     width: 100%;
     min-height: 140px;

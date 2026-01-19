@@ -1208,6 +1208,24 @@ function applySettings(settings) {
         }
     }
 
+    // Directory feed settings
+    const jsonEnabledEl = document.getElementById('directoryJsonEnabled');
+    if (jsonEnabledEl) {
+        jsonEnabledEl.checked = settings.directoryJsonEnabled === true;
+    }
+    const jsonFilenameEl = document.getElementById('directoryJsonFilename');
+    if (jsonFilenameEl) {
+        jsonFilenameEl.value = settings.directoryJsonFilename || 'contacts';
+    }
+    const xmlEnabledEl = document.getElementById('directoryXmlEnabled');
+    if (xmlEnabledEl) {
+        xmlEnabledEl.checked = settings.directoryXmlEnabled === true;
+    }
+    const xmlFilenameEl = document.getElementById('directoryXmlFilename');
+    if (xmlFilenameEl) {
+        xmlFilenameEl.value = settings.directoryXmlFilename || 'contacts';
+    }
+
     const updateMeta = settings.dataUpdateStatus || {};
     if (updateMeta.state === 'running') {
         updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
@@ -1712,7 +1730,11 @@ async function saveAllSettings() {
         topLevelUserEmail: document.getElementById('topLevelUserInput')?.value || '',
         topLevelUserId: document.getElementById('topLevelUserIdInput')?.value || '',
         exportXlsxColumns: getExportColumnSettings(),
-        customDirectoryContacts: (document.getElementById('customDirectoryContacts')?.value || '').trim()
+        customDirectoryContacts: (document.getElementById('customDirectoryContacts')?.value || '').trim(),
+        directoryJsonEnabled: document.getElementById('directoryJsonEnabled')?.checked || false,
+        directoryJsonFilename: (document.getElementById('directoryJsonFilename')?.value || 'contacts').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'contacts',
+        directoryXmlEnabled: document.getElementById('directoryXmlEnabled')?.checked || false,
+        directoryXmlFilename: (document.getElementById('directoryXmlFilename')?.value || 'contacts').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'contacts'
     };
 
     try {

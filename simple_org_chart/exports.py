@@ -187,7 +187,85 @@ def build_microsip_directory_items(
     return items
 
 
+def build_yealink_phonebook_xml(
+    employees: Optional[List[Dict[str, Any]]],
+    *,
+    settings: Optional[Dict[str, Any]] = None,
+    title: str = "Organization Directory",
+) -> str:
+    """Generate Yealink-compatible remote phonebook XML from employee records.
+    
+    Compatible with Yealink T31P, T33G, T46U and similar models that support
+    the YealinkIPPhoneDirectory XML schema for remote phonebooks.
+    """
+    from xml.etree.ElementTree import Element, SubElement, tostring
+
+    settings = settings or load_settings()
+    custom_contacts = _parse_custom_directory_contacts((settings or {}).get('customDirectoryContacts'))
+
+    root = Element('YealinkIPPhoneDirectory')
+
+    title_el = SubElement(root, 'Title')
+    title_el.text = title
+
+    used_numbers: Set[str] = set()
+
+    # Process employees sorted alphabetically
+    for employee in sorted(employees or [], key=lambda e: (e.get('name') or '').lower()):
+        business_phone = (employee.get('businessPhone') or '').strip()
+        mobile_phone = (employee.get('phone') or '').strip()
+
+        if not business_phone and not mobile_phone:
+            continue
+
+        full_name = (employee.get('name') or '').strip()
+        if not full_name:
+            continue
+
+        entry = SubElement(root, 'DirectoryEntry')
+
+        name_el = SubElement(entry, 'Name')
+        name_el.text = full_name
+
+        # Add business phone as primary
+        if business_phone:
+            phone_el = SubElement(entry, 'Telephone')
+            phone_el.text = business_phone
+            used_numbers.add(_sanitize_contact_number(business_phone))
+
+        # Add mobile as secondary if different from business
+        if mobile_phone:
+            sanitized_mobile = _sanitize_contact_number(mobile_phone)
+            if sanitized_mobile not in used_numbers:
+                mobile_el = SubElement(entry, 'Telephone')
+                mobile_el.text = mobile_phone
+                used_numbers.add(sanitized_mobile)
+
+    # Process custom contacts
+    for contact in custom_contacts:
+        raw_number = contact.get('raw_number', '')
+        sanitized = contact.get('sanitized_number', '')
+        name = (contact.get('name') or '').strip()
+
+        if not raw_number or not name:
+            continue
+
+        if sanitized in used_numbers:
+            continue
+
+        used_numbers.add(sanitized)
+
+        entry = SubElement(root, 'DirectoryEntry')
+        name_el = SubElement(entry, 'Name')
+        name_el.text = name
+        phone_el = SubElement(entry, 'Telephone')
+        phone_el.text = raw_number
+
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + tostring(root, encoding='unicode')
+
+
 __all__ = [
     'format_hire_date',
     'build_microsip_directory_items',
+    'build_yealink_phonebook_xml',
 ]

@@ -322,8 +322,42 @@
 
             <div class="config-group">
                 <div class="config-item">
-                    <label class="config-label" data-i18n="configure.directory.customContacts.label">Custom MicroSIP Contacts</label>
-                    <div class="config-description" data-i18n="configure.directory.customContacts.description">Add contacts that should appear in the MicroSIP feed even if they are not in the org chart. Use one entry per line in the format Name,Number.</div>
+                    <label class="config-label" data-i18n="configure.directory.jsonFeed.label">MicroSIP Directory (JSON)</label>
+                    <div class="config-description" data-i18n="configure.directory.jsonFeed.description">Enable a JSON feed for MicroSIP softphones at the specified endpoint.</div>
+                    <div class="config-controls">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="directoryJsonEnabled">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-label" data-i18n="configure.directory.jsonFeed.enableLabel">Enable JSON feed</span>
+                    </div>
+                    <div class="config-controls config-controls--inline" style="margin-top: 0.5rem;">
+                        <span class="config-hint" style="margin-right: 0.5rem;">/</span>
+                        <input type="text" id="directoryJsonFilename" class="config-input config-input--short" placeholder="contacts" maxlength="32">
+                        <span class="config-hint">.json</span>
+                    </div>
+                </div>
+
+                <div class="config-item">
+                    <label class="config-label" data-i18n="configure.directory.xmlFeed.label">Desk Phone Directory (XML)</label>
+                    <div class="config-description" data-i18n="configure.directory.xmlFeed.description">Enable an XML feed for Yealink and compatible desk phones at the specified endpoint.</div>
+                    <div class="config-controls">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="directoryXmlEnabled">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-label" data-i18n="configure.directory.xmlFeed.enableLabel">Enable XML feed</span>
+                    </div>
+                    <div class="config-controls config-controls--inline" style="margin-top: 0.5rem;">
+                        <span class="config-hint" style="margin-right: 0.5rem;">/</span>
+                        <input type="text" id="directoryXmlFilename" class="config-input config-input--short" placeholder="contacts" maxlength="32">
+                        <span class="config-hint">.xml</span>
+                    </div>
+                </div>
+
+                <div class="config-item">
+                    <label class="config-label" data-i18n="configure.directory.customContacts.label">Custom Directory Contacts</label>
+                    <div class="config-description" data-i18n="configure.directory.customContacts.description">Add contacts that should appear in the directory feeds even if they are not in the org chart. Use one entry per line in the format Name,Number.</div>
                     <div class="config-controls config-controls--stacked">
                         <textarea id="customDirectoryContacts" rows="6" class="config-textarea" placeholder="Ada Lovelace,555-123-4567" data-i18n-placeholder="configure.directory.customContacts.placeholder"></textarea>
                         <div class="config-hint" data-i18n="configure.directory.customContacts.hint">Lines starting with # are ignored. Numbers accept digits, spaces, and punctuation.</div>

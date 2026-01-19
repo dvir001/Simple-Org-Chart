@@ -192,12 +192,23 @@
 			}
 		},
 		"directory": {
+			"jsonFeed": {
+				"label": "MicroSIP Directory (JSON)",
+				"description": "Enable a JSON feed for MicroSIP softphones at the specified endpoint.",
+				"enableLabel": "Enable JSON feed"
+			},
+			"xmlFeed": {
+				"label": "Desk Phone Directory (XML)",
+				"description": "Enable an XML feed for Yealink and compatible desk phones at the specified endpoint.",
+				"enableLabel": "Enable XML feed"
+			},
 			"customContacts": {
-				"label": "Custom MicroSIP Contacts",
-				"description": "Add contacts that should appear in the MicroSIP feed even if they are not in the org chart. Use one entry per line in the format Name,Number.",
+				"label": "Custom Directory Contacts",
+				"description": "Add contacts that should appear in the directory feeds even if they are not in the org chart. Use one entry per line in the format Name,Number.",
 				"placeholder": "Ada Lovelace,555-123-4567",
 				"hint": "Lines starting with # are ignored. Numbers accept digits, spaces, and punctuation."
-			}
+			},
+			"disabled": "This directory feed is disabled. Enable it in the Configure page."
 		},
 		"appearance": {
 			"chartTitle": {
