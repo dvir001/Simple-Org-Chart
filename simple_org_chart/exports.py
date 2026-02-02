@@ -108,12 +108,15 @@ def build_microsip_directory_items(
         if not sanitized_business and not sanitized_mobile:
             continue
 
-        preferred_number = sanitized_business or sanitized_mobile
-        if not preferred_number or preferred_number in used_numbers:
-            preferred_number = _next_generated_number()
+        # Use sanitized number for deduplication, but keep formatted number for display
+        sanitized_preferred = sanitized_mobile or sanitized_business
+        display_number = mobile_phone if sanitized_mobile else business_phone
+        if not sanitized_preferred or sanitized_preferred in used_numbers:
+            sanitized_preferred = _next_generated_number()
+            display_number = sanitized_preferred
 
-        used_numbers.add(preferred_number)
-        employee_numbers.add(preferred_number)
+        used_numbers.add(sanitized_preferred)
+        employee_numbers.add(sanitized_preferred)
 
         full_name = (employee.get('name') or '').strip()
         first_name, last_name = _split_name_parts(full_name)
@@ -126,8 +129,8 @@ def build_microsip_directory_items(
         comment = ' - '.join(comment_parts)
 
         items.append({
-            'number': preferred_number,
-            'name': full_name or email or preferred_number,
+            'number': display_number,
+            'name': full_name or email or display_number,
             'firstname': first_name,
             'lastname': last_name,
             'phone': business_phone,
@@ -148,27 +151,30 @@ def build_microsip_directory_items(
     custom_numbers: Set[str] = set()
 
     for contact in custom_contacts:
-        preferred_number = contact['sanitized_number']
+        sanitized_number = contact['sanitized_number']
+        display_number = contact['raw_number']
 
-        if preferred_number:
-            if preferred_number in custom_numbers:
-                preferred_number = None
+        if sanitized_number:
+            if sanitized_number in custom_numbers:
+                sanitized_number = None
+                display_number = None
             else:
-                custom_numbers.add(preferred_number)
-                if preferred_number in employee_numbers:
-                    logger.debug("Custom contact reusing existing employee number %s", preferred_number)
+                custom_numbers.add(sanitized_number)
+                if sanitized_number in employee_numbers:
+                    logger.debug("Custom contact reusing existing employee number %s", sanitized_number)
 
-        if not preferred_number:
-            preferred_number = _next_generated_number()
+        if not sanitized_number:
+            sanitized_number = _next_generated_number()
+            display_number = sanitized_number
 
-        used_numbers.add(preferred_number)
+        used_numbers.add(sanitized_number)
 
         full_name = (contact.get('name') or '').strip()
         first_name, last_name = _split_name_parts(full_name)
 
         items.append({
-            'number': preferred_number,
-            'name': full_name or contact['raw_number'] or preferred_number,
+            'number': display_number,
+            'name': full_name or contact['raw_number'] or display_number,
             'firstname': first_name,
             'lastname': last_name,
             'phone': contact['raw_number'],
