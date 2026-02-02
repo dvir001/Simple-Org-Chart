@@ -94,18 +94,18 @@ def _schedule_loop() -> None:
 
     run_initial = os.environ.get("RUN_INITIAL_UPDATE", "auto").lower()
     if run_initial == "true":
-        logger.info("[%s] Running initial employee data update on startup (RUN_INITIAL_UPDATE=true)...", datetime.now())
+        logger.info("Running initial employee data update on startup (RUN_INITIAL_UPDATE=true)...")
         update_callback(source='startup')
     elif run_initial == "auto":
         # Only run initial update if no cached data exists
         from simple_org_chart.config import DATA_FILE
         if not os.path.exists(DATA_FILE):
-            logger.info("[%s] No cached data found; running initial employee data update...", datetime.now())
+            logger.info("No cached data found; running initial employee data update...")
             update_callback(source='startup-no-cache')
         else:
-            logger.info("[%s] Cached data exists; skipping initial update (set RUN_INITIAL_UPDATE=true to force)", datetime.now())
+            logger.info("Cached data exists; skipping initial update (set RUN_INITIAL_UPDATE=true to force)")
     else:
-        logger.info("[%s] Initial update skipped (RUN_INITIAL_UPDATE=%s)", datetime.now(), run_initial)
+        logger.info("Initial update skipped (RUN_INITIAL_UPDATE=%s)", run_initial)
 
     update_time = _parse_time_string(settings.get("updateTime"))
     tz = timezone.utc
@@ -123,7 +123,7 @@ def _schedule_loop() -> None:
 
     while _scheduler_running:
         if next_run_utc is not None and datetime.now(timezone.utc) >= next_run_utc:
-            logger.info("Executing scheduled update at %s UTC", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
+            logger.info("Executing scheduled update...")
             try:
                 update_callback()
             except Exception as exc:  # noqa: BLE001 - log and continue running loop

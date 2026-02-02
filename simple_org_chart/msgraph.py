@@ -355,6 +355,11 @@ def fetch_all_employees(
                 filtered_reasons: list[str] = []
                 if hide_disabled_users and not user.get("accountEnabled", True):
                     filtered_reasons.append("filter_disabled")
+                    logger.debug(
+                        "Filtering disabled user: %s (accountEnabled=%s)",
+                        display_name,
+                        user.get("accountEnabled"),
+                    )
                 if hide_guest_users and user_type == "guest":
                     filtered_reasons.append("filter_guest")
                 if hide_no_title and job_title_val.strip() == "":
@@ -483,10 +488,18 @@ def fetch_all_employees(
             logger.error("Unexpected error: %s", exc)
             break
 
+    # Count filtered reasons for logging
+    disabled_count = sum(1 for u in filtered_users if "filter_disabled" in (u.get("filterReasons") or []))
+    guest_count = sum(1 for u in filtered_users if "filter_guest" in (u.get("filterReasons") or []))
+    no_title_count = sum(1 for u in filtered_users if "filter_no_title" in (u.get("filterReasons") or []))
+
     logger.info(
-        "Fetched %s employees from Graph API (filtered total %s, with licenses %s)",
+        "Fetched %s employees from Graph API (filtered total %s: %s disabled, %s guests, %s no-title; licensed filtered %s)",
         len(employees),
         len(filtered_users),
+        disabled_count,
+        guest_count,
+        no_title_count,
         len(filtered_with_license),
     )
 

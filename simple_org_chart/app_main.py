@@ -105,7 +105,12 @@ from simple_org_chart.exports import (
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging with ISO 8601 timestamp format
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s:%(name)s:%(message)s',
+    datefmt='%Y-%m-%dT%H:%M:%S.000Z'
+)
 logger = logging.getLogger(__name__)
 
 def _parse_port(raw_value, fallback):
@@ -164,12 +169,23 @@ app.config['SESSION_PERMANENT'] = False
 
 # Initialize extensions
 Session(app)
+
+
+def _is_localhost_exempt():
+    """Check if request should be exempt from rate limiting (localhost/health checks)."""
+    remote_addr = get_remote_address()
+    return remote_addr in ('127.0.0.1', '::1', 'localhost')
+
+
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
     default_limits=[limit.strip() for limit in RATE_LIMIT_DEFAULT.split(',') if limit.strip()],
     storage_uri="memory://"
 )
+
+# Exempt localhost from all rate limits (health checks, internal requests)
+limiter.exempt(_is_localhost_exempt)
 
 # Simple authentication settings
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
@@ -2412,6 +2428,7 @@ def debug_search():
             'error': str(e),
             'traceback': traceback.format_exc()
         }), 500
+
 
 @app.route('/api/force-update', methods=['POST'])
 @require_auth

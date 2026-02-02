@@ -305,7 +305,7 @@ def update_employee_data(source: str = 'unknown') -> None:
             error_message = f"Cannot write to data directory {DATA_DIR}: {e}"
             return
 
-        logger.info(f"[{datetime.now()}] Starting employee data update...")
+        logger.info("Starting employee data update...")
 
         token = get_access_token()
         if not token:
@@ -410,7 +410,7 @@ def update_employee_data(source: str = 'unknown') -> None:
 
                 with open(DATA_FILE, 'w') as f:
                     json.dump(hierarchy, f, indent=2)
-                logger.info(f"[{datetime.now()}] Successfully updated employee data. Total employees: {len(employees)}")
+                logger.info(f"Successfully updated employee data. Total employees: {len(employees)}")
 
                 try:
                     with open(MISSING_MANAGER_FILE, 'w') as report_file:
@@ -419,7 +419,7 @@ def update_employee_data(source: str = 'unknown') -> None:
                 except Exception as report_error:
                     logger.error(f"Failed to write missing manager report cache: {report_error}")
             else:
-                logger.error(f"[{datetime.now()}] Could not build hierarchy from employee data")
+                logger.error("Could not build hierarchy from employee data")
 
             try:
                 recently_hired_records = collect_recently_hired_employees(employees, days=365)
@@ -431,7 +431,7 @@ def update_employee_data(source: str = 'unknown') -> None:
             except Exception as report_error:
                 logger.error(f"Failed to write recently hired employees report cache: {report_error}")
         else:
-            logger.error(f"[{datetime.now()}] No employees fetched from Graph API")
+            logger.error("No employees fetched from Graph API")
 
         try:
             filtered_user_records = filtered_users or []
@@ -511,7 +511,7 @@ def update_employee_data(source: str = 'unknown') -> None:
         success = True
     except Exception as e:
         error_message = str(e)
-        logger.error(f"[{datetime.now()}] Error updating employee data: {e}")
+        logger.error(f"Error updating employee data: {e}")
     finally:
         if success:
             mark_data_update_finished(success=True, source=source)
