@@ -16,6 +16,7 @@ try:
 except ImportError:  # pragma: no cover - Python < 3.9 not officially supported but guard anyway
     ZoneInfo = None  # type: ignore[assignment]
 
+import simple_org_chart.config as app_config
 from simple_org_chart.settings import load_settings
 
 logger = logging.getLogger(__name__)
@@ -24,9 +25,11 @@ _scheduler_running = False
 _scheduler_lock = threading.Lock()
 _scheduler_thread: Optional[threading.Thread] = None
 _update_callback: Optional[Callable[[], None]] = None
+_lock_file_handle = None  # File handle for cross-process lock
 
 DEFAULT_TIME_STRING = "20:00"
 DEFAULT_TIMEZONE = "UTC"
+SCHEDULER_LOCK_FILE = os.path.join(str(app_config.DATA_DIR), '.scheduler.lock')
 
 
 def _resolve_timezone(tz_name: Optional[str]) -> timezone:
@@ -146,6 +149,39 @@ def _schedule_loop() -> None:
         time.sleep(30)
 
 
+def _acquire_scheduler_lock() -> bool:
+    """Try to acquire cross-process scheduler lock. Returns True if acquired."""
+    global _lock_file_handle
+    try:
+        import fcntl
+        # Ensure data directory exists
+        os.makedirs(os.path.dirname(SCHEDULER_LOCK_FILE), exist_ok=True)
+        _lock_file_handle = open(SCHEDULER_LOCK_FILE, 'w')
+        fcntl.flock(_lock_file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_file_handle.write(str(os.getpid()))
+        _lock_file_handle.flush()
+        return True
+    except (ImportError, BlockingIOError, OSError):
+        # fcntl not available (Windows) or lock already held by another process
+        if _lock_file_handle:
+            _lock_file_handle.close()
+            _lock_file_handle = None
+        return False
+
+
+def _release_scheduler_lock() -> None:
+    """Release the cross-process scheduler lock."""
+    global _lock_file_handle
+    if _lock_file_handle:
+        try:
+            import fcntl
+            fcntl.flock(_lock_file_handle.fileno(), fcntl.LOCK_UN)
+        except (ImportError, OSError):
+            pass
+        _lock_file_handle.close()
+        _lock_file_handle = None
+
+
 def start_scheduler() -> None:
     """Start the background scheduler thread if it is not already running."""
     global _scheduler_running, _scheduler_thread
@@ -153,6 +189,12 @@ def start_scheduler() -> None:
     with _scheduler_lock:
         if _scheduler_running:
             return
+        
+        # Try to acquire cross-process lock (only one worker should run scheduler)
+        if not _acquire_scheduler_lock():
+            logger.debug("Scheduler lock held by another process; skipping scheduler start")
+            return
+        
         _scheduler_running = True
         _scheduler_thread = threading.Thread(target=_schedule_loop, daemon=True)
         _scheduler_thread.start()
@@ -167,6 +209,7 @@ def stop_scheduler() -> None:
         if not _scheduler_running:
             return
         _scheduler_running = False
+        _release_scheduler_lock()
         logger.info("Scheduler stopped")
 
 

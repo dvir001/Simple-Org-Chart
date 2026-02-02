@@ -515,8 +515,10 @@ def update_employee_data(source: str = 'unknown') -> None:
     finally:
         if success:
             mark_data_update_finished(success=True, source=source)
+            logger.info(f"Data sync completed successfully (source: {source})")
         else:
             mark_data_update_finished(success=False, error=error_message or 'Unknown error', source=source)
+            logger.error(f"Data sync failed (source: {source}): {error_message or 'Unknown error'}")
 
 
 # Initialize on module load
