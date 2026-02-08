@@ -436,13 +436,29 @@ def serve_static(filename):
 def get_employee_photo(user_id):
     """Serve employee photo from Microsoft Graph API with caching"""
     try:
+        # Validate user_id to prevent directory traversal and unsafe filenames
+        # Allow only alphanumeric characters plus a small set of safe symbols.
+        allowed_extra_chars = {'-', '_', '@', '.'}
+        if not user_id or any(
+            (not ch.isalnum()) and (ch not in allowed_extra_chars)
+            for ch in user_id
+        ):
+            logger.warning(f"Invalid user_id for photo request: {user_id!r}")
+            return "Invalid user identifier", 400
+
         # Create photos cache directory
         photos_dir = os.path.join(DATA_DIR, 'photos')
         if not os.path.exists(photos_dir):
             os.makedirs(photos_dir, exist_ok=True)
         
         # Check if photo is cached
-        photo_file = os.path.join(photos_dir, f"{user_id}.jpg")
+        raw_photo_file = os.path.join(photos_dir, f"{user_id}.jpg")
+        # Normalize and ensure the path remains within the photos directory
+        photos_dir_real = os.path.realpath(photos_dir)
+        photo_file = os.path.realpath(raw_photo_file)
+        if not photo_file.startswith(photos_dir_real + os.sep):
+            logger.warning(f"Attempted path traversal in photo request: {user_id!r}")
+            return "Invalid photo path", 400
         
         if os.path.exists(photo_file):
             # Check if cache is still valid
