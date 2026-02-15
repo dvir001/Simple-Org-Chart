@@ -2490,4 +2490,5 @@ def force_update():
         }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=APP_PORT)
+    debug_mode = os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+    app.run(debug=debug_mode, host='0.0.0.0', port=APP_PORT)
