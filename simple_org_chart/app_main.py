@@ -902,7 +902,7 @@ def test_hierarchy(email):
             
     except Exception as e:
         logger.error(f"Error in test hierarchy: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/upload-logo', methods=['POST'])
 @require_auth
