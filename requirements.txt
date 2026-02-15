@@ -9,7 +9,7 @@ Flask-Limiter==4.1.1
 Flask-Session==0.5.0
 gunicorn==25.1.0
 marshmallow==3.21.0
-openpyxl==3.1.2
+openpyxl==3.1.5
 Pillow==12.1.1
 idna==3.10
 itsdangerous==2.2.0
