@@ -133,7 +133,10 @@ def build_org_hierarchy(
                     root = emp
 
             if root:
-                logger.info(f"Using person with most reports as top-level: {root['name']} ({max_reports} reports)")
+                logger.info(
+                    "Using person with most reports as top-level (%d reports) based on manager/child relationships",
+                    max_reports,
+                )
 
         if not root and employees:
             root = emp_dict[employees[0]['id']]
