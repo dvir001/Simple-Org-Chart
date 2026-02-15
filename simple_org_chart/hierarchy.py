@@ -68,7 +68,7 @@ def build_org_hierarchy(
     # Fallback to settings user ID if no email-based selection was made
     if not root and settings_top_user_id and settings_top_user_id in emp_dict:
         root = emp_dict[settings_top_user_id]
-        logger.info(f"Using fallback settings top-level user by ID: {root['name']}")
+        logger.info("Using fallback settings top-level user by configured ID: %s", settings_top_user_id)
 
     if root:
         # If a specific root is configured, build hierarchy with that person at the top
