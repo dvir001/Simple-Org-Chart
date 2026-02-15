@@ -113,12 +113,18 @@ def build_org_hierarchy(
                 title_lower = (candidate.get('title') or '').lower()
                 if any(keyword in title_lower for keyword in ceo_keywords):
                     root = candidate
-                    logger.info(f"Auto-detected top-level user: {root['name']} - {root.get('title')}")
+                    logger.info(
+                        "Auto-detected top-level user based on title keywords among %d root candidates",
+                        len(root_candidates),
+                    )
                     break
 
             if not root and root_candidates:
                 root = root_candidates[0]
-                logger.info(f"Using first root candidate as top-level: {root['name']}")
+                logger.info(
+                    "Using first root candidate as top-level (no title keyword match found; %d candidates considered)",
+                    len(root_candidates),
+                )
         else:
             max_reports = 0
             for emp_id, emp in emp_dict.items():
