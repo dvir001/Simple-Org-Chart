@@ -60,7 +60,7 @@ def build_org_hierarchy(
         for emp in employees:
             if emp.get('email') == top_user_email:
                 root = emp_dict[emp['id']]
-                logger.info(f"Found and using configured top-level user by email: {root['name']} ({root.get('email')})")
+                logger.info("Found and using configured top-level user for requested email filter")
                 break
         else:
             logger.warning(f"Could not find user with email '{top_user_email}' in employee list")
