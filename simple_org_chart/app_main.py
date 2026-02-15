@@ -2329,9 +2329,9 @@ def search_employees():
         logger.error(f"Attribute error in search (likely None value): {e}")
         logger.error(f"Query was: {query}")
         try:
-            for emp in all_employees:
+            for index, emp in enumerate(all_employees):
                 if emp:
-                    logger.debug(f"Employee data: name={emp.get('name')}, title={emp.get('title')}, dept={emp.get('department')}")
+                    logger.debug(f"Employee record at index {index} is present during error handling")
         except:
             pass
         return jsonify([])
