@@ -137,7 +137,7 @@ def build_org_hierarchy(
 
         if not root and employees:
             root = emp_dict[employees[0]['id']]
-            logger.info(f"Using first employee as root: {root['name']}")
+            logger.info("Using first employee in list as root (no explicit or inferred top-level user found)")
 
         return root
 
