@@ -2344,7 +2344,7 @@ def search_employees():
         logger.error(f"Query was: {query}")
         import traceback
         logger.error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/employee/<employee_id>')
 def get_employee(employee_id):
