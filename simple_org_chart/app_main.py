@@ -1107,7 +1107,7 @@ def reset_all_settings():
         return jsonify({'success': True})
     except Exception as e:
         logger.error(f"Error resetting all settings: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Reset failed'}), 500
 
 @app.route('/api/export-xlsx')
 def export_xlsx():
