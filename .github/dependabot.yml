@@ -5,7 +5,22 @@
 
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Enable version updates for Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
     schedule:
       interval: "weekly"
+    labels:
+      - "dependencies"
+      - "python"
+    open-pull-requests-limit: 10
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    open-pull-requests-limit: 5
