@@ -597,8 +597,12 @@ def get_employees():
             update_new_status(data)
         
         # Debug logging for root user
-        if data and data.get('name'):
-            logger.info(f"Returning org chart data with root user: {data['name']} ({data.get('email', 'no email')})")
+        if data:
+            logger.info(
+                "Returning org chart data with root user present (id=%s, has_email=%s)",
+                data.get('id'),
+                bool(data.get('email')),
+            )
         
         if not data:
             logger.warning("No hierarchical data available")
