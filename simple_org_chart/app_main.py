@@ -2492,8 +2492,7 @@ def force_update():
         logger.error(traceback.format_exc())
         return jsonify({
             'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
+            'message': 'Force update failed. Please check server logs for details.'
         }), 500
 
 if __name__ == '__main__':
