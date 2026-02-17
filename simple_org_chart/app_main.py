@@ -2367,7 +2367,10 @@ def get_employee(employee_id):
             return jsonify(employee)
         return jsonify({'error': 'Employee not found'}), 404
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error in get_employee for id {employee_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/update-now', methods=['POST'])
 @require_auth
