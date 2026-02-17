@@ -180,6 +180,11 @@
                         </label>
                         <span data-i18n="configure.behavior.search.highlight">Highlight search results</span>
                     </div>
+                    <div class="config-controls config-controls--spaced">
+                        <span class="label-prefix" data-i18n="configure.behavior.search.highlightDurationLabel">Highlight fade duration:</span>
+                        <input type="number" id="searchHighlightDuration" min="0" max="60" step="1" value="10" style="width: 80px;">
+                        <span data-i18n="configure.behavior.search.seconds">seconds</span>
+                    </div>
                 </div>
 
                 <div class="config-item">
@@ -467,6 +472,100 @@
                         <button class="btn btn-secondary" type="button" data-config-action="reset-export-columns" data-i18n="configure.buttons.resetColumns">Reset Columns to Default</button>
                     </div>
                 </div>
+            </div>
+
+            <div id="emailReportsSection" style="display: none;">
+                <h2 class="section-heading" data-i18n="configure.sections.emailReports.title">📧 Email Reports</h2>
+
+                <div class="config-group">
+                    <div class="config-item">
+                        <label class="config-label" data-i18n="configure.emailReports.enable.label">Automated Email Reports</label>
+                        <div class="config-description" data-i18n="configure.emailReports.enable.description">Send scheduled organization chart reports via email after data synchronization</div>
+                        <div class="config-controls">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="emailReportsEnabled">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label" data-i18n="configure.emailReports.enable.toggleLabel">Enable email reports</span>
+                        </div>
+                        <div id="smtpStatusMessage" class="config-hint" style="margin-top: 0.5rem;"></div>
+                    </div>
+
+                <div class="config-item" id="emailConfigPanel" style="display: none;">
+                    <label class="config-label" data-i18n="configure.emailReports.recipient.label">Recipient Email</label>
+                    <div class="config-description" data-i18n="configure.emailReports.recipient.description">Email address(es) to receive automated reports (comma-separated for multiple)</div>
+                    <div class="config-controls">
+                        <input type="text" id="emailRecipient" placeholder="reports@yourcompany.com, admin@yourcompany.com" data-i18n-placeholder="configure.emailReports.recipient.placeholder">
+                    </div>
+                </div>
+
+                <div class="config-item" id="emailFrequencyPanel" style="display: none;">
+                    <label class="config-label" data-i18n="configure.emailReports.frequency.label">Report Frequency</label>
+                    <div class="config-description" data-i18n="configure.emailReports.frequency.description">How often to send automated reports</div>
+                    <div class="config-controls">
+                        <select id="emailFrequency">
+                            <option value="daily" data-i18n="configure.emailReports.frequency.daily">Daily</option>
+                            <option value="weekly" selected data-i18n="configure.emailReports.frequency.weekly">Weekly</option>
+                            <option value="monthly" data-i18n="configure.emailReports.frequency.monthly">Monthly</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="config-item" id="emailDayPanel" style="display: none;">
+                    <label class="config-label" data-i18n="configure.emailReports.dayOfWeek.label">Day of Week</label>
+                    <div class="config-description" data-i18n="configure.emailReports.dayOfWeek.description">Select the day of the week to send weekly reports</div>
+                    <div class="config-controls">
+                        <select id="emailDayOfWeek">
+                            <option value="monday" selected data-i18n="configure.emailReports.dayOfWeek.monday">Monday</option>
+                            <option value="tuesday" data-i18n="configure.emailReports.dayOfWeek.tuesday">Tuesday</option>
+                            <option value="wednesday" data-i18n="configure.emailReports.dayOfWeek.wednesday">Wednesday</option>
+                            <option value="thursday" data-i18n="configure.emailReports.dayOfWeek.thursday">Thursday</option>
+                            <option value="friday" data-i18n="configure.emailReports.dayOfWeek.friday">Friday</option>
+                            <option value="saturday" data-i18n="configure.emailReports.dayOfWeek.saturday">Saturday</option>
+                            <option value="sunday" data-i18n="configure.emailReports.dayOfWeek.sunday">Sunday</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="config-item" id="emailMonthPanel" style="display: none;">
+                    <label class="config-label" data-i18n="configure.emailReports.dayOfMonth.label">Day of Month</label>
+                    <div class="config-description" data-i18n="configure.emailReports.dayOfMonth.description">Which day of the month to send reports</div>
+                    <div class="config-controls">
+                        <select id="emailDayOfMonth">
+                            <option value="first" selected data-i18n="configure.emailReports.dayOfMonth.first">First day</option>
+                            <option value="last" data-i18n="configure.emailReports.dayOfMonth.last">Last day</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="config-item" id="emailFileTypesPanel" style="display: none;">
+                    <label class="config-label" data-i18n="configure.emailReports.fileTypes.label">Attachment Types</label>
+                    <div class="config-description" data-i18n="configure.emailReports.fileTypes.description">Select which file formats to include as email attachments</div>
+                    <div class="config-controls">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="emailFileXlsx" value="xlsx" checked>
+                            <span data-i18n="configure.emailReports.fileTypes.xlsx">XLSX (Excel)</span>
+                        </label>
+                        <label class="checkbox-label" style="margin-left: 1.5rem;">
+                            <input type="checkbox" id="emailFilePng" value="png">
+                            <span data-i18n="configure.emailReports.fileTypes.png">PNG (Chart Image)</span>
+                        </label>
+                    </div>
+                    <div class="config-hint" style="margin-top: 0.5rem;" data-i18n="configure.emailReports.fileTypes.note">
+                        PNG export uses server-side rendering to generate the full organization chart.
+                    </div>
+                </div>
+
+                <div class="config-item" id="emailTestPanel" style="display: none;">
+                    <label class="config-label" data-i18n="configure.emailReports.test.label">Send Reports</label>
+                    <div class="config-description" data-i18n="configure.emailReports.test.description">Test your email configuration or send a report immediately</div>
+                    <div class="config-controls">
+                        <button class="btn btn-secondary" type="button" id="sendTestEmail" data-i18n="configure.emailReports.test.button">Send Test Email</button>
+                        <button class="btn btn-primary" type="button" id="sendTestEmailWithAttachments" style="margin-left: 0.5rem;" data-i18n="configure.emailReports.test.manualSendButton">Manual Send Now</button>
+                        <span id="testEmailStatus" class="upload-status"></span>
+                    </div>
+                </div>
+            </div>
             </div>
 
             <div class="action-buttons">

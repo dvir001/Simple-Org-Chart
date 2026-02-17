@@ -3861,12 +3861,12 @@ async function exportToPDF(exportFullChart = false) {
 
         // Add timestamp in the bottom-right corner
         const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const timestamp = `${year}-${month}-${day} ${hours}:${minutes}`;
+        const year = now.getUTCFullYear();
+        const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(now.getUTCDate()).padStart(2, '0');
+        const hours = String(now.getUTCHours()).padStart(2, '0');
+        const minutes = String(now.getUTCMinutes()).padStart(2, '0');
+        const timestamp = `${year}-${month}-${day} ${hours}:${minutes} UTC`;
         pdf.setFontSize(8);
         pdf.setTextColor(128, 128, 128);
         const timestampText = `Generated: ${timestamp}`;
@@ -4937,18 +4937,61 @@ function findManagerById(rootData, managerId) {
     return searchNode(rootData);
 }
 
+let highlightTimeouts = new Map();
+
 function highlightNode(nodeId, highlight = true) {
     if (appSettings.searchHighlight !== false) {
+        // Clear any existing timeout for this node
+        if (highlightTimeouts.has(nodeId)) {
+            clearTimeout(highlightTimeouts.get(nodeId));
+            highlightTimeouts.delete(nodeId);
+        }
+        
         g.selectAll('.node-rect').each(function(d) {
             if (d.data.id === nodeId) {
-                d3.select(this).classed('search-highlight', highlight);
+                const element = d3.select(this);
+                element.classed('search-highlight', highlight);
+                element.classed('fading', false);
+                
+                if (highlight) {
+                    // Get the configured duration (default 10 seconds)
+                    const durationSeconds = appSettings.searchHighlightDuration || 10;
+                    
+                    // If duration is 0, don't show highlight at all
+                    if (durationSeconds === 0) {
+                        element.classed('search-highlight', false);
+                        element.classed('fading', false);
+                        return;
+                    }
+                    
+                    const durationMs = durationSeconds * 1000;
+                    
+                    // Set timeout to start fading
+                    const timeoutId = setTimeout(() => {
+                        element.classed('fading', true);
+                        
+                        // After fade transition completes (500ms), remove highlight
+                        setTimeout(() => {
+                            element.classed('search-highlight', false);
+                            element.classed('fading', false);
+                            highlightTimeouts.delete(nodeId);
+                        }, 500);
+                    }, durationMs);
+                    
+                    highlightTimeouts.set(nodeId, timeoutId);
+                }
             }
         });
     }
 }
 
 function clearHighlights() {
+    // Clear all pending timeouts
+    highlightTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+    highlightTimeouts.clear();
+    
     g.selectAll('.node-rect').classed('search-highlight', false);
+    g.selectAll('.node-rect').classed('fading', false);
 }
 
 let searchTimeout;

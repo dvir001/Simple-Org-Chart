@@ -32,6 +32,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "collapseLevel": "2",
     "searchAutoExpand": True,
     "searchHighlight": True,
+    "searchHighlightDuration": 5,
     "showNames": True,
     "showDepartments": True,
     "showJobTitles": True,

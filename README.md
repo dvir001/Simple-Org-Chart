@@ -99,6 +99,18 @@ python -c "import secrets; print(secrets.token_hex(32))"
 | `GRAPH_API_ENDPOINT` | `https://graph.microsoft.com/v1.0` | Microsoft Graph API v1.0 endpoint. |
 | `GRAPH_API_BETA_ENDPOINT` | `https://graph.microsoft.com/beta` | Microsoft Graph API beta endpoint. |
 
+**SMTP Email Configuration (optional, for automated reports)**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SMTP_SERVER` | *(none)* | SMTP server hostname (e.g., `smtp.gmail.com`, `smtp.office365.com`). |
+| `SMTP_PORT` | `587` | SMTP server port (587 for STARTTLS, 465 for SSL/TLS, 25 for plain). |
+| `SMTP_USERNAME` | *(none)* | SMTP username (often your email address). |
+| `SMTP_PASSWORD` | *(none)* | SMTP password or app-specific password. |
+| `SMTP_FROM_ADDRESS` | *(none)* | From address for sent emails (must be authorized by SMTP server). |
+| `SMTP_ENCRYPTION` | `TLS` | Encryption protocol: `TLS` (STARTTLS for port 587), `SSL` (SSL/TLS for port 465), or `None`. |
+| `APP_BASE_URL` | `http://localhost:5000` | Base URL for generating PNG screenshots (required for PNG email attachments). |
+
 ## Running the Application
 
 ### Docker (recommended)
@@ -116,16 +128,85 @@ docker compose up -d
 
 - **Interactive D3 Org Chart**: Pan, zoom, and expand/collapse hierarchies with persistent hidden subtrees.
 - **Search & Discovery**: Real-time directory search, quick navigation helpers, and configurable filters for guests/disabled users.
-- **Configuration UI** (`/configure`): Adjust styling, filtering, export columns, and scheduling without editing files.
+- **Configuration UI** (`/configure`): Adjust styling, filtering, export columns, scheduling, and email reports without editing files.
 - **Admin Reports** (`/reports`):
   - Missing managers
-   - Users by last sign-in activity
-   - Employees hired in the last 365 days
-   - Users hidden by filters
+  - Users by last sign-in activity
+  - Employees hired in the last 365 days
+  - Users hidden by filters
+- **Automated Email Reports**: Schedule daily, weekly, or monthly reports sent via SMTP after data synchronization.
 - **Export Options**: SVG/PNG/PDF snapshots and XLSX exports for reports and chart data.
 - **MicroSIP Directory Feed**: Serve a MicroSIP contacts JSON at /contacts.json using cached employee data.
 - **Desk Phone Directory**: Yealink-compatible XML phonebook at /contacts.xml for T31P, T33G, T46U, and similar models.
 - **Caching & Scheduling**: JSON caches regenerate nightly; manual refresh endpoints keep data current on demand.
+
+## Automated Email Reports
+
+SimpleOrgChart can send scheduled email reports with organization chart data as attachments after each successful data synchronization. **Disabled by default.**
+
+### Prerequisites
+
+1. Configure SMTP environment variables in `.env` (see SMTP Email Configuration section above)
+2. Ensure all required SMTP settings are provided: server, port, username, password, and from address
+3. Set `APP_BASE_URL` in `.env` to the **internal** URL where the app listens:
+   - **Docker**: `http://localhost` (port 80 inside container, regardless of external port mapping)
+   - **Non-Docker**: `http://localhost:5000` (or whatever port you configured)
+4. **(Docker users)** PNG screenshots are automatically supported - Playwright is included in the Docker image
+5. **(Non-Docker users)** For PNG chart screenshots, install Playwright:
+   ```bash
+   pip install playwright
+   playwright install --with-deps chromium
+   ```
+
+### Configuration
+
+1. Navigate to `/configure` and locate the **📧 Email Reports** section
+2. Enable **Automated Email Reports** toggle
+3. Configure the following options:
+   - **Recipient Email**: Email address(es) to receive reports (comma-separated for multiple recipients)
+   - **Report Frequency**: Choose daily, weekly, or monthly
+   - **Day of Week**: For weekly schedules, select which day to send
+   - **Day of Month**: For monthly schedules, select first or last day
+   - **Attachment Types**: Select which file formats to include:
+     - **XLSX (Excel)**: Employee data spreadsheet (always available)
+     - **PNG (Chart Image)**: Visual org chart diagram (requires Playwright)
+4. Click **Send Test Email** to verify SMTP configuration
+5. Save settings
+
+### How It Works
+
+- Email reports are triggered automatically after successful data synchronization
+- The scheduler checks if an email should be sent based on the configured frequency
+- For **daily** reports: Emails are sent on the specified day of the week if at least 24 hours have passed since the last email
+- For **weekly** reports: Emails are sent on the specified day of the week if at least 7 days have passed
+- For **monthly** reports: Emails are sent on the first or last day of the month if at least 28 days have passed
+
+Email reports support two attachment types:
+
+1. **XLSX (Excel)** - Always available
+   - Complete employee directory with name, title, department, email, phone, manager, location details
+   - Server-side generation, no additional dependencies
+
+2. **PNG (Chart Image)** - Included in Docker, optional for manual installs
+   - Visual organization chart diagram
+   - Full chart view with all employees
+   - Generated via headless browser screenshot
+   - **Docker**: Automatically available (Playwright included in image)
+   - **Manual installs**: Requires `playwright install --with-deps chromium`
+
+> **Note**: SVG and PDF exports require client-side rendering and are not available for automated email reports. These formats can still be generated manually from the web interface.
+
+### Test Email
+
+Use the **Send Test Email** button to verify your SMTP configuration before enabling automated reports. Use **Manual Send Now** to immediately send a report with XLSX and/or PNG attachments based on your configuration.
+
+### SMTP Status
+
+The email reports section displays the current SMTP configuration status:
+- ✓ **SMTP configured**: Shows the server, port, and from address
+- ⚠ **SMTP not configured**: Indicates missing SMTP environment variables
+
+If SMTP is not configured, ensure all required variables are set in your `.env` file and restart the application.
 
 ## MicroSIP Directory
 

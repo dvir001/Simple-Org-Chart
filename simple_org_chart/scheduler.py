@@ -128,7 +128,7 @@ def _schedule_loop() -> None:
         if next_run_utc is not None and datetime.now(timezone.utc) >= next_run_utc:
             logger.info("Executing scheduled update...")
             try:
-                update_callback()
+                update_callback(source='scheduled')
             except Exception as exc:  # noqa: BLE001 - log and continue running loop
                 logger.exception("Scheduled update callback failed: %s", exc)
 

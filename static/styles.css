@@ -1542,6 +1542,13 @@ body.fullscreen-mode .org-chart-container {
     stroke: #ff6b6b !important;
     stroke-width: 4px !important;
     filter: drop-shadow(0 0 8px rgba(255, 107, 107, 0.5));
+    transition: stroke 0.5s ease-out, stroke-width 0.5s ease-out, filter 0.5s ease-out;
+}
+
+.node-rect.search-highlight.fading {
+    stroke: transparent !important;
+    stroke-width: 0px !important;
+    filter: drop-shadow(0 0 0px transparent);
 }
 
 .node-rect.new-employee {

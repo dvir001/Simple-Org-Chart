@@ -192,6 +192,8 @@ function discardUnsavedChanges() {
     isInitializing = true;
     try {
         applySettings(currentSettings);
+        // Also revert email configuration changes
+        applyEmailConfig(emailConfig);
     } finally {
         isInitializing = previousInitializingState;
     }
@@ -1100,6 +1102,10 @@ function applySettings(settings) {
         document.getElementById('searchHighlight').checked = settings.searchHighlight;
     }
 
+    if (settings.searchHighlightDuration !== undefined) {
+        document.getElementById('searchHighlightDuration').value = settings.searchHighlightDuration;
+    }
+
     if (settings.newEmployeeMonths !== undefined) {
         document.getElementById('newEmployeeMonths').value = settings.newEmployeeMonths;
     }
@@ -1624,6 +1630,7 @@ function resetAllSettings() {
 
     document.getElementById('searchAutoExpand').checked = true;
     document.getElementById('searchHighlight').checked = true;
+    document.getElementById('searchHighlightDuration').value = '10';
     document.getElementById('newEmployeeMonths').value = '3';
     document.getElementById('hideDisabledUsers').checked = true;
     document.getElementById('hideGuestUsers').checked = true;
@@ -1684,6 +1691,7 @@ async function saveAllSettings() {
         collapseLevel: document.getElementById('collapseLevel').value,
         searchAutoExpand: document.getElementById('searchAutoExpand').checked,
         searchHighlight: document.getElementById('searchHighlight').checked,
+        searchHighlightDuration: parseInt(document.getElementById('searchHighlightDuration').value, 10),
         newEmployeeMonths: parseInt(document.getElementById('newEmployeeMonths').value, 10),
         hideDisabledUsers: document.getElementById('hideDisabledUsers').checked,
         hideGuestUsers: document.getElementById('hideGuestUsers').checked,
@@ -1949,4 +1957,329 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (file) uploadFaviconFile(file);
         });
     }
+
+    // Initialize email reports configuration
+    await initEmailReportsConfig();
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Email Reports Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+let emailConfig = {};
+
+async function loadEmailConfig() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/email-config`);
+        if (response.ok) {
+            const data = await response.json();
+            emailConfig = data.config || {};
+            
+            // Show/hide entire email reports section based on SMTP configuration
+            const emailReportsSection = document.getElementById('emailReportsSection');
+            if (emailReportsSection) {
+                emailReportsSection.style.display = data.smtpConfigured ? 'block' : 'none';
+            }
+            
+            // Update SMTP status message
+            const smtpStatusEl = document.getElementById('smtpStatusMessage');
+            if (smtpStatusEl && data.smtpConfigured) {
+                smtpStatusEl.textContent = `✓ SMTP configured: ${data.smtpServer}:${data.smtpPort} (${data.smtpFromAddress})`;
+                smtpStatusEl.style.color = '#28a745';
+            }
+            
+            // Apply email config to UI
+            applyEmailConfig(emailConfig);
+        }
+    } catch (error) {
+        console.error('Error loading email config:', error);
+    }
+}
+
+function applyEmailConfig(config) {
+    const enabledCheckbox = document.getElementById('emailReportsEnabled');
+    if (enabledCheckbox) {
+        enabledCheckbox.checked = config.enabled || false;
+    }
+    
+    const recipientInput = document.getElementById('emailRecipient');
+    if (recipientInput) {
+        recipientInput.value = config.recipientEmail || '';
+    }
+    
+    const frequencySelect = document.getElementById('emailFrequency');
+    if (frequencySelect) {
+        frequencySelect.value = config.frequency || 'weekly';
+    }
+    
+    const dayOfWeekSelect = document.getElementById('emailDayOfWeek');
+    if (dayOfWeekSelect) {
+        dayOfWeekSelect.value = config.dayOfWeek || 'monday';
+    }
+    
+    const dayOfMonthSelect = document.getElementById('emailDayOfMonth');
+    if (dayOfMonthSelect) {
+        dayOfMonthSelect.value = config.dayOfMonth || 'first';
+    }
+    
+    const fileTypes = config.fileTypes || [];
+    const xlsxCheckbox = document.getElementById('emailFileXlsx');
+    if (xlsxCheckbox) {
+        xlsxCheckbox.checked = fileTypes.includes('xlsx');
+    }
+    
+    const pngCheckbox = document.getElementById('emailFilePng');
+    if (pngCheckbox) {
+        pngCheckbox.checked = fileTypes.includes('png');
+    }
+    
+    // Update panel visibility
+    updateEmailPanelVisibility();
+    updateEmailFrequencyPanels();
+}
+
+function updateEmailPanelVisibility() {
+    const enabled = document.getElementById('emailReportsEnabled')?.checked || false;
+    const panels = [
+        'emailConfigPanel',
+        'emailFrequencyPanel',
+        'emailFileTypesPanel',
+        'emailTestPanel'
+    ];
+    
+    panels.forEach(panelId => {
+        const panel = document.getElementById(panelId);
+        if (panel) {
+            panel.style.display = enabled ? 'block' : 'none';
+        }
+    });
+    
+    // Always update frequency panels to ensure correct visibility
+    updateEmailFrequencyPanels();
+}
+
+function updateEmailFrequencyPanels() {
+    const enabled = document.getElementById('emailReportsEnabled')?.checked || false;
+    const frequency = document.getElementById('emailFrequency')?.value || 'weekly';
+    const dayPanel = document.getElementById('emailDayPanel');
+    const monthPanel = document.getElementById('emailMonthPanel');
+    
+    if (dayPanel) {
+        // Show day of week only for weekly (hide for daily and monthly)
+        dayPanel.style.display = (enabled && frequency === 'weekly') ? 'block' : 'none';
+    }
+    
+    if (monthPanel) {
+        // Show day of month for monthly (only if email reports are enabled)
+        monthPanel.style.display = (enabled && frequency === 'monthly') ? 'block' : 'none';
+    }
+}
+
+async function saveEmailConfig() {
+    const config = {
+        enabled: document.getElementById('emailReportsEnabled')?.checked || false,
+        recipientEmail: document.getElementById('emailRecipient')?.value || '',
+        frequency: document.getElementById('emailFrequency')?.value || 'weekly',
+        dayOfWeek: document.getElementById('emailDayOfWeek')?.value || 'monday',
+        dayOfMonth: document.getElementById('emailDayOfMonth')?.value || 'first',
+        fileTypes: []
+    };
+    
+    // Collect selected file types
+    if (document.getElementById('emailFileXlsx')?.checked) {
+        config.fileTypes.push('xlsx');
+    }
+    if (document.getElementById('emailFilePng')?.checked) {
+        config.fileTypes.push('png');
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/email-config`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (response.ok) {
+            emailConfig = config;
+            return true;
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Failed to save email config:', errorData);
+            return false;
+        }
+    } catch (error) {
+        console.error('Error saving email config:', error);
+        return false;
+    }
+}
+
+async function sendTestEmail() {
+    const button = document.getElementById('sendTestEmail');
+    const statusEl = document.getElementById('testEmailStatus');
+    
+    if (!button || !statusEl) return;
+    
+    // Disable button and show loading
+    button.disabled = true;
+    button.textContent = 'Sending...';
+    statusEl.textContent = '';
+    statusEl.style.color = '';
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/email-config/test`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            statusEl.textContent = '✓ ' + (data.message || 'Test email sent successfully!');
+            statusEl.style.color = '#28a745';
+        } else {
+            statusEl.textContent = '✗ ' + (data.error || 'Failed to send test email');
+            statusEl.style.color = '#dc3545';
+        }
+    } catch (error) {
+        statusEl.textContent = '✗ Error: ' + error.message;
+        statusEl.style.color = '#dc3545';
+    } finally {
+        // Re-enable button
+        button.disabled = false;
+        button.textContent = 'Send Test Email';
+        
+        // Clear status after 5 seconds
+        setTimeout(() => {
+            if (statusEl) {
+                statusEl.textContent = '';
+            }
+        }, 5000);
+    }
+}
+
+async function sendTestEmailWithAttachments() {
+    const button = document.getElementById('sendTestEmailWithAttachments');
+    const statusEl = document.getElementById('testEmailStatus');
+    
+    if (!button || !statusEl) return;
+    
+    // Disable button and show loading
+    button.disabled = true;
+    const originalText = button.textContent;
+    button.textContent = 'Generating & Sending...';
+    statusEl.textContent = '';
+    statusEl.style.color = '';
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/email-config/test-with-attachments`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            statusEl.textContent = '✓ ' + (data.message || 'Email sent successfully!');
+            statusEl.style.color = '#28a745';
+        } else {
+            statusEl.textContent = '✗ ' + (data.error || 'Failed to send email');
+            statusEl.style.color = '#dc3545';
+        }
+    } catch (error) {
+        statusEl.textContent = '✗ Error: ' + error.message;
+        statusEl.style.color = '#dc3545';
+    } finally {
+        // Re-enable button
+        button.disabled = false;
+        button.textContent = originalText;
+        
+        // Clear status after 10 seconds (longer because user wants to see result)
+        setTimeout(() => {
+            if (statusEl) {
+                statusEl.textContent = '';
+            }
+        }, 10000);
+    }
+}
+
+async function initEmailReportsConfig() {
+    // Load email configuration
+    await loadEmailConfig();
+    
+    // Wire up event listeners
+    const enabledCheckbox = document.getElementById('emailReportsEnabled');
+    if (enabledCheckbox) {
+        enabledCheckbox.addEventListener('change', () => {
+            updateEmailPanelVisibility();
+            if (!isInitializing) {
+                addUnsavedReason('email-enabled');
+            }
+        });
+    }
+    
+    const frequencySelect = document.getElementById('emailFrequency');
+    if (frequencySelect) {
+        frequencySelect.addEventListener('change', () => {
+            updateEmailFrequencyPanels();
+            if (!isInitializing) {
+                addUnsavedReason('email-frequency');
+            }
+        });
+    }
+    
+    // Add change listeners to all email config inputs
+    const emailInputs = [
+        'emailRecipient',
+        'emailDayOfWeek',
+        'emailDayOfMonth',
+        'emailFileXlsx',
+        'emailFilePng'
+    ];
+    
+    emailInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.addEventListener('change', () => {
+                if (!isInitializing) {
+                    addUnsavedReason('email-config');
+                }
+            });
+        }
+    });
+    
+    // Wire up test email button
+    const testButton = document.getElementById('sendTestEmail');
+    if (testButton) {
+        testButton.addEventListener('click', sendTestEmail);
+    }
+    
+    // Wire up test email with attachments button
+    const testWithAttachmentsButton = document.getElementById('sendTestEmailWithAttachments');
+    if (testWithAttachmentsButton) {
+        testWithAttachmentsButton.addEventListener('click', sendTestEmailWithAttachments);
+    }
+}
+
+// Hook into saveAllSettings to also save email config
+const originalSaveAllSettings = saveAllSettings;
+async function enhancedSaveAllSettings() {
+    // Save regular settings first
+    await originalSaveAllSettings();
+    
+    // Then save email config
+    const emailSaved = await saveEmailConfig();
+    if (!emailSaved) {
+        showStatus('Warning: Email configuration may not have saved correctly', 'warning');
+    }
+}
+
+// Replace saveAllSettings with enhanced version
+saveAllSettings = enhancedSaveAllSettings;
+

@@ -193,6 +193,9 @@
 			},
 			"export": {
 				"title": "📄 Export to XLSX Options"
+			},
+			"emailReports": {
+				"title": "📧 Email Reports"
 			}
 		},
 		"directory": {
@@ -211,6 +214,55 @@
 				"description": "Add contacts that should appear in the directory feeds even if they are not in the org chart. Use one entry per line in the format Name,Number.",
 				"placeholder": "Ada Lovelace,555-123-4567",
 				"hint": "Lines starting with # are ignored. Numbers accept digits, spaces, and punctuation."
+			}
+		},
+		"emailReports": {
+			"enable": {
+				"label": "Automated Email Reports",
+				"description": "Send scheduled organization chart reports via email after data synchronization",
+				"toggleLabel": "Enable email reports"
+			},
+			"recipient": {
+				"label": "Recipient Email",
+				"description": "Email address(es) to receive automated reports (comma-separated for multiple)",
+				"placeholder": "reports@yourcompany.com, admin@yourcompany.com"
+			},
+			"frequency": {
+				"label": "Report Frequency",
+				"description": "How often to send automated reports",
+				"daily": "Daily",
+				"weekly": "Weekly",
+				"monthly": "Monthly"
+			},
+			"dayOfWeek": {
+				"label": "Day of Week",
+				"description": "Select the day of the week to send weekly reports",
+				"monday": "Monday",
+				"tuesday": "Tuesday",
+				"wednesday": "Wednesday",
+				"thursday": "Thursday",
+				"friday": "Friday",
+				"saturday": "Saturday",
+				"sunday": "Sunday"
+			},
+			"dayOfMonth": {
+				"label": "Day of Month",
+				"description": "Which day of the month to send reports",
+				"first": "First day",
+				"last": "Last day"
+			},
+			"fileTypes": {
+				"label": "Attachment Types",
+				"description": "Select which file formats to include as email attachments",
+				"xlsx": "XLSX (Excel)",
+				"png": "PNG (Chart Image)",
+				"note": "PNG export uses server-side rendering to generate the full organization chart."
+			},
+			"test": {
+				"label": "Send Reports",
+				"description": "Test your email configuration or send a report immediately",
+				"button": "Send Test Email",
+				"manualSendButton": "Manual Send Now"
 			}
 		},
 		"appearance": {
@@ -279,7 +331,9 @@
 				"label": "Search Settings",
 				"description": "Configure search behavior",
 				"autoExpand": "Auto-expand to search results",
-				"highlight": "Highlight search results"
+				"highlight": "Highlight search results",
+				"highlightDurationLabel": "Highlight fade duration:",
+				"seconds": "seconds"
 			},
 			"newEmployees": {
 				"label": "New Employee Highlighting",

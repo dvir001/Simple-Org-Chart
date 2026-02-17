@@ -1,5 +1,5 @@
-# Use Python 3.10 slim image as base
-FROM python:3.10-slim
+# Use Ubuntu 22.04 with Python 3.10 for better Playwright support
+FROM ubuntu:22.04
 
 # Set working directory
 WORKDIR /app
@@ -10,14 +10,23 @@ ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 ENV APP_PORT=5000
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Install system dependencies and create application user
+# Install Python 3.10 and system dependencies
 RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-venv \
+    python3-pip \
     gcc \
     curl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system app \
     && useradd --system --gid app --create-home app
+
+# Create symlinks for python/pip
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
+    ln -sf /usr/bin/python3.10 /usr/bin/python3
 
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
@@ -25,6 +34,10 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright browsers to system location and set ownership
+RUN playwright install --with-deps chromium && \
+    chown -R app:app /ms-playwright
 
 # Copy application code
 COPY . .

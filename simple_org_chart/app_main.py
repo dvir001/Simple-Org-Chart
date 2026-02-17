@@ -34,6 +34,13 @@ except ImportError:
 
 import simple_org_chart.config as app_config
 from simple_org_chart.auth import login_required, require_auth, sanitize_next_path
+from simple_org_chart.email_config import (
+    get_smtp_config,
+    is_smtp_configured,
+    load_email_config,
+    save_email_config,
+    get_report_types,
+)
 from simple_org_chart.settings import (
     DEFAULT_SETTINGS,
     department_is_ignored,
@@ -1108,6 +1115,142 @@ def reset_all_settings():
     except Exception as e:
         logger.error(f"Error resetting all settings: {e}")
         return jsonify({'error': 'Reset failed'}), 500
+
+
+@app.route('/api/email-config', methods=['GET', 'POST'])
+@require_auth
+@limiter.limit(RATE_LIMIT_SETTINGS)
+def handle_email_config():
+    """Get or update email report configuration."""
+    if request.method == 'GET':
+        try:
+            email_config = load_email_config()
+            smtp_config = get_smtp_config()
+            
+            # Return configuration with SMTP status (but not credentials)
+            return jsonify({
+                'success': True,
+                'config': email_config,
+                'smtpConfigured': is_smtp_configured(),
+                'smtpServer': smtp_config.get('server', ''),
+                'smtpPort': smtp_config.get('port', 587),
+                'smtpFromAddress': smtp_config.get('fromAddress', ''),
+                'availableReports': get_report_types(),
+            })
+        except Exception as e:
+            logger.error(f"Error loading email config: {e}")
+            return jsonify({'error': 'Failed to load email configuration'}), 500
+    
+    elif request.method == 'POST':
+        try:
+            new_config = request.json
+            if not new_config:
+                return jsonify({'error': 'No configuration provided'}), 400
+            
+            # Validate recipient email if enabled
+            if new_config.get('enabled') and not new_config.get('recipientEmail'):
+                return jsonify({'error': 'Recipient email is required when enabled'}), 400
+            
+            if save_email_config(new_config):
+                return jsonify({'success': True})
+            else:
+                return jsonify({'error': 'Failed to save email configuration'}), 500
+        except Exception as e:
+            logger.error(f"Error saving email config: {e}")
+            return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/email-config/test', methods=['POST'])
+@require_auth
+@limiter.limit('2 per minute')
+def test_email():
+    """Send a test email to verify SMTP configuration."""
+    try:
+        if not is_smtp_configured():
+            return jsonify({
+                'error': 'SMTP not configured. Please set SMTP environment variables in .env file.'
+            }), 400
+        
+        email_config = load_email_config()
+        recipient = email_config.get('recipientEmail')
+        
+        if not recipient:
+            return jsonify({'error': 'No recipient email configured'}), 400
+        
+        # Import email sender module (we'll create this next)
+        from simple_org_chart.email_sender import send_test_email
+        
+        success, message = send_test_email(recipient)
+        
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'error': message}), 500
+            
+    except ImportError:
+        return jsonify({'error': 'Email sender module not available'}), 500
+    except Exception as e:
+        logger.error(f"Error sending test email: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/email-config/test-with-attachments', methods=['POST'])
+@require_auth
+@limiter.limit('1 per 2 minutes')
+def test_email_with_attachments():
+    """Send an email report with attachments immediately."""
+    try:
+        if not is_smtp_configured():
+            return jsonify({
+                'error': 'SMTP not configured. Please set SMTP environment variables in .env file.'
+            }), 400
+        
+        email_config = load_email_config()
+        recipient = email_config.get('recipientEmail')
+        
+        if not recipient:
+            return jsonify({'error': 'No recipient email configured'}), 400
+        
+        file_types = email_config.get('fileTypes', [])
+        if not file_types:
+            return jsonify({'error': 'No file types selected for attachments'}), 400
+        
+        # Generate XLSX if requested
+        xlsx_content = None
+        if 'xlsx' in file_types:
+            try:
+                from simple_org_chart.data_update import _generate_xlsx_bytes
+                xlsx_content = _generate_xlsx_bytes()
+            except Exception as e:
+                logger.error(f"Failed to generate XLSX for email: {e}")
+                return jsonify({'error': f'Failed to generate XLSX: {str(e)}'}), 500
+        
+        # Get base URL for PNG generation if requested
+        base_url = None
+        if 'png' in file_types:
+            base_url = os.environ.get('APP_BASE_URL', 'http://localhost:5000')
+        
+        # Send email with attachments
+        from simple_org_chart.email_sender import send_test_email_with_attachments
+        
+        success, message = send_test_email_with_attachments(
+            recipient=recipient,
+            xlsx_content=xlsx_content,
+            base_url=base_url
+        )
+        
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'error': message}), 500
+            
+    except ImportError as e:
+        logger.error(f"Import error: {e}")
+        return jsonify({'error': 'Required module not available'}), 500
+    except Exception as e:
+        logger.error(f"Error sending email with attachments: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/export-xlsx')
 def export_xlsx():

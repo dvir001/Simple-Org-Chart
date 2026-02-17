@@ -516,6 +516,12 @@ def update_employee_data(source: str = 'unknown') -> None:
         if success:
             mark_data_update_finished(success=True, source=source)
             logger.info(f"Data sync completed successfully (source: {source})")
+            
+            # Try to send email report if scheduled
+            try:
+                _try_send_scheduled_email(source=source)
+            except Exception as email_error:
+                logger.error(f"Failed to send scheduled email: {email_error}")
         else:
             mark_data_update_finished(success=False, error=error_message or 'Unknown error', source=source)
             logger.error(f"Data sync failed (source: {source}): {error_message or 'Unknown error'}")
@@ -524,6 +530,161 @@ def update_employee_data(source: str = 'unknown') -> None:
 # Initialize on module load
 load_data_update_status()
 mark_startup_complete()
+
+
+def _try_send_scheduled_email(source: str = 'unknown') -> None:
+    """
+    Attempt to send a scheduled email report if conditions are met.
+    Called after successful data sync.
+    
+    Args:
+        source: The source of the data sync (e.g., 'manual', 'scheduled', 'startup')
+    """
+    try:
+        from simple_org_chart.email_config import should_send_email_now, mark_email_sent, load_email_config
+        from simple_org_chart.email_sender import send_report_email
+        
+        # Only send email reports for scheduled syncs
+        if source != 'scheduled':
+            logger.debug(f"Skipping email report for non-scheduled sync (source: {source})")
+            return
+        
+        if not should_send_email_now():
+            logger.debug("Email sending not scheduled at this time")
+            return
+        
+        logger.info("Email report scheduled, preparing to send...")
+        
+        # Load email configuration
+        email_config = load_email_config()
+        
+        # Generate XLSX export if requested
+        xlsx_content = None
+        if 'xlsx' in email_config.get('fileTypes', []):
+            try:
+                xlsx_content = _generate_xlsx_bytes()
+            except Exception as e:
+                logger.error(f"Failed to generate XLSX export for email: {e}")
+        
+        # Load report data if requested
+        reports_data = None
+        include_reports = email_config.get('includeReports', [])
+        if include_reports:
+            reports_data = _load_report_data(include_reports)
+        
+        # Get base URL for screenshot generation (if PNG export is requested)
+        base_url = None
+        if 'png' in email_config.get('fileTypes', []):
+            base_url = os.environ.get('APP_BASE_URL', 'http://localhost:5000')
+            logger.debug(f"Using base URL for PNG generation: {base_url}")
+        
+        # Send the email
+        success, message = send_report_email(
+            xlsx_content=xlsx_content,
+            reports_data=reports_data,
+            base_url=base_url
+        )
+        
+        if success:
+            mark_email_sent()
+            logger.info(f"Scheduled email sent successfully: {message}")
+        else:
+            logger.error(f"Failed to send scheduled email: {message}")
+            
+    except ImportError:
+        logger.debug("Email modules not available, skipping email sending")
+    except Exception as e:
+        logger.error(f"Error in email sending process: {e}")
+
+
+def _generate_xlsx_bytes() -> bytes:
+    """Generate XLSX export as bytes for email attachment."""
+    from io import BytesIO
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        raise ImportError("openpyxl is required for XLSX export")
+    
+    # Load employee data from cache
+    if not os.path.exists(EMPLOYEE_LIST_FILE):
+        raise FileNotFoundError(f"Employee list file not found: {EMPLOYEE_LIST_FILE}")
+    
+    with open(EMPLOYEE_LIST_FILE, 'r') as f:
+        employees = json.load(f)
+    
+    if not employees:
+        raise ValueError("No employee data available for export")
+    
+    # Create workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Employees"
+    
+    # Define columns (simplified version, full admin export)
+    headers = [
+        'Name', 'Title', 'Department', 'Email', 'Phone', 
+        'Manager', 'Office', 'City', 'State', 'Country'
+    ]
+    
+    # Write headers
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center")
+    
+    # Write data
+    for row_idx, emp in enumerate(employees, 2):
+        ws.cell(row=row_idx, column=1, value=emp.get('name', ''))
+        ws.cell(row=row_idx, column=2, value=emp.get('title', ''))
+        ws.cell(row=row_idx, column=3, value=emp.get('department', ''))
+        ws.cell(row=row_idx, column=4, value=emp.get('email', ''))
+        ws.cell(row=row_idx, column=5, value=emp.get('phone', ''))
+        ws.cell(row=row_idx, column=6, value=emp.get('managerName', ''))
+        ws.cell(row=row_idx, column=7, value=emp.get('officeLocation', ''))
+        ws.cell(row=row_idx, column=8, value=emp.get('city', ''))
+        ws.cell(row=row_idx, column=9, value=emp.get('state', ''))
+        ws.cell(row=row_idx, column=10, value=emp.get('country', ''))
+    
+    # Auto-adjust column widths
+    for col in range(1, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(col)].width = 20
+    
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.read()
+
+
+def _load_report_data(report_types: List[str]) -> Dict[str, Any]:
+    """Load report data from cached files."""
+    reports = {}
+    
+    report_file_map = {
+        'missing_manager': MISSING_MANAGER_FILE,
+        'disabled_with_license': DISABLED_LICENSE_FILE,
+        'filtered_with_license': FILTERED_LICENSE_FILE,
+        'filtered_users': FILTERED_USERS_FILE,
+        'disabled_users': DISABLED_USERS_FILE,
+        'last_login': LAST_LOGIN_FILE,
+        'recently_disabled': RECENTLY_DISABLED_FILE,
+        'recently_hired': RECENTLY_HIRED_FILE,
+    }
+    
+    for report_type in report_types:
+        file_path = report_file_map.get(report_type)
+        if file_path and os.path.exists(file_path):
+            try:
+                with open(file_path, 'r') as f:
+                    reports[report_type] = json.load(f)
+                logger.debug(f"Loaded report data for {report_type}")
+            except Exception as e:
+                logger.warning(f"Failed to load report {report_type}: {e}")
+    
+    return reports
 
 
 __all__ = [

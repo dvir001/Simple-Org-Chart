@@ -11,6 +11,7 @@ gunicorn==25.1.0
 marshmallow==4.2.2
 openpyxl==3.1.5
 Pillow==12.1.1
+playwright==1.49.1
 idna==3.11
 itsdangerous==2.2.0
 Jinja2==3.1.6
