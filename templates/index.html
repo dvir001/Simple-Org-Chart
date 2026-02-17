@@ -73,13 +73,13 @@
         
         <div class="main-content">
             <div class="org-chart-container" id="orgChart">
+                <button id="fullscreenBtn" class="fullscreen-btn" type="button" title="Toggle fullscreen mode (F11)" aria-label="Toggle fullscreen mode" data-i18n-title="index.toolbar.layout.fullscreenTitle" data-i18n-aria-label="index.toolbar.layout.fullscreenTitle">
+                    <span class="fullscreen-icon">⛶</span>
+                </button>
                 <div class="chart-toolbar">
                     <div class="toolbar-section toolbar-section--layout layout-toggle">
-                        <button class="layout-btn active" data-layout="vertical" type="button" aria-label="Vertical layout" data-i18n-aria-label="index.toolbar.layout.vertical">
+                        <button class="layout-btn active" data-layout="toggle" type="button" aria-label="Vertical layout" data-i18n-aria-label="index.toolbar.layout.vertical">
                             <span class="layout-icon">↓</span>
-                        </button>
-                        <button class="layout-btn" data-layout="horizontal" type="button" aria-label="Horizontal layout" data-i18n-aria-label="index.toolbar.layout.horizontal">
-                            <span class="layout-icon">→</span>
                         </button>
                         <button id="compactToggleBtn" class="layout-btn" type="button" title="Toggle compact layout for teams" data-i18n-title="index.toolbar.layout.compactTitle">
                             <span class="layout-icon">▦</span>
@@ -108,20 +108,18 @@
                         </button>
                     </div>
                     <div class="toolbar-section toolbar-section--controls controls">
+                        <button class="control-btn is-hidden" data-control="reset-zoom" type="button" data-i18n="index.toolbar.controls.resetZoom">Reset Zoom</button>
                         <button class="control-btn" data-control="zoom-in" type="button" aria-label="Zoom in" data-i18n-aria-label="index.toolbar.controls.zoomIn">+</button>
                         <button class="control-btn" data-control="zoom-out" type="button" aria-label="Zoom out" data-i18n-aria-label="index.toolbar.controls.zoomOut">-</button>
-                        <button class="control-btn" data-control="reset-zoom" type="button" data-i18n="index.toolbar.controls.resetZoom">Reset Zoom</button>
-                        <button class="control-btn" data-control="fit" type="button" data-i18n="index.toolbar.controls.fitToScreen">Fit to Screen</button>
-                        <button class="control-btn" data-control="expand" type="button" data-i18n="index.toolbar.controls.expandAll">Expand All</button>
-                        <button class="control-btn" data-control="collapse" type="button" data-i18n="index.toolbar.controls.collapseAll">Collapse All</button>
+                        <button class="control-btn" data-control="toggle-expand" type="button" data-i18n="index.toolbar.controls.expandAll">Expand All</button>
                         <button class="control-btn" data-control="reset-hidden" type="button" title="Show all previously hidden subtrees" data-i18n="index.toolbar.controls.resetHidden" data-i18n-title="index.toolbar.controls.resetHiddenTitle">Reset Hidden</button>
                         <button class="control-btn" data-control="reset-titles" type="button" title="Restore all job titles to their original values" data-i18n="index.toolbar.controls.resetTitles" data-i18n-title="index.toolbar.controls.resetTitlesTitle">Reset Titles</button>
                         <button class="control-btn" data-control="reset-departments" type="button" title="Restore all departments to their original values" data-i18n="index.toolbar.controls.resetDepartments" data-i18n-title="index.toolbar.controls.resetDepartmentsTitle">Reset Departments</button>
-                        <button class="control-btn" data-control="print" type="button" data-i18n="index.toolbar.controls.print">Print</button>
-                        <button class="control-btn control-btn--violet" data-control="export-visible-svg" type="button" data-i18n="index.toolbar.controls.exportVisibleSvg">Export Visible (SVG)</button>
-                        <button class="control-btn control-btn--teal" data-control="export-visible-png" type="button" data-i18n="index.toolbar.controls.exportVisiblePng">Export Visible (PNG)</button>
-                        <button class="control-btn control-btn--crimson" data-control="export-visible-pdf" type="button" data-i18n="index.toolbar.controls.exportVisiblePdf">Export Visible (PDF)</button>
-                        <button class="control-btn control-btn--green" data-control="export-xlsx" type="button" data-i18n="index.toolbar.controls.exportXlsx">Export to XLSX</button>
+                        <button class="control-btn control-btn--blue" data-control="print" type="button" data-i18n="index.toolbar.controls.print">Print</button>
+                        <button class="control-btn control-btn--violet" data-control="export-visible-svg" type="button" data-i18n="index.toolbar.controls.exportVisibleSvg">SVG</button>
+                        <button class="control-btn control-btn--teal" data-control="export-visible-png" type="button" data-i18n="index.toolbar.controls.exportVisiblePng">PNG</button>
+                        <button class="control-btn control-btn--crimson" data-control="export-visible-pdf" type="button" data-i18n="index.toolbar.controls.exportVisiblePdf">PDF</button>
+                        <button class="control-btn control-btn--green" data-control="export-xlsx" type="button" data-i18n="index.toolbar.controls.exportXlsx">XLSX (Full)</button>
                     </div>
                 </div>
                 <div class="loading">

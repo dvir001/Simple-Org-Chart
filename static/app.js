@@ -818,8 +818,21 @@ const HORIZONTAL_COMPACT_VERTICAL = HORIZONTAL_LEVEL_HEIGHT + 20;
 // Zoom tracking and helpers
 let userAdjustedZoom = false;
 let programmaticZoomActive = false;
+let baselineZoomScale = 1;
 let resizeTimer = null;
 const RESIZE_DEBOUNCE_MS = 180;
+const ZOOM_TOLERANCE = 0.05; // 5% tolerance for zoom level comparison
+
+function updateResetZoomButtonVisibility() {
+    const resetZoomBtn = document.querySelector('[data-control="reset-zoom"]');
+    if (resetZoomBtn) {
+        if (userAdjustedZoom) {
+            resetZoomBtn.classList.remove('is-hidden');
+        } else {
+            resetZoomBtn.classList.add('is-hidden');
+        }
+    }
+}
 
 function applyZoomTransform(transform, { duration = 750, resetUser = false } = {}) {
     if (!svg || !zoom) return;
@@ -829,6 +842,11 @@ function applyZoomTransform(transform, { duration = 750, resetUser = false } = {
         programmaticZoomActive = false;
         if (resetUser) {
             userAdjustedZoom = false;
+            if (svg) {
+                const currentTransform = d3.zoomTransform(svg.node());
+                baselineZoomScale = currentTransform.k;
+            }
+            updateResetZoomButtonVisibility();
         }
     };
 
@@ -1161,10 +1179,36 @@ function setupStaticEventListeners() {
 
     document.querySelectorAll('[data-layout]').forEach(button => {
         button.addEventListener('click', () => {
-            if (button.dataset.layout) {
+            if (button.dataset.layout === 'toggle') {
+                toggleLayoutOrientation();
+            } else if (button.dataset.layout) {
                 setLayoutOrientation(button.dataset.layout);
             }
         });
+    });
+
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+    }
+
+    // Listen for F11 key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'F11') {
+            e.preventDefault();
+            toggleFullscreen();
+        }
+    });
+
+    // Listen for native fullscreen changes
+    document.addEventListener('fullscreenchange', () => {
+        const fullscreenIcon = document.querySelector('#fullscreenBtn .fullscreen-icon');
+        if (!document.fullscreenElement) {
+            document.body.classList.remove('fullscreen-mode');
+            if (fullscreenIcon) {
+                fullscreenIcon.textContent = '⛶';
+            }
+        }
     });
 
     const controls = document.querySelector('.controls');
@@ -1284,14 +1328,8 @@ function handleControlAction(action) {
         case 'reset-zoom':
             resetZoom();
             break;
-        case 'fit':
-            fitToScreen();
-            break;
-        case 'expand':
-            expandAll();
-            break;
-        case 'collapse':
-            collapseAll();
+        case 'toggle-expand':
+            toggleExpandCollapse();
             break;
         case 'reset-hidden':
             resetHiddenSubtrees();
@@ -1517,12 +1555,101 @@ function adjustColor(color, amount) {
 
 // No conversion needed; we display and store updateTime in 24-hour HH:MM alongside timezone info
 
+function updateLayoutToggleButton() {
+    const toggleBtn = document.querySelector('[data-layout="toggle"]');
+    if (!toggleBtn) return;
+    
+    const icon = toggleBtn.querySelector('.layout-icon');
+    const isVertical = currentLayout === 'vertical';
+    const i18nKey = isVertical ? 'index.toolbar.layout.vertical' : 'index.toolbar.layout.horizontal';
+    const fallbackLabel = isVertical ? 'Vertical layout' : 'Horizontal layout';
+    const iconSymbol = isVertical ? '↓' : '→';
+    
+    if (icon) {
+        icon.textContent = iconSymbol;
+    }
+    
+    toggleBtn.setAttribute('data-i18n-aria-label', i18nKey);
+    toggleBtn.setAttribute('aria-label', fallbackLabel);
+    
+    // Update aria-label using i18n if available
+    if (window.i18n && window.i18n.t) {
+        toggleBtn.setAttribute('aria-label', window.i18n.t(i18nKey));
+    }
+}
+
+function toggleLayoutOrientation() {
+    const newLayout = currentLayout === 'vertical' ? 'horizontal' : 'vertical';
+    setLayoutOrientation(newLayout);
+}
+
+function toggleFullscreen() {
+    const isFullscreen = document.body.classList.contains('fullscreen-mode');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const fullscreenIcon = fullscreenBtn?.querySelector('.fullscreen-icon');
+    
+    if (!isFullscreen) {
+        // Enter fullscreen mode
+        document.body.classList.add('fullscreen-mode');
+        
+        // Update icon to exit fullscreen symbol
+        if (fullscreenIcon) {
+            fullscreenIcon.textContent = '⇲';
+        }
+        
+        // Try to use native fullscreen API
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen().catch(() => {
+                // Fullscreen API failed, just use CSS mode
+            });
+        } else if (elem.webkitRequestFullscreen) {
+            elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+            elem.msRequestFullscreen();
+        }
+        
+        // Resize chart to fit new dimensions
+        setTimeout(() => {
+            if (root) {
+                updateSvgSize();
+                fitToScreen({ duration: 300, resetUser: true });
+            }
+        }, 100);
+    } else {
+        // Exit fullscreen mode
+        document.body.classList.remove('fullscreen-mode');
+        
+        // Update icon back to enter fullscreen symbol
+        if (fullscreenIcon) {
+            fullscreenIcon.textContent = '⛶';
+        }
+        
+        // Exit native fullscreen if active
+        if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+        }
+        
+        // Resize chart to fit new dimensions
+        setTimeout(() => {
+            if (root) {
+                updateSvgSize();
+                fitToScreen({ duration: 300, resetUser: true });
+            }
+        }, 100);
+    }
+}
+
 function setLayoutOrientation(orientation) {
     currentLayout = orientation;
 
-    document.querySelectorAll('[data-layout]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.layout === orientation);
-    });
+    updateLayoutToggleButton();
 
     if (root) {
         update(root);
@@ -2577,7 +2704,15 @@ function renderOrgChart(data) {
         .on('zoom', (event) => {
             g.attr('transform', event.transform);
             if (!programmaticZoomActive && event.sourceEvent) {
-                userAdjustedZoom = true;
+                const scaleChanged = Math.abs(event.transform.k - baselineZoomScale) > ZOOM_TOLERANCE;
+                if (scaleChanged) {
+                    userAdjustedZoom = true;
+                    updateResetZoomButtonVisibility();
+                } else {
+                    // Scale returned to baseline, hide Reset Zoom button
+                    userAdjustedZoom = false;
+                    updateResetZoomButtonVisibility();
+                }
             }
         });
 
@@ -2610,6 +2745,7 @@ function renderOrgChart(data) {
 
     update(root);
     fitToScreen({ duration: 0 });
+    updateToggleExpandButton();
 }
 
 function update(source) {
@@ -2839,7 +2975,7 @@ function update(source) {
 
     const countGroup = nodeEnter.append('g')
         .attr('class', 'count-badge')
-        .style('display', d => shouldShowCountBadge(d) ? 'block' : 'none');
+        .style('display', 'none'); // Hidden - count now shows next to +/- button
 
     countGroup.append('circle')
         .attr('cx', -nodeWidth/2 + 15)
@@ -2866,18 +3002,32 @@ function update(source) {
             toggle(d);
         });
 
-    expandBtn.append('circle')
+    expandBtn.append('rect')
         .attr('class', 'expand-btn')
-        .attr('cy', currentLayout === 'vertical' ? nodeHeight/2 + 10 : 0)
-        .attr('cx', currentLayout === 'horizontal' ? nodeWidth/2 + 10 : 0)
-        .attr('r', 10);
+        .attr('y', currentLayout === 'vertical' ? nodeHeight/2 + 2 : -8)
+        .attr('x', d => {
+            const hasCount = shouldShowCountBadge(d);
+            const width = hasCount ? 36 : 18;
+            const xBase = currentLayout === 'horizontal' ? nodeWidth/2 + 10 : 0;
+            return xBase - width/2;
+        })
+        .attr('width', d => shouldShowCountBadge(d) ? 36 : 18)
+        .attr('height', 16)
+        .attr('rx', 8)
+        .attr('ry', 8);
 
     expandBtn.append('text')
         .attr('class', 'expand-text')
-        .attr('y', currentLayout === 'vertical' ? nodeHeight/2 + 15 : 4)
+        .attr('y', currentLayout === 'vertical' ? nodeHeight/2 + 13 : 3)
         .attr('x', currentLayout === 'horizontal' ? nodeWidth/2 + 10 : 0)
         .attr('text-anchor', 'middle')
-        .text(d => d._children?.length ? '+' : '-');
+        .text(d => {
+            const symbol = d._children?.length ? '+' : '-';
+            if (shouldShowCountBadge(d)) {
+                return formatDirectReportCount(d) + ' ' + symbol;
+            }
+            return symbol;
+        });
 
     // Eye icon toggle (placed top-right inside node)
     nodeEnter.append('text')
@@ -2962,19 +3112,34 @@ function update(source) {
         });
 
     nodeUpdate.select('.expand-text')
-        .text(d => d._children?.length ? '+' : '-')
-        .attr('y', currentLayout === 'vertical' ? nodeHeight/2 + 15 : 4)
+        .text(d => {
+            const symbol = d._children?.length ? '+' : '-';
+            if (shouldShowCountBadge(d)) {
+                return formatDirectReportCount(d) + ' ' + symbol;
+            }
+            return symbol;
+        })
+        .attr('y', currentLayout === 'vertical' ? nodeHeight/2 + 13 : 3)
         .attr('x', currentLayout === 'horizontal' ? nodeWidth/2 + 10 : 0);
 
     nodeUpdate.select('.expand-btn')
-        .attr('cy', currentLayout === 'vertical' ? nodeHeight/2 + 10 : 0)
-        .attr('cx', currentLayout === 'horizontal' ? nodeWidth/2 + 10 : 0);
+        .attr('y', currentLayout === 'vertical' ? nodeHeight/2 + 2 : -8)
+        .attr('x', d => {
+            const hasCount = shouldShowCountBadge(d);
+            const width = hasCount ? 36 : 18;
+            const xBase = currentLayout === 'horizontal' ? nodeWidth/2 + 10 : 0;
+            return xBase - width/2;
+        })
+        .attr('width', d => shouldShowCountBadge(d) ? 36 : 18)
+        .attr('height', 16)
+        .attr('rx', 8)
+        .attr('ry', 8);
 
     nodeUpdate.select('.expand-group')
         .style('display', d => (d._children?.length || d.children?.length) ? 'block' : 'none');
 
     nodeMerge.selectAll('.count-badge')
-        .style('display', d => shouldShowCountBadge(d) ? 'block' : 'none');
+        .style('display', 'none'); // Hidden - count now shows next to +/- button
 
     nodeMerge.selectAll('.count-badge text')
         .text(d => formatDirectReportCount(d));
@@ -3271,6 +3436,35 @@ function toggle(d) {
         }
     }
     update(d);
+    updateToggleExpandButton();
+}
+
+function hasAnyCollapsedNodes() {
+    let hasCollapsed = false;
+    root.each(d => {
+        if (d._children && d._children.length > 0) {
+            hasCollapsed = true;
+        }
+    });
+    return hasCollapsed;
+}
+
+function updateToggleExpandButton() {
+    const toggleBtn = document.querySelector('[data-control="toggle-expand"]');
+    if (!toggleBtn) return;
+    
+    const hasCollapsed = hasAnyCollapsedNodes();
+    const i18nKey = hasCollapsed ? 'index.toolbar.controls.expandAll' : 'index.toolbar.controls.collapseAll';
+    const fallbackText = hasCollapsed ? 'Expand All' : 'Collapse All';
+    
+    toggleBtn.setAttribute('data-i18n', i18nKey);
+    
+    // Update text using i18n if available, otherwise use fallback
+    if (window.i18n && window.i18n.t) {
+        toggleBtn.textContent = window.i18n.t(i18nKey);
+    } else {
+        toggleBtn.textContent = fallbackText;
+    }
 }
 
 function expandAll() {
@@ -3281,6 +3475,7 @@ function expandAll() {
         }
     });
     update(root);
+    updateToggleExpandButton();
 }
 
 function collapseAll() {
@@ -3291,6 +3486,15 @@ function collapseAll() {
         }
     });
     update(root);
+    updateToggleExpandButton();
+}
+
+function toggleExpandCollapse() {
+    if (hasAnyCollapsedNodes()) {
+        expandAll();
+    } else {
+        collapseAll();
+    }
 }
 
 function resetZoom() {
@@ -3344,15 +3548,27 @@ function fitToScreen(options = {}) {
 function zoomIn() {
     if (!svg) return;
     const transition = svg.transition().call(zoom.scaleBy, 1.2);
-    transition.on('end', () => { userAdjustedZoom = true; });
-    transition.on('interrupt', () => { userAdjustedZoom = true; });
+    const checkZoomLevel = () => {
+        const currentTransform = d3.zoomTransform(svg.node());
+        const scaleChanged = Math.abs(currentTransform.k - baselineZoomScale) > ZOOM_TOLERANCE;
+        userAdjustedZoom = scaleChanged;
+        updateResetZoomButtonVisibility();
+    };
+    transition.on('end', checkZoomLevel);
+    transition.on('interrupt', checkZoomLevel);
 }
 
 function zoomOut() {
     if (!svg) return;
     const transition = svg.transition().call(zoom.scaleBy, 0.8);
-    transition.on('end', () => { userAdjustedZoom = true; });
-    transition.on('interrupt', () => { userAdjustedZoom = true; });
+    const checkZoomLevel = () => {
+        const currentTransform = d3.zoomTransform(svg.node());
+        const scaleChanged = Math.abs(currentTransform.k - baselineZoomScale) > ZOOM_TOLERANCE;
+        userAdjustedZoom = scaleChanged;
+        updateResetZoomButtonVisibility();
+    };
+    transition.on('end', checkZoomLevel);
+    transition.on('interrupt', checkZoomLevel);
 }
 
 function getBounds(printRoot) {

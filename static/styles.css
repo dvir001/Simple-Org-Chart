@@ -456,6 +456,55 @@ html.i18n-loading body {
     display: none !important;
 }
 
+.fullscreen-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15), 0 2px 4px rgba(15, 23, 42, 0.1);
+    cursor: pointer;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(8px);
+}
+
+.fullscreen-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2), 0 3px 6px rgba(15, 23, 42, 0.15);
+    transform: translateY(-2px);
+}
+
+.fullscreen-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+}
+
+.fullscreen-icon {
+    font-size: 20px;
+    line-height: 1;
+    user-select: none;
+}
+
+body.fullscreen-mode .header,
+body.fullscreen-mode .search-bar {
+    display: none !important;
+}
+
+body.fullscreen-mode .main-content {
+    height: 100vh;
+}
+
+body.fullscreen-mode .org-chart-container {
+    height: 100vh;
+}
+
 .search-bar {
     padding: 8px 18px;
     background: white;
@@ -757,14 +806,14 @@ html.i18n-loading body {
     white-space: nowrap;
 }
 
-.control-btn:not(.control-btn--violet):not(.control-btn--teal):not(.control-btn--crimson):not(.control-btn--green) {
+.control-btn:not(.control-btn--violet):not(.control-btn--teal):not(.control-btn--crimson):not(.control-btn--green):not(.control-btn--blue) {
     background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
     border-color: rgba(71, 85, 105, 0.35);
     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14);
     color: #1f2937;
 }
 
-.control-btn:not(.control-btn--violet):not(.control-btn--teal):not(.control-btn--crimson):not(.control-btn--green):hover {
+.control-btn:not(.control-btn--violet):not(.control-btn--teal):not(.control-btn--crimson):not(.control-btn--green):not(.control-btn--blue):hover {
     transform: translateY(-1px);
     filter: none;
     background: linear-gradient(135deg, #d7dee7 0%, #b8c2cf 100%);
@@ -813,6 +862,17 @@ html.i18n-loading body {
 }
 
 .control-btn--green:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+}
+
+.control-btn--blue {
+    background: linear-gradient(135deg, #1a73e8 0%, #4285f4 100%);
+    border-color: transparent;
+    color: #ffffff;
+}
+
+.control-btn--blue:hover {
     transform: translateY(-1px);
     filter: brightness(1.05);
 }
@@ -1555,7 +1615,7 @@ html.i18n-loading body {
 
 .expand-text {
     fill: white;
-    font-size: 14px;
+    font-size: 10px;
     font-weight: bold;
     pointer-events: none;
 }

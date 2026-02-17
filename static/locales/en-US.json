@@ -42,6 +42,7 @@
 			"layout": {
 				"vertical": "Vertical layout",
 				"horizontal": "Horizontal layout",
+				"fullscreenTitle": "Toggle fullscreen mode (F11)",
 				"compactTitle": "Toggle compact layout for teams",
 				"compactTitleAdmin": "Toggle compact layout for large teams (admin)",
 				"compactTitleGuest": "Toggle compact layout for large teams",
@@ -73,7 +74,6 @@
 				"zoomIn": "Zoom in",
 				"zoomOut": "Zoom out",
 				"resetZoom": "Reset Zoom",
-				"fitToScreen": "Fit to Screen",
 				"expandAll": "Expand All",
 				"collapseAll": "Collapse All",
 				"resetHidden": "Reset Hidden",
@@ -83,11 +83,11 @@
 				"resetDepartments": "Reset Departments",
 				"resetDepartmentsTitle": "Restore all departments to their original values",
 				"print": "Print",
-				"exportVisibleSvg": "Export Visible (SVG)",
-				"exportVisiblePng": "Export Visible (PNG)",
-				"exportVisiblePdf": "Export Visible (PDF)",
-				"exportXlsx": "Export to XLSX",
-				"exportXlsxAdmin": "Export to XLSX (Admin)"
+				"exportVisibleSvg": "SVG",
+				"exportVisiblePng": "PNG",
+				"exportVisiblePdf": "PDF",
+				"exportXlsx": "XLSX (Full)",
+				"exportXlsxAdmin": "XLSX (Admin)"
 			}
 		},
 		"status": {
