@@ -1224,7 +1224,7 @@ def test_email_with_attachments():
                 xlsx_content = _generate_xlsx_bytes()
             except Exception as e:
                 logger.error(f"Failed to generate XLSX for email: {e}")
-                return jsonify({'error': f'Failed to generate XLSX: {str(e)}'}), 500
+                return jsonify({'error': 'Failed to generate XLSX'}), 500
         
         # Get base URL for PNG generation if requested
         base_url = None
@@ -1250,7 +1250,7 @@ def test_email_with_attachments():
         return jsonify({'error': 'Required module not available'}), 500
     except Exception as e:
         logger.error(f"Error sending email with attachments: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An internal error occurred while sending email with attachments'}), 500
 
 
 @app.route('/api/export-xlsx')
