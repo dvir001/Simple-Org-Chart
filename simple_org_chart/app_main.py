@@ -2510,7 +2510,7 @@ def get_employee(employee_id):
             return jsonify(employee)
         return jsonify({'error': 'Employee not found'}), 404
     except Exception as e:
-        logger.error(f"Error in get_employee for id {employee_id}: {e}")
+        logger.error(f"Error in get_employee: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
