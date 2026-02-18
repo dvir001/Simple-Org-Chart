@@ -2591,9 +2591,11 @@ def debug_search():
         return jsonify(info)
     except Exception as e:
         import traceback
+        logger.error(f"Error in debug_search: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({
-            'error': str(e),
-            'traceback': traceback.format_exc()
+            'error': 'Internal server error',
+            'message': 'Debug search failed. Please check server logs for details.'
         }), 500
 
 
