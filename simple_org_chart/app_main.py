@@ -644,8 +644,9 @@ def get_employees():
         
         return jsonify(data)
     except Exception as e:
-        logger.error(f"Error in get_employees: {e}")
-        return jsonify({'error': str(e)}), 500
+        # Log full details server-side but avoid exposing internal error information to the client
+        logger.error(f"Error in get_employees: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load employees'}), 500
 
 
 @app.route('/<filename>.json')
