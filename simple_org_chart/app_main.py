@@ -603,11 +603,11 @@ def get_employees():
             
             update_new_status(data)
         
-        # Debug logging for root user
+        # Debug logging for root user (avoid logging sensitive identifiers)
         if data:
             logger.info(
-                "Returning org chart data with root user present (id=%s, has_email=%s)",
-                data.get('id'),
+                "Returning org chart data with root user present (has_id=%s, has_email=%s)",
+                bool(data.get('id')),
                 bool(data.get('email')),
             )
         
