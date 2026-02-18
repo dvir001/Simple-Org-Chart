@@ -1191,8 +1191,8 @@ def test_email():
     except ImportError:
         return jsonify({'error': 'Email sender module not available'}), 500
     except Exception as e:
-        logger.error(f"Error sending test email: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error sending test email", exc_info=e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @app.route('/api/email-config/test-with-attachments', methods=['POST'])

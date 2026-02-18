@@ -83,8 +83,8 @@ def send_test_email(recipient: str) -> Tuple[bool, str]:
             return False, 'Failed to send test email. Check logs for details.'
             
     except Exception as e:
-        logger.error(f"Error sending test email: {e}")
-        return False, f'Error: {str(e)}'
+        logger.error("Error sending test email", exc_info=e)
+        return False, 'Failed to send test email. Check server logs for details.'
 
 
 def send_test_email_with_attachments(
