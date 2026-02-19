@@ -165,7 +165,7 @@ def send_test_email_with_attachments(
                 logger.info("XLSX file attached to email")
             except Exception as e:
                 logger.warning(f"Failed to attach XLSX file to email: {e}")
-                return False, f'Failed to attach XLSX file: {str(e)}'
+                return False, 'Failed to attach XLSX file. Check server logs for details.'
         
         # Attach PNG screenshot if requested
         if 'png' in file_types and base_url:
@@ -192,7 +192,7 @@ def send_test_email_with_attachments(
                         return False, 'Failed to generate PNG export'
             except Exception as e:
                 logger.warning(f"Failed to attach PNG screenshot to email: {e}")
-                return False, f'Failed to attach PNG: {str(e)}'
+                return False, 'Failed to attach PNG. Check server logs for details.'
         
         # Send email
         success = _send_email_smtp(smtp_config, msg, recipients)
@@ -204,7 +204,7 @@ def send_test_email_with_attachments(
             
     except Exception as e:
         logger.error(f"Error sending email with attachments: {e}")
-        return False, f'Error: {str(e)}'
+        return False, 'An internal error occurred while sending email with attachments.'
 
 
 def send_report_email(
