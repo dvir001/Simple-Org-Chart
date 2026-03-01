@@ -47,6 +47,7 @@ def generate_org_chart_png_via_export(
         logger.error("Playwright is not installed. Cannot generate PNG.")
         return None
     
+    browser = None
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -101,3 +102,9 @@ def generate_org_chart_png_via_export(
     except Exception as e:
         logger.error(f"Error generating PNG export: {e}", exc_info=True)
         return None
+    finally:
+        if browser:
+            try:
+                browser.close()
+            except Exception:
+                pass
