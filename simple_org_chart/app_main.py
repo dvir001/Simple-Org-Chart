@@ -192,7 +192,7 @@ limiter = Limiter(
 )
 
 # Exempt localhost from all rate limits (health checks, internal requests)
-limiter.exempt(_is_localhost_exempt)
+limiter.request_filter(_is_localhost_exempt)
 
 # Simple authentication settings
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
