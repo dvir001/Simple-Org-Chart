@@ -11,6 +11,7 @@ services:
       - .env
     volumes:
       - orgchart_data:/app/data
+      - orgchart_repos:/app/repositories
     labels:
         com.docker.compose.project: "docker"
     networks:
@@ -21,3 +22,4 @@ networks:
 
 volumes:
   orgchart_data:
+  orgchart_repos:
