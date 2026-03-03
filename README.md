@@ -134,6 +134,7 @@ docker compose up -d
   - Users by last sign-in activity
   - Employees hired in the last 365 days
   - Users hidden by filters
+  - User Scanner (OSINT) — individual and organization-wide email presence scans
 - **Automated Email Reports**: Schedule daily, weekly, or monthly reports sent via SMTP after data synchronization.
 - **Export Options**: SVG/PNG/PDF snapshots and XLSX exports for reports and chart data.
 - **MicroSIP Directory Feed**: Serve a MicroSIP contacts JSON at /contacts.json using cached employee data.
@@ -291,12 +292,64 @@ Example XML structure:
 </YealinkIPPhoneDirectory>
 ```
 
+## User Scanner (OSINT)
+
+SimpleOrgChart includes a built-in OSINT scanner that checks employee email addresses against hundreds of online platforms to identify where accounts are registered. **Disabled by default.**
+
+The scanner uses the open-source [user-scanner](https://pypi.org/project/user-scanner/) package, which is downloaded automatically from PyPI when the feature is enabled and kept up to date.
+
+### Enabling
+
+1. Navigate to `/configure` and locate the **🔍 User Scanner** section
+2. Toggle **Enable User Scanner**
+3. Save settings — the package is installed on first use
+
+### Individual Scan
+
+Scan a single employee or any arbitrary email address from the **Individual** tab on the reports page.
+
+1. Go to `/reports` and select **User Scanner (OSINT)** from the report dropdown
+2. On the **Individual** tab, search for an employee or type a raw email address
+3. Optionally filter by specific sites or categories, toggle loud-site inclusion, or limit to found-only results
+4. Click **Run Scan** — results appear inline in a per-platform table showing registration status
+
+### Organization Scan
+
+Scan all employees (or a filtered subset) from the **Organization** tab.
+
+1. Switch to the **Organization** tab
+2. Optionally narrow the scan with user filters (mailbox type, account status, license status, user type)
+3. Use site and category pickers to target specific platforms
+4. Toggle "Include loud sites" to include platforms that may notify the target (e.g., Instagram, Flirtbate)
+5. Optionally enter an email address to receive the report when the scan completes
+6. Click **Run Full Scan**
+
+During the scan:
+
+- A progress bar and live terminal display scanning status in real time
+- The scan can be stopped at any point with **Stop Scan**; partial results are preserved
+- Rate limiting (1.5 s between employees) prevents HTTP 429 errors from target platforms
+
+When the scan completes (or is stopped):
+
+- An XLSX workbook is generated with a **Summary** sheet plus one sheet per scanned site
+- The last five scan runs are listed under **Recent Scan Results** with one-click **Download** buttons
+- If an email address was provided, the XLSX is sent as an attachment
+- Use the **Clear** button to remove scan history
+
+### Multi-Worker Support
+
+Organization scans use file-based state (`data/full_scan_state.json`) and a cancel sentinel (`data/full_scan_cancel.flag`) so progress and stop signals work correctly across multiple Gunicorn workers.
+
 ## Reporting Caches
 
 - `data/employee_data.json` – Full org hierarchy.
 - `data/missing_manager_records.json` – Missing manager snapshot.
 - `data/disabled_user_records.json` – Disabled users enriched with license and sign-in metadata.
 - `data/last_login_records.json` – Active users with last sign-in timestamps.
+- `data/user_scanner_results.json` – Cached results from the most recent organization-wide OSINT scan.
+- `data/user_scanner_history.json` – Last five scan run metadata entries.
+- `data/user_scanner_exports/` – Downloaded XLSX workbooks for completed scans.
 - Additional files exist for filtered/disabled-with-license/hiring reports.
 
 If a cache is missing or stale, hit **Refresh Data** on the reports page or start the app with `RUN_INITIAL_UPDATE=true`.

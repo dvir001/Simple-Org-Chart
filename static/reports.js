@@ -11,6 +11,61 @@ const FILTER_REASON_I18N_KEYS = {
     filter_ignored_employee: 'reports.types.filteredLicensed.reason.ignoredEmployee',
 };
 
+let selectedScanUser = null;
+let userScannerEnabled = false;
+let scannerSiteFilter = new Set();          // selected site names (empty = all)
+let scannerKnownSites = [];                 // populated after first scan
+let siteFilterPicker = null;                // TagPicker-style instance (single tab)
+let categoryFilterPicker = null;            // TagPicker-style instance for categories (single tab)
+let fullScanSiteFilterPicker = null;        // TagPicker-style instance (all tab)
+let fullScanCategoryFilterPicker = null;    // TagPicker-style instance for categories (all tab)
+
+/** State for the full-scan user-level filters (mirrors last-logins filter toggles). */
+const fullScanFilterState = {
+    includeUserMailboxes: true,
+    includeSharedMailboxes: false,
+    includeRoomEquipmentMailboxes: false,
+    includeEnabled: true,
+    includeDisabled: false,
+    includeLicensed: true,
+    includeUnlicensed: false,
+    includeMembers: true,
+    includeGuests: false,
+};
+
+/** Filter definitions for the full-scan user filter panel. */
+const FULL_SCAN_FILTER_GROUPS = [
+    {
+        labelKey: 'reports.filters.groups.mailboxTypes',
+        filters: [
+            { key: 'includeUserMailboxes', labelKey: 'reports.filters.includeUserMailboxes.label' },
+            { key: 'includeSharedMailboxes', labelKey: 'reports.filters.includeSharedMailboxes.label' },
+            { key: 'includeRoomEquipmentMailboxes', labelKey: 'reports.filters.includeRoomEquipmentMailboxes.label' },
+        ],
+    },
+    {
+        labelKey: 'reports.filters.groups.accountStatus',
+        filters: [
+            { key: 'includeEnabled', labelKey: 'reports.filters.includeEnabled.label' },
+            { key: 'includeDisabled', labelKey: 'reports.filters.includeDisabled.label' },
+        ],
+    },
+    {
+        labelKey: 'reports.filters.groups.licenseStatus',
+        filters: [
+            { key: 'includeLicensed', labelKey: 'reports.filters.includeLicensed.label' },
+            { key: 'includeUnlicensed', labelKey: 'reports.filters.includeUnlicensed.label' },
+        ],
+    },
+    {
+        labelKey: 'reports.filters.groups.userScope',
+        filters: [
+            { key: 'includeMembers', labelKey: 'reports.filters.includeMembers.label' },
+            { key: 'includeGuests', labelKey: 'reports.filters.includeGuests.label' },
+        ],
+    },
+];
+
 const REPORT_CONFIGS = {
     'missing-manager': {
         dataPath: '/api/reports/missing-manager',
@@ -424,6 +479,22 @@ const REPORT_CONFIGS = {
                 labelKey: 'reports.types.filteredLicensed.columns.filterReasons',
                 render: renderFilterReasonsCell,
             },
+        ],
+    },
+    'user-scanner': {
+        dataPath: '/api/user-scanner/full-scan/results',
+        exportPath: null,
+        summaryLabelKey: 'reports.types.userScanner.summaryLabel',
+        tableTitleKey: 'reports.types.userScanner.tableTitle',
+        emptyKey: 'reports.types.userScanner.empty',
+        countSummaryKey: 'reports.types.userScanner.countSummary',
+        isCustom: true,
+        buildStatusParams: (records) => ({ count: records.length }),
+        columns: [
+            { key: 'name', labelKey: 'reports.table.columns.name' },
+            { key: 'email', labelKey: 'reports.table.columns.email' },
+            { key: 'totalChecked', labelKey: 'reports.types.userScanner.columns.totalChecked' },
+            { key: 'registeredCount', labelKey: 'reports.types.userScanner.columns.registeredCount' },
         ],
     },
 };
@@ -1231,6 +1302,994 @@ async function exportReportToPDF() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// User Scanner panel logic
+// ---------------------------------------------------------------------------
+
+function toggleUserScannerPanel(show) {
+    const panel = qs('userScannerPanel');
+    const tablePanel = document.querySelector('.table-panel');
+    const summaryPanel = document.querySelector('.summary-panel');
+    const headerActions = document.querySelector('.header-actions');
+    const filterPanel = document.querySelector('.filter-panel');
+    const reportFilters = qs('reportFilters');
+    if (panel) panel.classList.toggle('is-hidden', !show);
+    if (tablePanel) tablePanel.classList.toggle('is-hidden', show);
+    if (summaryPanel) summaryPanel.classList.toggle('is-hidden', show);
+    if (headerActions) headerActions.classList.toggle('is-hidden', show);
+    if (filterPanel) filterPanel.classList.toggle('is-hidden', show);
+    // Hide report-level filter chips (Mailbox Type, Account Status, etc.)
+    if (reportFilters) { reportFilters.classList.add('is-hidden'); reportFilters.innerHTML = ''; }
+}
+
+async function checkUserScannerEnabled() {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/user-scanner/status`, { credentials: 'include' });
+        if (resp.ok) {
+            const data = await resp.json();
+            // Auto-install when enabled but not yet installed
+            if (data.enabled && !data.installed) {
+                try {
+                    const installResp = await fetch(`${API_BASE_URL}/api/user-scanner/install`, {
+                        method: 'POST',
+                        credentials: 'include',
+                    });
+                    if (installResp.ok) {
+                        const installData = await installResp.json();
+                        data.installed = installData.success;
+                        data.version = installData.version || null;
+                    }
+                } catch (installErr) {
+                    console.error('Auto-install of user-scanner failed:', installErr);
+                }
+            }
+            userScannerEnabled = data.enabled && data.installed;
+            return data;
+        }
+    } catch (e) { /* ignore */ }
+    return { enabled: false, installed: false };
+}
+
+function renderScanResultsTable(container, results, isEmail) {
+    const t = getTranslator();
+    container.innerHTML = '';
+    if (!results || !results.length) {
+        container.textContent = t('reports.types.userScanner.noResults');
+        return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'user-scanner-results-table';
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['Platform', 'Category', 'Status', 'Reason'].forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    results.forEach(r => {
+        const tr = document.createElement('tr');
+        const statusLabel = r.status || '';
+        const isRegistered = statusLabel === 'Registered' || statusLabel === 'Found';
+
+        [r.site_name, r.category, statusLabel, r.reason || ''].forEach((val, i) => {
+            const td = document.createElement('td');
+            if (i === 2) {
+                const badge = document.createElement('span');
+                badge.className = isRegistered ? 'badge badge--warning' : 'badge badge--neutral';
+                badge.textContent = val;
+                td.appendChild(badge);
+            } else {
+                td.textContent = val || '—';
+            }
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+}
+
+function _looksLikeEmail(str) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+}
+
+// Abort controller for the in-flight individual scan; allows tab-switch to cancel it.
+let _singleScanAbort = null;
+// Generation counter incremented on every scanner-tab switch.
+// The individual scan captures this at start and bails if it changes.
+let _scannerTabGen = 0;
+
+async function runSingleUserScan() {
+    // If no employee was selected from the dropdown, check if the input
+    // contains a raw email and use it directly.
+    if (!selectedScanUser) {
+        const inputVal = (qs('userScannerInput')?.value || '').trim();
+        if (_looksLikeEmail(inputVal)) {
+            selectedScanUser = { name: '', email: inputVal };
+        } else {
+            return;
+        }
+    }
+
+    // Abort any previous in-flight individual scan
+    if (_singleScanAbort) { _singleScanAbort.abort(); }
+    _singleScanAbort = new AbortController();
+    const signal = _singleScanAbort.signal;
+    const myGen = _scannerTabGen;   // capture generation
+
+    const t = getTranslator();
+    const scanBtn = qs('runUserScanBtn');
+    const tablePanel = document.querySelector('.table-panel');
+    if (scanBtn) { scanBtn.disabled = true; scanBtn.textContent = t('reports.types.userScanner.scanning'); }
+    if (tablePanel) tablePanel.classList.remove('is-hidden');
+
+    const thead = qs('reportTableHead');
+    const tbody = qs('reportTableBody');
+    const titleEl = qs('tableTitle');
+    if (titleEl) titleEl.textContent = t('reports.types.userScanner.singleResultTitle') + ' — ' + (selectedScanUser.name || selectedScanUser.email);
+    if (thead) thead.innerHTML = '';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4">' + t('reports.types.userScanner.scanning') + '</td></tr>';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/user-scanner/scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            signal,
+            body: JSON.stringify({
+                email: selectedScanUser.email || null,
+                ..._getScanOptions(),
+            }),
+        });
+        // If user switched tabs while fetch was in-flight, discard results
+        if (myGen !== _scannerTabGen) return;
+        const data = await resp.json();
+        if (myGen !== _scannerTabGen) return;
+        if (!resp.ok) {
+            if (tbody) tbody.innerHTML = '<tr class="empty-row"><td colspan="4">' + (data.error || 'Scan failed') + '</td></tr>';
+            return;
+        }
+
+        // Final gate before rendering – bail if tab changed
+        if (myGen !== _scannerTabGen) return;
+
+        // Email results only – filtered server-side when sites are selected
+        const rawResults = data.email_results || [];
+        _collectKnownSites(rawResults);
+        const nonErrorResults = rawResults.filter(r => (r.status || '').toLowerCase() !== 'error');
+        const errorResults = rawResults.filter(r => (r.status || '').toLowerCase() === 'error');
+        const allResults = nonErrorResults;
+        latestRecords = allResults;
+
+        if (thead) {
+            thead.innerHTML = '';
+            const hr = document.createElement('tr');
+            ['Platform', 'Category', 'Status', 'Reason'].forEach(h => {
+                const th = document.createElement('th'); th.textContent = h; hr.appendChild(th);
+            });
+            thead.appendChild(hr);
+        }
+
+        if (tbody) {
+            tbody.innerHTML = '';
+            if (!allResults.length) {
+                tbody.innerHTML = '<tr class="empty-row"><td colspan="4">' + t('reports.types.userScanner.noResults') + '</td></tr>';
+            } else {
+                allResults.forEach(r => {
+                    const tr = document.createElement('tr');
+                    const statusLabel = r.status || '';
+                    const isRegistered = statusLabel === 'Registered' || statusLabel === 'Found';
+                    [r.site_name, r.category, statusLabel, r.reason || ''].forEach((val, i) => {
+                        const td = document.createElement('td');
+                        if (i === 2) {
+                            const badge = document.createElement('span');
+                            badge.className = isRegistered ? 'badge badge--warning' : 'badge badge--neutral';
+                            badge.textContent = val;
+                            td.appendChild(badge);
+                        } else {
+                            td.textContent = val || '—';
+                        }
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+
+                // Collapsible errors section
+                if (errorResults.length) {
+                    const errorRow = document.createElement('tr');
+                    const errorTd = document.createElement('td');
+                    errorTd.colSpan = 4;
+                    errorTd.style.padding = '0';
+                    const details = document.createElement('details');
+                    details.style.padding = '10px 14px';
+                    const summary = document.createElement('summary');
+                    summary.style.cursor = 'pointer';
+                    summary.style.color = 'var(--text-muted)';
+                    summary.style.fontSize = '0.88rem';
+                    summary.textContent = errorResults.length + ' site(s) returned errors (click to expand)';
+                    details.appendChild(summary);
+                    const errorTable = document.createElement('table');
+                    errorTable.className = 'user-scanner-results-table';
+                    errorTable.style.marginTop = '8px';
+                    errorResults.forEach(r => {
+                        const tr2 = document.createElement('tr');
+                        [r.site_name, r.category, 'Error', r.reason || ''].forEach(val => {
+                            const td2 = document.createElement('td');
+                            td2.textContent = val || '—';
+                            td2.style.color = 'var(--text-muted)';
+                            tr2.appendChild(td2);
+                        });
+                        errorTable.appendChild(tr2);
+                    });
+                    details.appendChild(errorTable);
+                    errorTd.appendChild(details);
+                    errorRow.appendChild(errorTd);
+                    tbody.appendChild(errorRow);
+                }
+            }
+        }
+    } catch (err) {
+        if (err.name === 'AbortError') return;   // scan was cancelled by tab switch
+        if (myGen === _scannerTabGen && tbody) tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Scan failed: ' + err.message + '</td></tr>';
+    } finally {
+        if (scanBtn) { scanBtn.disabled = false; scanBtn.textContent = t('reports.userScanner.scanButton'); }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Site-filter helpers  (TagPicker-style component)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lightweight TagPicker clone for filtering scan results by site name.
+ * Mirrors the TagPicker class from configure.js but fires an onChange
+ * callback instead of calling markUnsavedChange().
+ */
+class SiteFilterPicker {
+    constructor({ pickerId, hiddenInputId, options = [], placeholder = '', onChange }) {
+        this.root = document.getElementById(pickerId);
+        this.hiddenInput = document.getElementById(hiddenInputId);
+        this.onChange = typeof onChange === 'function' ? onChange : () => {};
+        if (!this.root || !this.hiddenInput) { this.enabled = false; return; }
+
+        this.enabled = true;
+        this.options = (Array.isArray(options) ? options.slice() : []).filter(Boolean);
+        this.options.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+        this.tagContainer = this.root.querySelector('[data-role="tag-container"]');
+        this.dropdown    = this.root.querySelector('[data-role="dropdown"]');
+        this.input       = this.root.querySelector('.tag-picker__input');
+        if (placeholder && this.input) this.input.placeholder = placeholder;
+
+        this.selected    = [];
+        this.selectedSet = new Set();
+        this.filteredOptions = [];
+
+        this._onDocClick    = this._onDocClick.bind(this);
+        this._onDropClick   = this._onDropClick.bind(this);
+        this._onTagClick    = this._onTagClick.bind(this);
+        this._onInput       = this._onInput.bind(this);
+        this._onKeyDown     = this._onKeyDown.bind(this);
+
+        if (this.tagContainer) this.tagContainer.addEventListener('click', this._onTagClick);
+        if (this.dropdown) this.dropdown.addEventListener('click', this._onDropClick);
+        if (this.input) {
+            this.input.addEventListener('input', this._onInput);
+            this.input.addEventListener('focus', () => this._openDropdown());
+            this.input.addEventListener('keydown', this._onKeyDown);
+        }
+        document.addEventListener('click', this._onDocClick);
+        this._renderTags();
+        this._closeDropdown();
+        this._syncHidden();
+    }
+
+    /* --- public API --- */
+    setOptions(opts) {
+        if (!this.enabled) return;
+        this.options = (Array.isArray(opts) ? opts.slice() : []).filter(Boolean);
+        this.options.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        this._refreshDropdown();
+    }
+    setValue(values) {
+        if (!this.enabled) return;
+        this.selected = []; this.selectedSet = new Set();
+        (values || []).forEach(v => {
+            const n = (v || '').trim(); if (!n) return;
+            const k = n.toLowerCase();
+            if (!this.selectedSet.has(k)) { this.selected.push(n); this.selectedSet.add(k); }
+        });
+        this._renderTags(); this._syncHidden();
+        if (this.input) this.input.value = '';
+        this._closeDropdown();
+    }
+    getValue() { return this.enabled ? this.selected.slice() : []; }
+    clear()    { this.setValue([]); this.onChange(); }
+
+    /* --- internal: add / remove --- */
+    _addValue(raw) {
+        if (!this.enabled) return;
+        const n = (raw || '').trim(); if (!n) return;
+        const k = n.toLowerCase();
+        if (this.selectedSet.has(k)) { if (this.input) this.input.value = ''; this._closeDropdown(); return; }
+        this.selected.push(n); this.selectedSet.add(k);
+        this._renderTags(); this._syncHidden();
+        if (this.input) this.input.value = '';
+        this._refreshDropdown(); this._openDropdown(); this._focusSoon();
+        this.onChange();
+    }
+    _removeValue(raw) {
+        if (!this.enabled) return;
+        const n = (raw || '').trim(); if (!n) return;
+        const k = n.toLowerCase();
+        if (!this.selectedSet.has(k)) return;
+        this.selected = this.selected.filter(i => i.toLowerCase() !== k);
+        this.selectedSet.delete(k);
+        this._renderTags(); this._syncHidden();
+        this._refreshDropdown(); this._openDropdown(); this._focusSoon();
+        this.onChange();
+    }
+
+    /* --- internal: render --- */
+    _renderTags() {
+        if (!this.tagContainer) return;
+        this.tagContainer.innerHTML = '';
+        this.selected.forEach(value => {
+            const tag = document.createElement('span');
+            tag.className = 'tag-picker__tag';
+            const label = document.createElement('span');
+            label.textContent = value;
+            tag.appendChild(label);
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'tag-picker__remove';
+            btn.setAttribute('aria-label', `Remove ${value}`);
+            btn.dataset.value = value; btn.innerHTML = '&times;';
+            tag.appendChild(btn);
+            this.tagContainer.appendChild(tag);
+        });
+    }
+    _refreshDropdown() {
+        if (!this.dropdown) return;
+        const q = this.input ? this.input.value.trim().toLowerCase() : '';
+        const avail = this.options.filter(o => !this.selectedSet.has(o.toLowerCase()));
+        let filtered = avail;
+        if (q) filtered = avail.filter(o => o.toLowerCase().includes(q));
+        this.filteredOptions = filtered.slice(0, 60);
+        this.dropdown.innerHTML = '';
+        if (!this.filteredOptions.length) {
+            const empty = document.createElement('div');
+            empty.className = 'tag-picker__option tag-picker__option--empty';
+            empty.textContent = q ? 'No matches found' : 'No options available';
+            this.dropdown.appendChild(empty); return;
+        }
+        this.filteredOptions.forEach(opt => {
+            const el = document.createElement('div');
+            el.className = 'tag-picker__option'; el.dataset.value = opt;
+            const title = document.createElement('span');
+            title.className = 'tag-picker__option-title'; title.textContent = opt;
+            el.appendChild(title);
+            if (scannerLoudSites.has(opt)) {
+                const badge = document.createElement('span');
+                badge.className = 'tag-picker__loud-badge';
+                badge.textContent = 'loud';
+                el.appendChild(badge);
+            }
+            this.dropdown.appendChild(el);
+        });
+    }
+    _openDropdown()  { if (this.dropdown) this.dropdown.hidden = false; }
+    _closeDropdown() { if (this.dropdown) this.dropdown.hidden = true; }
+    _syncHidden() {
+        if (!this.hiddenInput) return;
+        try { this.hiddenInput.value = JSON.stringify(this.selected); }
+        catch { this.hiddenInput.value = this.selected.join(', '); }
+    }
+    _focusSoon() { if (this.input) requestAnimationFrame(() => this.input.focus()); }
+
+    /* --- event handlers --- */
+    _onDocClick(e)  { if (this.root && !this.root.contains(e.target)) this._closeDropdown(); }
+    _onDropClick(e) {
+        const opt = e.target.closest('[data-value]'); if (!opt) return;
+        e.preventDefault(); e.stopPropagation();
+        this._addValue(opt.getAttribute('data-value') || '');
+    }
+    _onTagClick(e)  {
+        const btn = e.target.closest('.tag-picker__remove'); if (!btn) return;
+        this._removeValue(btn.getAttribute('data-value') || '');
+    }
+    _onInput() { this._refreshDropdown(); this._openDropdown(); }
+    _onKeyDown(e) {
+        if (e.key === 'Backspace' && this.input && !this.input.value && this.selected.length) {
+            this._removeValue(this.selected[this.selected.length - 1]); e.preventDefault();
+        } else if ((e.key === 'Enter' || e.key === 'Tab') && this.input) {
+            const q = this.input.value.trim(); if (!q) return;
+            this._addValue(this.filteredOptions.length ? this.filteredOptions[0] : q);
+            e.preventDefault();
+        }
+    }
+}
+
+function _renderLoudSitesList(containerId, loudList) {
+    const el = document.getElementById(containerId);
+    if (!el || !loudList.length) return;
+    el.textContent = loudList.join(', ');
+}
+
+function _collectKnownSites(results) {
+    const names = new Set(scannerKnownSites);
+    (results || []).forEach(r => { if (r.site_name) names.add(r.site_name); });
+    scannerKnownSites = Array.from(names).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    // Keep picker options in sync (supplement API-sourced list with any new names)
+    if (siteFilterPicker) siteFilterPicker.setOptions(scannerKnownSites);
+}
+
+/** Return the list of selected site names (empty array = all). */
+function _getSelectedSiteNames() {
+    return siteFilterPicker ? siteFilterPicker.getValue() : [];
+}
+
+/** Return the list of selected category names (empty array = all). */
+function _getSelectedCategories() {
+    return categoryFilterPicker ? categoryFilterPicker.getValue() : [];
+}
+
+/** Read toggle states and return the common scan options object (single tab). */
+function _getScanOptions() {
+    const sites = _getSelectedSiteNames();
+    const categories = _getSelectedCategories();
+    const allowLoudEl = document.getElementById('scanOptAllowLoud');
+    const onlyFoundEl = document.getElementById('scanOptOnlyFound');
+    return {
+        sites: sites.length ? sites : null,
+        categories: categories.length ? categories : null,
+        allowLoud: allowLoudEl ? allowLoudEl.checked : false,
+        onlyFound: onlyFoundEl ? onlyFoundEl.checked : false,
+    };
+}
+
+/** Read toggle states and return scan options for the All tab (full scan). */
+function _getFullScanOptions() {
+    const sites = fullScanSiteFilterPicker ? fullScanSiteFilterPicker.getValue() : [];
+    const categories = fullScanCategoryFilterPicker ? fullScanCategoryFilterPicker.getValue() : [];
+    const allowLoudEl = document.getElementById('fullScanOptAllowLoud');
+    const onlyFoundEl = document.getElementById('fullScanOptOnlyFound');
+    return {
+        sites: sites.length ? sites : null,
+        categories: categories.length ? categories : null,
+        allowLoud: allowLoudEl ? allowLoudEl.checked : false,
+        onlyFound: onlyFoundEl ? onlyFoundEl.checked : false,
+    };
+}
+
+/** Read the user-level filter state for the All tab. */
+function _getFullScanUserFilters() {
+    return { ...fullScanFilterState };
+}
+
+/**
+ * Render the full-scan user filters using the same filter-group / filter-chip
+ * pattern as the report filter toolbar.
+ */
+function renderFullScanFilters() {
+    const container = document.getElementById('fullScanFilters');
+    if (!container) return;
+
+    const t = getTranslator();
+    container.innerHTML = '';
+
+    const title = document.createElement('span');
+    title.className = 'filter-toolbar__title';
+    title.textContent = t('reports.userScanner.fullScan.filtersTitle');
+    container.appendChild(title);
+
+    FULL_SCAN_FILTER_GROUPS.forEach(group => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'filter-group';
+
+        const label = document.createElement('span');
+        label.className = 'filter-group__label';
+        label.textContent = t(group.labelKey);
+        groupEl.appendChild(label);
+
+        group.filters.forEach(filter => {
+            const isActive = !!fullScanFilterState[filter.key];
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `filter-chip${isActive ? ' filter-chip--active' : ''}`;
+            btn.textContent = t(filter.labelKey);
+            btn.setAttribute('aria-pressed', String(isActive));
+            btn.addEventListener('click', () => {
+                fullScanFilterState[filter.key] = !fullScanFilterState[filter.key];
+                renderFullScanFilters();
+            });
+            groupEl.appendChild(btn);
+        });
+
+        container.appendChild(groupEl);
+    });
+}
+
+function _syncSiteFilterFromPicker() {
+    scannerSiteFilter = new Set(siteFilterPicker ? siteFilterPicker.getValue() : []);
+}
+
+async function initSiteFilter() {
+    // --- Single-scan pickers ---
+    siteFilterPicker = new SiteFilterPicker({
+        pickerId: 'siteFilterPicker',
+        hiddenInputId: 'siteFilterHiddenInput',
+        options: scannerKnownSites,
+        onChange: _syncSiteFilterFromPicker,
+    });
+
+    const resetBtn = qs('siteFilterResetBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            if (siteFilterPicker) siteFilterPicker.clear();
+            scannerSiteFilter.clear();
+        });
+    }
+
+    // Pre-populate picker with all available sites from the backend
+    let allSites = [];
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/user-scanner/sites`, { credentials: 'include' });
+        if (resp.ok) {
+            allSites = await resp.json();
+            if (Array.isArray(allSites) && allSites.length) {
+                scannerKnownSites = allSites;
+                siteFilterPicker.setOptions(scannerKnownSites);
+            }
+        }
+    } catch (e) {
+        // Non-critical – picker will start empty and get populated after first scan
+    }
+
+    // Fetch loud sites and render their names next to the toggle
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/user-scanner/loud-sites`, { credentials: 'include' });
+        if (resp.ok) {
+            const loudList = await resp.json();
+            if (Array.isArray(loudList)) {
+                scannerLoudSites = new Set(loudList);
+                _renderLoudSitesList('loudSitesList', loudList);
+                _renderLoudSitesList('fullScanLoudSitesList', loudList);
+            }
+        }
+    } catch (_) { /* non-critical */ }
+
+    // Category filter (single)
+    categoryFilterPicker = new SiteFilterPicker({
+        pickerId: 'categoryFilterPicker',
+        hiddenInputId: 'categoryFilterHiddenInput',
+        options: [],
+        onChange: () => {},
+    });
+
+    const catResetBtn = qs('categoryFilterResetBtn');
+    if (catResetBtn) {
+        catResetBtn.addEventListener('click', () => {
+            if (categoryFilterPicker) categoryFilterPicker.clear();
+        });
+    }
+
+    let allCats = [];
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/user-scanner/categories`, { credentials: 'include' });
+        if (resp.ok) {
+            allCats = await resp.json();
+            if (Array.isArray(allCats) && allCats.length) {
+                categoryFilterPicker.setOptions(allCats);
+            }
+        }
+    } catch (e) {
+        // Non-critical
+    }
+
+    // --- Full-scan pickers ---
+    fullScanSiteFilterPicker = new SiteFilterPicker({
+        pickerId: 'fullScanSiteFilterPicker',
+        hiddenInputId: 'fullScanSiteFilterHiddenInput',
+        options: scannerKnownSites.length ? scannerKnownSites : allSites,
+        onChange: () => {},
+    });
+
+    const fullSiteResetBtn = document.getElementById('fullScanSiteFilterResetBtn');
+    if (fullSiteResetBtn) {
+        fullSiteResetBtn.addEventListener('click', () => {
+            if (fullScanSiteFilterPicker) fullScanSiteFilterPicker.clear();
+        });
+    }
+
+    fullScanCategoryFilterPicker = new SiteFilterPicker({
+        pickerId: 'fullScanCategoryFilterPicker',
+        hiddenInputId: 'fullScanCategoryFilterHiddenInput',
+        options: allCats,
+        onChange: () => {},
+    });
+
+    const fullCatResetBtn = document.getElementById('fullScanCategoryFilterResetBtn');
+    if (fullCatResetBtn) {
+        fullCatResetBtn.addEventListener('click', () => {
+            if (fullScanCategoryFilterPicker) fullScanCategoryFilterPicker.clear();
+        });
+    }
+}
+
+let _fullScanPollTimer = null;
+let _fullScanGeneration = 0;
+let _lastLogLen = 0;                 // track how many log lines we've rendered
+
+function _stopPolling() {
+    if (_fullScanPollTimer) {
+        clearInterval(_fullScanPollTimer);
+        _fullScanPollTimer = null;
+    }
+}
+
+/* ---------- progress bar + terminal helpers ---------- */
+
+function _showScanUI(show) {
+    const wrap = qs('fullScanProgressWrap');
+    const term = qs('fullScanTerminal');
+    if (wrap) wrap.classList.toggle('is-hidden', !show);
+    if (term) term.classList.toggle('is-hidden', !show);
+    if (show) _lastLogLen = 0;
+}
+
+function _updateProgress(progress) {
+    const fill = qs('fullScanProgressFill');
+    const label = qs('fullScanProgressLabel');
+    if (!progress) return;
+    const pct = progress.total ? Math.round((progress.current / progress.total) * 100) : 0;
+    if (fill) fill.style.width = pct + '%';
+    if (label) label.textContent = `${progress.current} / ${progress.total}  (${pct}%)`;
+}
+
+function _appendLog(lines) {
+    const body = qs('fullScanTerminalBody');
+    if (!body || !lines) return;
+
+    // Only append new lines since last render
+    const newLines = lines.slice(_lastLogLen);
+    if (newLines.length === 0) return;
+    _lastLogLen = lines.length;
+
+    for (const line of newLines) {
+        body.textContent += (body.textContent ? '\n' : '') + line;
+    }
+    body.scrollTop = body.scrollHeight;
+}
+
+function _finishScanUI() {
+    // Keep terminal visible so user can review, but hide progress bar
+    const wrap = qs('fullScanProgressWrap');
+    if (wrap) wrap.classList.add('is-hidden');
+}
+
+/* ---------- polling ---------- */
+
+function _startPolling(generation) {
+    _stopPolling();
+    const t = getTranslator();
+    const statusEl = qs('fullScanStatus');
+    const btn = qs('runFullScanBtn');
+    const stopBtn = qs('stopFullScanBtn');
+
+    async function _poll() {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/user-scanner/full-scan/status`, { credentials: 'include', cache: 'no-store' });
+            if (!resp.ok) return;
+            const state = await resp.json();
+
+            // Ignore results from a different generation
+            if (generation && state.generation !== generation) {
+                _stopPolling();
+                return;
+            }
+
+            // Always push progress & log updates while running
+            if (state.progress) _updateProgress(state.progress);
+            if (state.log) _appendLog(state.log);
+
+            if (!state.running && state.cancelled && state.scanId) {
+                _stopPolling();
+                _finishScanUI();
+                if (btn) btn.disabled = false;
+                if (stopBtn) stopBtn.classList.add('is-hidden');
+                if (statusEl) statusEl.textContent = t('reports.types.userScanner.fullScan.stopped');
+
+                loadFullScanHistory();
+            } else if (!state.running && state.scanId) {
+                _stopPolling();
+                _finishScanUI();
+                if (btn) btn.disabled = false;
+                if (stopBtn) stopBtn.classList.add('is-hidden');
+                if (statusEl) statusEl.textContent = t('reports.types.userScanner.fullScan.complete');
+
+                loadFullScanHistory();
+            } else if (!state.running && state.error) {
+                _stopPolling();
+                _finishScanUI();
+                if (btn) btn.disabled = false;
+                if (stopBtn) stopBtn.classList.add('is-hidden');
+                if (statusEl) statusEl.textContent = t('reports.types.userScanner.fullScan.failed').replace('{error}', state.error);
+            } else if (state.running && state.progress) {
+                // Update status text with live count
+                if (statusEl) {
+                    const p = state.progress;
+                    statusEl.textContent = t('reports.types.userScanner.fullScan.progressStatus')
+                        .replace('{current}', p.current)
+                        .replace('{total}', p.total);
+                }
+            }
+        } catch (_) { /* ignore transient errors */ }
+    }
+
+    // Fire immediately, then every 2 seconds
+    _poll();
+    _fullScanPollTimer = setInterval(_poll, 2000);
+}
+
+async function runFullScan() {
+    const t = getTranslator();
+    const emailInput = qs('fullScanEmail');
+    const statusEl = qs('fullScanStatus');
+    const btn = qs('runFullScanBtn');
+    const stopBtn = qs('stopFullScanBtn');
+    const notifyEmail = emailInput ? emailInput.value.trim() : '';
+
+    if (btn) btn.disabled = true;
+    if (statusEl) {
+        statusEl.classList.remove('is-hidden');
+        statusEl.textContent = t('reports.types.userScanner.fullScan.starting');
+    }
+
+    // Reset terminal + progress
+    const termBody = qs('fullScanTerminalBody');
+    if (termBody) termBody.textContent = '';
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/user-scanner/full-scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                notifyEmail: notifyEmail || null,
+                ..._getFullScanOptions(),
+                ..._getFullScanUserFilters(),
+            }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            if (statusEl) statusEl.textContent = data.error || 'Failed to start scan';
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const msg = t('reports.types.userScanner.fullScan.started')
+            .replace('{count}', data.employeeCount || 0);
+        if (statusEl) statusEl.textContent = msg + (notifyEmail ? ' ' + t('reports.types.userScanner.fullScan.willNotify').replace('{email}', notifyEmail) : '');
+
+        // Show stop button, progress bar, terminal
+        if (stopBtn) {
+            stopBtn.classList.remove('is-hidden');
+            stopBtn.disabled = false;
+        }
+        _showScanUI(true);
+
+        // Start polling for completion
+        _fullScanGeneration = data.generation || 0;
+        _startPolling(_fullScanGeneration);
+    } catch (err) {
+        if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function stopFullScan() {
+    const t = getTranslator();
+    const statusEl = qs('fullScanStatus');
+    const stopBtn = qs('stopFullScanBtn');
+
+    if (stopBtn) stopBtn.disabled = true;
+    if (statusEl) statusEl.textContent = t('reports.types.userScanner.fullScan.stopping');
+
+    try {
+        await fetch(`${API_BASE_URL}/api/user-scanner/full-scan/stop`, {
+            method: 'POST',
+            credentials: 'include',
+        });
+    } catch (_) { /* polling will handle the final state */ }
+}
+
+async function loadFullScanHistory() {
+    const t = getTranslator();
+    const container = qs('fullScanHistory');
+    if (!container) return;
+
+    try {
+        const resp = await fetch(`${API_BASE_URL}/api/user-scanner/full-scan/history`, { credentials: 'include' });
+        if (!resp.ok) return;
+        const history = await resp.json();
+
+        if (!history || history.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const heading = t('reports.types.userScanner.fullScan.historyTitle');
+        const clearLabel = t('reports.types.userScanner.fullScan.clearHistory');
+        let html = `<div class="full-scan-history-header"><h4>${heading}</h4><button type="button" class="btn btn-secondary btn-sm full-scan-history-clear" id="clearScanHistoryBtn">${clearLabel}</button></div><ul class="full-scan-history-list">`;
+        for (const entry of history) {
+            const date = entry.scannedAt ? new Date(entry.scannedAt).toLocaleString() : '—';
+            const dlUrl = `${API_BASE_URL}/api/user-scanner/full-scan/download/${encodeURIComponent(entry.scanId)}`;
+            html += `<li class="full-scan-history-item">
+                <div class="full-scan-history-info">
+                    <span class="full-scan-history-date">${date}</span>
+                    <span class="full-scan-history-meta">${entry.totalEmployees} ${t('reports.types.userScanner.fullScan.historyEmployees')} · ${entry.registeredTotal} ${t('reports.types.userScanner.fullScan.historyRegistered')}</span>
+                </div>
+                <a href="${dlUrl}" class="btn btn-secondary btn-sm full-scan-history-dl" download>${t('reports.types.userScanner.fullScan.download')}</a>
+            </li>`;
+        }
+        html += '</ul>';
+        container.innerHTML = html;
+
+        // Wire up clear button
+        const clearBtn = document.getElementById('clearScanHistoryBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', async () => {
+                try {
+                    const r = await fetch(`${API_BASE_URL}/api/user-scanner/full-scan/history`, { method: 'DELETE', credentials: 'include' });
+                    if (r.ok) loadFullScanHistory();
+                } catch (_) { /* ignore */ }
+            });
+        }
+    } catch (_) { /* ignore */ }
+}
+
+function initUserScannerPanel() {
+    const input = qs('userScannerInput');
+    const searchResults = qs('userScannerSearchResults');
+    const scanBtn = qs('runUserScanBtn');
+    const fullScanBtn = qs('runFullScanBtn');
+
+    // --- Tab switching ---
+    const tabs = document.querySelectorAll('.scanner-tab');
+    const tabContents = document.querySelectorAll('.scanner-tab-content');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.tab;
+            tabs.forEach(t => { t.classList.toggle('is-active', t.dataset.tab === target); t.setAttribute('aria-selected', t.dataset.tab === target ? 'true' : 'false'); });
+            tabContents.forEach(c => { c.classList.toggle('is-active', c.dataset.tabContent === target); });
+
+            // Bump generation so any in-flight individual scan discards results
+            _scannerTabGen++;
+            // Abort any in-flight individual scan when leaving the tab
+            if (_singleScanAbort) { _singleScanAbort.abort(); _singleScanAbort = null; }
+
+            const tablePanel = document.querySelector('.table-panel');
+            const thead = qs('reportTableHead');
+            const tbody = qs('reportTableBody');
+            const titleEl = qs('tableTitle');
+            // Always clear the shared table on tab switch
+            if (thead) thead.innerHTML = '';
+            if (tbody) tbody.innerHTML = '';
+            if (titleEl) titleEl.textContent = '';
+
+            if (target === 'all') {
+                // Organization tab: hide results table, only show terminal + downloads
+                if (tablePanel) tablePanel.classList.add('is-hidden');
+                loadFullScanHistory();
+            } else {
+                // Individual tab: show the results table for single-user scans
+                if (tablePanel) tablePanel.classList.remove('is-hidden');
+            }
+        });
+    });
+
+    if (scanBtn) {
+        scanBtn.disabled = true;
+        scanBtn.addEventListener('click', () => runSingleUserScan());
+    }
+
+    if (fullScanBtn) {
+        fullScanBtn.addEventListener('click', () => runFullScan());
+    }
+
+    const stopScanBtn = qs('stopFullScanBtn');
+    if (stopScanBtn) {
+        stopScanBtn.addEventListener('click', () => stopFullScan());
+    }
+
+    // Load history and check if a scan is currently running
+    loadFullScanHistory();
+    (async () => {
+        try {
+            const resp = await fetch(`${API_BASE_URL}/api/user-scanner/full-scan/status`, { credentials: 'include', cache: 'no-store' });
+            if (resp.ok) {
+                const state = await resp.json();
+                if (state.running) {
+                    const statusEl = qs('fullScanStatus');
+                    if (statusEl) {
+                        statusEl.classList.remove('is-hidden');
+                        statusEl.textContent = getTranslator()('reports.types.userScanner.fullScan.running');
+                    }
+                    if (fullScanBtn) fullScanBtn.disabled = true;
+                    if (stopScanBtn) stopScanBtn.classList.remove('is-hidden');
+                    _showScanUI(true);
+                    if (state.progress) _updateProgress(state.progress);
+                    if (state.log) _appendLog(state.log);
+                    _fullScanGeneration = state.generation || 0;
+                    _startPolling(_fullScanGeneration);
+                }
+            }
+        } catch (_) { /* ignore */ }
+    })();
+
+    if (!input || !searchResults) return;
+
+    let debounceTimer = null;
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const query = input.value.trim();
+        if (query.length < 2) {
+            searchResults.classList.add('is-hidden');
+            searchResults.innerHTML = '';
+            selectedScanUser = null;
+            if (scanBtn) scanBtn.disabled = true;
+            return;
+        }
+
+        // Enable the scan button when the input looks like a valid email,
+        // even without selecting from the dropdown.
+        if (_looksLikeEmail(query)) {
+            selectedScanUser = null;  // will be resolved in runSingleUserScan
+            if (scanBtn) scanBtn.disabled = false;
+        } else {
+            if (!selectedScanUser && scanBtn) scanBtn.disabled = true;
+        }
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                // Use scanner-specific endpoint that includes all non-guest users
+                const resp = await fetch(`${API_BASE_URL}/api/user-scanner/users?q=${encodeURIComponent(query)}`, { credentials: 'include' });
+                const employees = await resp.json();
+                searchResults.innerHTML = '';
+                if (!employees.length) {
+                    searchResults.classList.add('is-hidden');
+                    return;
+                }
+                searchResults.classList.remove('is-hidden');
+                employees.forEach(emp => {
+                    const item = document.createElement('div');
+                    item.className = 'user-scanner-search__item';
+                    item.innerHTML = '<strong>' + (emp.name || '—') + '</strong> <span>' + (emp.email || emp.mail || '') + '</span> <span class="badge badge--neutral">' + (emp.title || '') + '</span>';
+                    item.addEventListener('click', () => {
+                        selectedScanUser = {
+                            name: emp.name || '',
+                            email: emp.email || emp.mail || '',
+                        };
+                        input.value = emp.name + (emp.email ? ' (' + emp.email + ')' : '');
+                        searchResults.classList.add('is-hidden');
+                        if (scanBtn) scanBtn.disabled = false;
+                    });
+                    searchResults.appendChild(item);
+                });
+            } catch (e) {
+                searchResults.classList.add('is-hidden');
+            }
+        }, 300);
+    });
+
+    initSiteFilter();
+    renderFullScanFilters();
+}
+
 async function initializeReportsPage() {
     const htmlElement = document.documentElement;
     const i18nReadyPromise = window.i18n?.ready;
@@ -1246,9 +2305,23 @@ async function initializeReportsPage() {
 
         const reportSelect = qs('reportTypeSelect');
         if (reportSelect) {
+            // Check if user-scanner is enabled; hide option if not
+            const scannerStatus = await checkUserScannerEnabled();
+            const scannerOption = reportSelect.querySelector('option[value="user-scanner"]');
+            if (scannerOption && !scannerStatus.enabled) {
+                scannerOption.style.display = 'none';
+            }
+
             reportSelect.value = currentReportKey;
+            // Show scanner panel if it's the initial selection
+            if (currentReportKey === 'user-scanner' && scannerStatus.enabled) {
+                toggleUserScannerPanel(true);
+            }
             reportSelect.addEventListener('change', () => {
                 currentReportKey = reportSelect.value;
+                const isScanner = currentReportKey === 'user-scanner';
+                toggleUserScannerPanel(isScanner);
+                if (isScanner) return;
                 const config = REPORT_CONFIGS[currentReportKey] || REPORT_CONFIGS['missing-manager'];
                 ensureFilterState(currentReportKey);
                 renderSummary([], null, config);
@@ -1259,6 +2332,8 @@ async function initializeReportsPage() {
                 });
             });
         }
+
+        initUserScannerPanel();
 
         const refreshBtn = qs('refreshReportBtn');
         if (refreshBtn) {

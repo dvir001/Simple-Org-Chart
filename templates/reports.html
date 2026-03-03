@@ -41,7 +41,168 @@
                 <option value="last-logins" data-i18n="reports.selector.options.lastLogins">Users by last sign-in activity</option>
                 <option value="hired-this-year" data-i18n="reports.selector.options.hiredThisYear">Employees hired in the last 365 days</option>
                 <option value="filtered-users" data-i18n="reports.selector.options.filteredUsers">Users hidden by filters</option>
+                <option value="user-scanner" data-i18n="reports.selector.options.userScanner">User Scanner (OSINT)</option>
             </select>
+        </section>
+
+        <!-- User Scanner custom panel (hidden unless report selected) -->
+        <section id="userScannerPanel" class="user-scanner-panel is-hidden">
+            <!-- Tab bar -->
+            <div class="scanner-tabs" role="tablist">
+                <button class="scanner-tab is-active" role="tab" aria-selected="true" data-tab="single" id="scannerTabSingle" data-i18n="reports.userScanner.tabs.single">Individual</button>
+                <button class="scanner-tab" role="tab" aria-selected="false" data-tab="all" id="scannerTabAll" data-i18n="reports.userScanner.tabs.all">Organization</button>
+            </div>
+
+            <!-- ── Single Scan tab ─────────────────────────────── -->
+            <div class="scanner-tab-content is-active" data-tab-content="single" id="scannerPanelSingle">
+                <div class="user-scanner-search">
+                    <label for="userScannerInput" data-i18n="reports.userScanner.searchLabel">Scan a user</label>
+                    <div class="user-scanner-search__row">
+                        <input type="text" id="userScannerInput" class="user-scanner-search__input" placeholder="Search employee or enter any email address..." data-i18n-placeholder="reports.userScanner.searchPlaceholder">
+                        <button type="button" class="btn btn-primary" id="runUserScanBtn" data-i18n="reports.userScanner.scanButton">Run Scan</button>
+                    </div>
+                    <div id="userScannerSearchResults" class="user-scanner-search__results is-hidden"></div>
+                </div>
+
+                <!-- Site filter (tag-picker style) -->
+                <div class="user-scanner-site-filter tag-picker-row">
+                    <div class="tag-picker-field">
+                        <span class="label-prefix" data-i18n="reports.userScanner.siteFilter.label">Filter by sites</span>
+                        <div class="tag-picker" id="siteFilterPicker">
+                            <div class="tag-picker__control">
+                                <div class="tag-picker__tags" data-role="tag-container"></div>
+                                <input type="text" class="tag-picker__input" id="siteFilterSearch" autocomplete="off" placeholder="Type a site name..." data-i18n-placeholder="reports.userScanner.siteFilter.placeholder">
+                            </div>
+                            <div class="tag-picker__dropdown" data-role="dropdown" hidden></div>
+                        </div>
+                        <input type="hidden" id="siteFilterHiddenInput">
+                    </div>
+                    <button class="btn btn-secondary" type="button" id="siteFilterResetBtn" data-i18n="reports.userScanner.siteFilter.reset">Reset</button>
+                </div>
+
+                <!-- Category filter (tag-picker style) -->
+                <div class="user-scanner-site-filter tag-picker-row">
+                    <div class="tag-picker-field">
+                        <span class="label-prefix" data-i18n="reports.userScanner.categoryFilter.label">Filter by categories</span>
+                        <div class="tag-picker" id="categoryFilterPicker">
+                            <div class="tag-picker__control">
+                                <div class="tag-picker__tags" data-role="tag-container"></div>
+                                <input type="text" class="tag-picker__input" id="categoryFilterSearch" autocomplete="off" placeholder="Type a category..." data-i18n-placeholder="reports.userScanner.categoryFilter.placeholder">
+                            </div>
+                            <div class="tag-picker__dropdown" data-role="dropdown" hidden></div>
+                        </div>
+                        <input type="hidden" id="categoryFilterHiddenInput">
+                    </div>
+                    <button class="btn btn-secondary" type="button" id="categoryFilterResetBtn" data-i18n="reports.userScanner.categoryFilter.reset">Reset</button>
+                </div>
+
+                <!-- Scan options -->
+                <div class="user-scanner-options">
+                    <div class="user-scanner-options__item">
+                        <label class="scanner-toggle">
+                            <input type="checkbox" id="scanOptAllowLoud">
+                            <span class="scanner-toggle__slider"></span>
+                        </label>
+                        <span data-i18n="reports.userScanner.options.allowLoud">Include loud sites (may notify the target)</span>
+                        <span class="loud-sites-list" id="loudSitesList"></span>
+                    </div>
+                    <div class="user-scanner-options__item">
+                        <label class="scanner-toggle">
+                            <input type="checkbox" id="scanOptOnlyFound">
+                            <span class="scanner-toggle__slider"></span>
+                        </label>
+                        <span data-i18n="reports.userScanner.options.onlyFound">Only show registered / found results</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── All Scans tab ───────────────────────────────── -->
+            <div class="scanner-tab-content" data-tab-content="all" id="scannerPanelAll">
+                <div class="user-scanner-full">
+                    <h3 data-i18n="reports.userScanner.fullScan.title">Full Organization Scan</h3>
+                    <p data-i18n="reports.userScanner.fullScan.description">Scan all employees by email. Results are downloaded automatically when complete.</p>
+
+                    <!-- User filters (rendered by JS using existing filter-chip pattern) -->
+                    <div class="scanner-user-filters" id="fullScanFilters" aria-live="polite"></div>
+
+                    <!-- Site filter (tag-picker style) for full scan -->
+                    <div class="user-scanner-site-filter tag-picker-row">
+                        <div class="tag-picker-field">
+                            <span class="label-prefix" data-i18n="reports.userScanner.siteFilter.label">Filter by sites</span>
+                            <div class="tag-picker" id="fullScanSiteFilterPicker">
+                                <div class="tag-picker__control">
+                                    <div class="tag-picker__tags" data-role="tag-container"></div>
+                                    <input type="text" class="tag-picker__input" id="fullScanSiteFilterSearch" autocomplete="off" placeholder="Type a site name..." data-i18n-placeholder="reports.userScanner.siteFilter.placeholder">
+                                </div>
+                                <div class="tag-picker__dropdown" data-role="dropdown" hidden></div>
+                            </div>
+                            <input type="hidden" id="fullScanSiteFilterHiddenInput">
+                        </div>
+                        <button class="btn btn-secondary" type="button" id="fullScanSiteFilterResetBtn" data-i18n="reports.userScanner.siteFilter.reset">Reset</button>
+                    </div>
+
+                    <!-- Category filter (tag-picker style) for full scan -->
+                    <div class="user-scanner-site-filter tag-picker-row">
+                        <div class="tag-picker-field">
+                            <span class="label-prefix" data-i18n="reports.userScanner.categoryFilter.label">Filter by categories</span>
+                            <div class="tag-picker" id="fullScanCategoryFilterPicker">
+                                <div class="tag-picker__control">
+                                    <div class="tag-picker__tags" data-role="tag-container"></div>
+                                    <input type="text" class="tag-picker__input" id="fullScanCategoryFilterSearch" autocomplete="off" placeholder="Type a category..." data-i18n-placeholder="reports.userScanner.categoryFilter.placeholder">
+                                </div>
+                                <div class="tag-picker__dropdown" data-role="dropdown" hidden></div>
+                            </div>
+                            <input type="hidden" id="fullScanCategoryFilterHiddenInput">
+                        </div>
+                        <button class="btn btn-secondary" type="button" id="fullScanCategoryFilterResetBtn" data-i18n="reports.userScanner.categoryFilter.reset">Reset</button>
+                    </div>
+
+                    <!-- Scan options for full scan -->
+                    <div class="user-scanner-options">
+                        <div class="user-scanner-options__item">
+                            <label class="scanner-toggle">
+                                <input type="checkbox" id="fullScanOptAllowLoud">
+                                <span class="scanner-toggle__slider"></span>
+                            </label>
+                            <span data-i18n="reports.userScanner.options.allowLoud">Include loud sites (may notify the target)</span>
+                            <span class="loud-sites-list" id="fullScanLoudSitesList"></span>
+                        </div>
+                        <div class="user-scanner-options__item">
+                            <label class="scanner-toggle">
+                                <input type="checkbox" id="fullScanOptOnlyFound">
+                                <span class="scanner-toggle__slider"></span>
+                            </label>
+                            <span data-i18n="reports.userScanner.options.onlyFound">Only show registered / found results</span>
+                        </div>
+                    </div>
+
+                    <div class="user-scanner-divider"></div>
+
+                    <div class="user-scanner-full__row">
+                        <input type="email" id="fullScanEmail" class="user-scanner-search__input" placeholder="(Optional) Email to send report to..." data-i18n-placeholder="reports.userScanner.fullScan.emailPlaceholder">
+                        <button type="button" class="btn btn-secondary" id="runFullScanBtn" data-i18n="reports.userScanner.fullScan.button">Run Full Scan</button>
+                        <button type="button" class="btn btn-danger is-hidden" id="stopFullScanBtn" data-i18n="reports.types.userScanner.fullScan.stop">Stop Scan</button>
+                    </div>
+                    <div id="fullScanStatus" class="user-scanner-status is-hidden"></div>
+
+                    <!-- Progress bar (visible while scanning) -->
+                    <div id="fullScanProgressWrap" class="full-scan-progress-wrap is-hidden">
+                        <div class="full-scan-progress-bar">
+                            <div class="full-scan-progress-fill" id="fullScanProgressFill"></div>
+                        </div>
+                        <span class="full-scan-progress-label" id="fullScanProgressLabel"></span>
+                    </div>
+
+                    <!-- Terminal / live log (visible while scanning) -->
+                    <div id="fullScanTerminal" class="full-scan-terminal is-hidden">
+                        <div class="full-scan-terminal__header" data-i18n="reports.types.userScanner.fullScan.terminalTitle">Scan Output</div>
+                        <pre class="full-scan-terminal__body" id="fullScanTerminalBody"></pre>
+                    </div>
+
+                    <!-- Scan history (last 5 runs) -->
+                    <div id="fullScanHistory" class="full-scan-history"></div>
+                </div>
+            </div>
         </section>
 
         <section class="summary-panel">

@@ -316,6 +316,28 @@
                 </div>
             </div>
 
+            <h2 class="section-heading" data-i18n="configure.sections.userScanner.title">🔍 User Scanner</h2>
+
+            <div class="config-group">
+                <div class="config-item">
+                    <label class="config-label" data-i18n="configure.userScanner.enable.label">User Scanner (OSINT)</label>
+                    <div class="config-description" data-i18n="configure.userScanner.enable.description">Enable the User Scanner tool to check email presence across multiple platforms. This uses an external open-source tool (user-scanner) which will be downloaded automatically from PyPI when enabled and kept up to date.</div>
+                    <div class="config-controls">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="userScannerEnabled">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-label" data-i18n="configure.userScanner.enable.toggleLabel">Enable User Scanner</span>
+                    </div>
+                    <div id="userScannerStatus" class="config-hint" style="margin-top: 0.5rem;"></div>
+                    <div id="userScannerUpdateRow" class="config-controls" style="margin-top: 0.5rem; display: none; gap: 8px; align-items: center;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="checkUserScannerUpdateBtn">Check for Updates</button>
+                        <button type="button" class="btn btn-primary btn-sm" id="applyUserScannerUpdateBtn" style="display: none;">Update Now</button>
+                        <span id="userScannerUpdateStatus" class="config-hint"></span>
+                    </div>
+                </div>
+            </div>
+
             <h2 class="section-heading" data-i18n="configure.sections.directory.title">📇 Directory Integrations</h2>
 
             <div class="config-group">
