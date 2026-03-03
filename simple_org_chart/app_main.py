@@ -2621,7 +2621,7 @@ def user_scanner_scan():
         return jsonify(result)
     except Exception as exc:
         logger.error('User scanner scan failed: %s', exc)
-        return jsonify({'error': str(exc)}), 500
+        return jsonify({'error': 'User scanner scan failed'}), 500
 
 
 # ---------------------------------------------------------------------------
