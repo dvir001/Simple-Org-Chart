@@ -2820,9 +2820,8 @@ def user_scanner_full_scan():
                 progress_callback=_scan_progress,
             )
             was_cancelled = result.get('_cancelled', False)
-            logger.info('Full user scan %s: %d employees scanned',
-                        'cancelled' if was_cancelled else 'complete',
-                        result.get('totalEmployees', 0))
+            logger.info('Full user scan %s',
+                        'cancelled' if was_cancelled else 'complete')
 
             scan_id = result.get('_scanId')
             with _full_scan_lock:
