@@ -479,7 +479,11 @@ def run_full_scan(
                       registered=registered_count,
                       checked=len(scan_results))
         except Exception as exc:
-            logger.warning("Scan failed for employee '%s': %s", name or "<unknown>", exc)
+            logger.warning(
+                "Scan failed for employee at index %d (1-based): %s",
+                idx + 1,
+                exc,
+            )
             results.append({
                 "name": name,
                 "email": email,
