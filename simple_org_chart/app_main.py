@@ -2822,7 +2822,6 @@ def user_scanner_full_scan():
             was_cancelled = result.get('_cancelled', False)
             logger.info('Full user scan %s',
                         'cancelled' if was_cancelled else 'complete')
-
             scan_id = result.get('_scanId')
             with _full_scan_lock:
                 st = _read_scan_state()
