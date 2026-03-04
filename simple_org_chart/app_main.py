@@ -5,7 +5,27 @@ from flask_limiter.util import get_remote_address
 from flask_session import Session
 import atexit
 import contextlib
-import fcntl
+try:
+    import fcntl as _fcntl
+except ImportError:
+    class _FcntlFallback:
+        """
+        Minimal no-op fallback for fcntl on non-POSIX platforms.
+        Provides the attributes used for file locking but does nothing.
+        """
+
+        LOCK_EX = 0
+        LOCK_NB = 0
+        LOCK_UN = 0
+
+        @staticmethod
+        def flock(fd, op):
+            # No-op fallback: on platforms without fcntl, we skip locking.
+            return None
+
+    fcntl = _FcntlFallback()
+else:
+    fcntl = _fcntl
 import json
 import os
 from datetime import datetime, timedelta, timezone
