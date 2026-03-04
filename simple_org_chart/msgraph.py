@@ -852,7 +852,6 @@ if not 1 <= _PRESENCE_BATCH_LIMIT <= 650:
         _PRESENCE_BATCH_LIMIT,
     )
     _PRESENCE_BATCH_LIMIT = max(1, min(_PRESENCE_BATCH_LIMIT, 650))
-_PRESENCE_MAX_RETRY_SLEEP = 60  # cap Retry-After sleep to avoid tying up a worker
 
 
 def fetch_presence_by_user_ids(
@@ -894,7 +893,14 @@ def fetch_presence_by_user_ids(
                 )
                 break
             response.raise_for_status()
-            for entry in response.json().get("value", []):
+            try:
+                data = response.json()
+            except ValueError as json_err:
+                logger.error(
+                    "Error decoding presence response JSON (offset %s): %s", i, json_err
+                )
+                continue
+            for entry in data.get("value", []):
                 uid = entry.get("id")
                 if uid:
                     result[uid] = {
