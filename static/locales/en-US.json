@@ -191,6 +191,9 @@
 			"userScanner": {
 				"title": "🔍 User Scanner"
 			},
+			"presence": {
+				"title": "🟢 Teams Presence"
+			},
 			"directory": {
 				"title": "📇 Directory Integrations"
 			},
@@ -224,6 +227,13 @@
 				"label": "User Scanner (OSINT)",
 				"description": "Enable the User Scanner tool to check email presence across multiple platforms. This uses an external open-source tool (user-scanner) which will be downloaded automatically from PyPI when enabled and kept up to date.",
 				"toggleLabel": "Enable User Scanner"
+			}
+		},
+		"presence": {
+			"enable": {
+				"label": "Teams Presence Indicators",
+				"description": "Show a live status dot on each org chart card based on the employee's Microsoft Teams availability. Requires the Presence.Read.All permission in your Entra ID app registration.",
+				"toggleLabel": "Enable Teams Presence"
 			}
 		},
 		"emailReports": {
@@ -689,6 +699,25 @@
 				"title": "4. View All Employees",
 				"button": "Load All Employees"
 			}
+		}
+	},
+	"presence": {
+		"activity": {
+			"Available": "Available",
+			"Away": "Away",
+			"BeRightBack": "Be Right Back",
+			"Busy": "Busy",
+			"DoNotDisturb": "Do Not Disturb",
+			"InACall": "In a Call",
+			"InAConferenceCall": "In a Conference Call",
+			"InAMeeting": "In a Meeting",
+			"Inactive": "Inactive",
+			"Offline": "Offline",
+			"OffWork": "Off Work",
+			"OutOfOffice": "Out of Office",
+			"PresenceUnknown": "Unknown",
+			"Presenting": "Presenting",
+			"UrgentInterruptionsOnly": "Do Not Disturb"
 		}
 	}
 }

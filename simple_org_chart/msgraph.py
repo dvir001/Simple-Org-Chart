@@ -835,6 +835,62 @@ def collect_disabled_licensed_users(
     return licensed_records
 
 
+# ---------------------------------------------------------------------------
+# Teams Presence
+# ---------------------------------------------------------------------------
+
+_PRESENCE_BATCH_LIMIT = int(os.environ.get('PRESENCE_BATCH_SIZE', '650'))
+
+
+def fetch_presence_by_user_ids(
+    user_ids: Sequence[str],
+    *,
+    token: Optional[str] = None,
+) -> dict[str, dict]:
+    """Fetch Teams presence for a list of user IDs via the batch endpoint.
+
+    Returns ``{userId: {"availability": ..., "activity": ...}}`` dict.
+    Users whose presence could not be resolved are omitted.
+    """
+
+    token = token or get_access_token()
+    if not token:
+        logger.error("Cannot fetch presence – no access token")
+        return {}
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    result: dict[str, dict] = {}
+    url = f"{GRAPH_API_ENDPOINT}/communications/getPresencesByUserId"
+
+    # Process in chunks of _PRESENCE_BATCH_LIMIT
+    for i in range(0, len(user_ids), _PRESENCE_BATCH_LIMIT):
+        chunk = list(user_ids[i : i + _PRESENCE_BATCH_LIMIT])
+        try:
+            response = requests.post(url, headers=headers, json={"ids": chunk}, timeout=15)
+            if response.status_code == 429:
+                retry_after = int(response.headers.get("Retry-After", "5"))
+                logger.warning("Presence API rate-limited, waiting %ss", retry_after)
+                time.sleep(retry_after)
+                response = requests.post(url, headers=headers, json={"ids": chunk}, timeout=15)
+            response.raise_for_status()
+            for entry in response.json().get("value", []):
+                uid = entry.get("id")
+                if uid:
+                    result[uid] = {
+                        "availability": entry.get("availability", "PresenceUnknown"),
+                        "activity": entry.get("activity", ""),
+                    }
+        except requests.RequestException as exc:
+            logger.error("Error fetching presence batch (offset %s): %s", i, exc)
+
+    logger.info("Fetched presence for %s / %s users", len(result), len(user_ids))
+    return result
+
+
 __all__ = [
     "calculate_days_since",
     "collect_disabled_licensed_users",
@@ -843,6 +899,7 @@ __all__ = [
     "datetime_to_iso",
     "fetch_all_employees",
     "fetch_employee_photo",
+    "fetch_presence_by_user_ids",
     "fetch_subscribed_sku_map",
     "get_access_token",
     "parse_graph_datetime",

@@ -175,6 +175,10 @@ RATE_LIMIT_SETTINGS = os.environ.get('RATE_LIMIT_SETTINGS', '20 per minute')
 RATE_LIMIT_UPLOAD = os.environ.get('RATE_LIMIT_UPLOAD', '5 per minute')
 RATE_LIMIT_REFRESH = os.environ.get('RATE_LIMIT_REFRESH', '1 per minute')
 
+# Teams Presence
+PRESENCE_REFRESH_SECONDS = int(os.environ.get('PRESENCE_REFRESH_SECONDS', '120'))
+PRESENCE_BATCH_SIZE = int(os.environ.get('PRESENCE_BATCH_SIZE', '650'))
+
 # Security headers (configurable via .env)
 SECURITY_HEADER_CONTENT_TYPE_OPTIONS = os.environ.get('SECURITY_HEADER_CONTENT_TYPE_OPTIONS', 'nosniff')
 SECURITY_HEADER_FRAME_OPTIONS = os.environ.get('SECURITY_HEADER_FRAME_OPTIONS', 'DENY')
@@ -672,6 +676,30 @@ def get_employees():
         return jsonify({'error': 'Failed to load employees'}), 500
 
 
+@app.route('/api/presence', methods=['POST'])
+def get_presence():
+    """Return Teams presence for the supplied user IDs."""
+    try:
+        settings = load_settings()
+        if not settings.get('teamsPresenceEnabled'):
+            return jsonify({'error': 'Teams presence is disabled'}), 403
+
+        body = request.get_json(silent=True) or {}
+        ids = body.get('ids', [])
+        if not isinstance(ids, list) or not ids:
+            return jsonify({'error': 'ids array required'}), 400
+
+        # Cap at configured batch size (Graph API max is 650)
+        ids = [str(i) for i in ids[:PRESENCE_BATCH_SIZE]]
+
+        from .msgraph import fetch_presence_by_user_ids
+        result = fetch_presence_by_user_ids(ids)
+        return jsonify(result)
+    except Exception as e:
+        logger.error("Error in get_presence: %s", e, exc_info=True)
+        return jsonify({'error': 'Failed to fetch presence'}), 500
+
+
 @app.route('/<filename>.json')
 def get_microsip_directory(filename):
     """Expose a MicroSIP-compatible directory derived from cached employees."""
@@ -804,6 +832,7 @@ def handle_settings():
 
         settings['dataLastUpdatedAt'] = data_last_updated
         settings['dataUpdateStatus'] = load_data_update_status()
+        settings['presenceRefreshSeconds'] = PRESENCE_REFRESH_SECONDS
 
         return jsonify(settings)
     
