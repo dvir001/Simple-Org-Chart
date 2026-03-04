@@ -2699,11 +2699,20 @@ def _read_scan_state() -> dict:
 
 
 def _write_scan_state(state: dict) -> None:
-    """Persist scan state to disk (called under _full_scan_lock)."""
+    """Persist scan state to disk (called under _full_scan_lock).
+
+    Writes to a temporary file and then atomically replaces the
+    existing state file so that readers never observe a partially
+    written JSON document.
+    """
     try:
         os.makedirs(os.path.dirname(_FULL_SCAN_STATE_FILE), exist_ok=True)
-        with open(_FULL_SCAN_STATE_FILE, 'w', encoding='utf-8') as fh:
+        temp_path = _FULL_SCAN_STATE_FILE + '.tmp'
+        with open(temp_path, 'w', encoding='utf-8') as fh:
             json.dump(state, fh)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temp_path, _FULL_SCAN_STATE_FILE)
     except Exception as exc:
         logger.warning('Failed to write full-scan state: %s', exc)
 
