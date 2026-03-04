@@ -192,10 +192,8 @@ async function fetchPresenceData() {
     const ids = Array.from(visibleIds);
     if (!ids.length) return;
 
-    // Send all visible IDs in a single request; the server handles Graph-level batching
-    // internally (up to 5 000 IDs accepted per request).
+    // Page requests so that all visible IDs are covered (server accepts up to 5 000 per call).
     const maxIdsPerRequest = 5000;
-    const requestIds = ids.slice(0, maxIdsPerRequest);
 
     presenceFetchInFlight = true;
     try {
@@ -203,23 +201,27 @@ async function fetchPresenceData() {
         // preventing UI flicker while the request is in flight.
         const newPresenceData = new Map();
 
-        const response = await fetch(`${API_BASE_URL}/api/presence`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids: requestIds }),
-        });
-        if (!response.ok) {
-            console.error('Error fetching presence:', response.status, response.statusText);
-        } else {
+        for (let start = 0; start < ids.length; start += maxIdsPerRequest) {
+            const batchIds = ids.slice(start, start + maxIdsPerRequest);
+            const response = await fetch(`${API_BASE_URL}/api/presence`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: batchIds }),
+            });
+            if (!response.ok) {
+                console.error(`Error fetching presence batch (offset ${start}):`, response.status, response.statusText);
+                continue;
+            }
             const data = await response.json();
             for (const [id, info] of Object.entries(data)) {
                 newPresenceData.set(id, info);
             }
-            // Atomic swap: replace the live map only after data is fully loaded.
-            presenceData.clear();
-            for (const [id, info] of newPresenceData) {
-                presenceData.set(id, info);
-            }
+        }
+
+        // Atomic swap: replace the live map only after all pages are loaded.
+        presenceData.clear();
+        for (const [id, info] of newPresenceData) {
+            presenceData.set(id, info);
         }
 
         // Refresh icons on visible nodes once all batches are processed.

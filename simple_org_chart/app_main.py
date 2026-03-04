@@ -175,6 +175,7 @@ RATE_LIMIT_PHOTO = os.environ.get('RATE_LIMIT_PHOTO', '500 per hour')
 RATE_LIMIT_SETTINGS = os.environ.get('RATE_LIMIT_SETTINGS', '20 per minute')
 RATE_LIMIT_UPLOAD = os.environ.get('RATE_LIMIT_UPLOAD', '5 per minute')
 RATE_LIMIT_REFRESH = os.environ.get('RATE_LIMIT_REFRESH', '1 per minute')
+RATE_LIMIT_PRESENCE = os.environ.get('RATE_LIMIT_PRESENCE', '60 per minute')
 
 # Teams Presence
 _PRESENCE_REFRESH_RAW = os.environ.get('PRESENCE_REFRESH_SECONDS', '120')
@@ -692,7 +693,7 @@ def get_employees():
 
 
 @app.route('/api/presence', methods=['POST'])
-@limiter.limit("60 per minute")
+@limiter.limit(RATE_LIMIT_PRESENCE)
 def get_presence():
     """Return Teams presence for the supplied user IDs."""
     try:

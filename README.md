@@ -92,6 +92,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 | `RATE_LIMIT_SETTINGS` | `20 per minute` | Rate limit for settings endpoints. |
 | `RATE_LIMIT_UPLOAD` | `5 per minute` | Rate limit for file upload endpoints. |
 | `RATE_LIMIT_REFRESH` | `1 per minute` | Rate limit for data refresh endpoints. |
+| `RATE_LIMIT_PRESENCE` | `60 per minute` | Rate limit for the Teams presence endpoint. |
 | `PRESENCE_REFRESH_SECONDS` | `120` | How often the client refreshes Teams presence status (seconds). |
 | `PRESENCE_BATCH_SIZE` | `650` | Maximum user IDs per Graph presence batch request (Graph API max is 650). |
 | `SECURITY_HEADER_CONTENT_TYPE_OPTIONS` | `nosniff` | `X-Content-Type-Options` header value. |
