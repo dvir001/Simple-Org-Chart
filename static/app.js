@@ -2686,6 +2686,24 @@ function renderOrgChart(data) {
         return;
     }
 
+    // Sort children by department (A-Z), then by name (A-Z) as tiebreaker
+    (function sortChildrenByDepartment(node) {
+        if (node && node.children && Array.isArray(node.children)) {
+            node.children.sort((a, b) => {
+                const deptA = (a.department || '').toLowerCase();
+                const deptB = (b.department || '').toLowerCase();
+                if (deptA < deptB) return -1;
+                if (deptA > deptB) return 1;
+                const nameA = (a.name || '').toLowerCase();
+                const nameB = (b.name || '').toLowerCase();
+                if (nameA < nameB) return -1;
+                if (nameA > nameB) return 1;
+                return 0;
+            });
+            node.children.forEach(sortChildrenByDepartment);
+        }
+    })(data);
+
     const container = document.getElementById('orgChart');
     container.querySelector('.loading').style.display = 'none';
 
