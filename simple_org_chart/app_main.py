@@ -690,8 +690,10 @@ def get_presence():
         if not isinstance(ids, list) or not ids:
             return jsonify({'error': 'ids array required'}), 400
 
-        # Cap at configured batch size (Graph API max is 650)
-        ids = [str(i) for i in ids[:PRESENCE_BATCH_SIZE]]
+        # Remove the cap here – fetch_presence_by_user_ids() already chunks requests
+        # internally (respecting the Graph API maximum of 650 per batch), so truncating
+        # the incoming list would silently drop users in larger orgs.
+        ids = [str(i) for i in ids]
 
         from .msgraph import fetch_presence_by_user_ids
         result = fetch_presence_by_user_ids(ids)

@@ -717,7 +717,9 @@
 			"OutOfOffice": "Out of Office",
 			"PresenceUnknown": "Unknown",
 			"Presenting": "Presenting",
-			"UrgentInterruptionsOnly": "Do Not Disturb"
+			"UrgentInterruptionsOnly": "Do Not Disturb",
+			"AvailableIdle": "Available (Idle)",
+			"BusyIdle": "Busy (Idle)"
 		}
 	}
 }
