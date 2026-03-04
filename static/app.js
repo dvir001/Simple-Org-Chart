@@ -49,12 +49,6 @@ const PRESENCE_ICON_RADIUS = 7;
 
 // Human-readable labels for activity values are stored in the locale file
 // under the key "presence.activity.<ActivityValue>".
-const PRESENCE_ACTIVITY_KEYS = [
-    'Available', 'Away', 'BeRightBack', 'Busy', 'DoNotDisturb',
-    'InACall', 'InAConferenceCall', 'InAMeeting', 'Inactive',
-    'Offline', 'OffWork', 'OutOfOffice', 'PresenceUnknown',
-    'Presenting', 'UrgentInterruptionsOnly',
-];
 
 function getPresenceLabel(userId) {
     const p = presenceData.get(userId);
