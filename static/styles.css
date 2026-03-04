@@ -1582,7 +1582,8 @@ body.fullscreen-mode .org-chart-container {
 
 /* Teams Presence indicator icons (SVG org chart nodes) */
 .presence-indicator {
-    pointer-events: none;
+    /* Allow pointer events so SVG <title> tooltips can show, while clicks still bubble to the node */
+    pointer-events: visiblePainted;
 }
 
 /* Teams Presence badges (HTML side panel) */
