@@ -42,6 +42,7 @@ from werkzeug.utils import secure_filename
 
 import hashlib
 import secrets
+import uuid
 try:
     from PIL import Image
 except ImportError:
@@ -701,13 +702,43 @@ def get_presence():
         if not isinstance(ids, list) or not ids:
             return jsonify({'error': 'ids array required'}), 400
 
-        # Remove the cap here – fetch_presence_by_user_ids() already chunks requests
-        # internally (respecting the Graph API maximum of 650 per batch), so truncating
-        # the incoming list would silently drop users in larger orgs.
-        ids = [str(i) for i in ids]
+        # Validate that each ID is a GUID/UUID string.
+        def _is_valid_uuid(val: str) -> bool:
+            try:
+                uuid.UUID(str(val))
+                return True
+            except (ValueError, AttributeError):
+                return False
+
+        # Deduplicate, validate format, and cap to a sane per-request maximum.
+        _MAX_IDS_PER_REQUEST = 5000
+        seen: set[str] = set()
+        validated_ids: list[str] = []
+        for raw_id in ids:
+            sid = str(raw_id).strip()
+            if sid in seen:
+                continue
+            seen.add(sid)
+            if _is_valid_uuid(sid):
+                validated_ids.append(sid)
+
+        if not validated_ids:
+            return jsonify({'error': 'No valid UUIDs supplied'}), 400
+
+        if len(validated_ids) > _MAX_IDS_PER_REQUEST:
+            return jsonify({'error': f'Too many IDs; maximum is {_MAX_IDS_PER_REQUEST}'}), 400
+
+        # Filter to IDs that are present in the cached employee dataset to prevent
+        # arbitrary Graph queries for non-employee IDs.
+        cached_employees = load_cached_employees() or []
+        known_ids: set[str] = {emp['id'] for emp in cached_employees if emp.get('id')}
+        if known_ids:
+            validated_ids = [i for i in validated_ids if i in known_ids]
+            if not validated_ids:
+                return jsonify({}), 200
 
         from .msgraph import fetch_presence_by_user_ids
-        result = fetch_presence_by_user_ids(ids)
+        result = fetch_presence_by_user_ids(validated_ids)
         return jsonify(result)
     except Exception as e:
         logger.error("Error in get_presence: %s", e, exc_info=True)

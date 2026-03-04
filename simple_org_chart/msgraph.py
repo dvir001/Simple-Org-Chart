@@ -839,7 +839,13 @@ def collect_disabled_licensed_users(
 # Teams Presence
 # ---------------------------------------------------------------------------
 
-_PRESENCE_BATCH_LIMIT: int = int(os.environ.get('PRESENCE_BATCH_SIZE', '650'))
+try:
+    _PRESENCE_BATCH_LIMIT: int = int(os.environ.get('PRESENCE_BATCH_SIZE', '650'))
+except (ValueError, TypeError):
+    logger.warning(
+        "PRESENCE_BATCH_SIZE env var is not a valid integer; using default 650.",
+    )
+    _PRESENCE_BATCH_LIMIT = 650
 if not 1 <= _PRESENCE_BATCH_LIMIT <= 650:
     logger.warning(
         "PRESENCE_BATCH_SIZE=%s is outside the valid range [1, 650]; clamping.",
