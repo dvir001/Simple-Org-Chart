@@ -43,7 +43,7 @@ RUN playwright install --with-deps chromium && \
 COPY . .
 
 # Create necessary directories for data persistence and adjust ownership
-RUN mkdir -p static data data/photos && \
+RUN mkdir -p static data data/photos repositories && \
     chown -R app:app /app
 
 # Expose port

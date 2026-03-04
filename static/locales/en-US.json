@@ -188,6 +188,9 @@
 			"behavior": {
 				"title": "⚙️ Behavior Settings"
 			},
+			"userScanner": {
+				"title": "🔍 User Scanner"
+			},
 			"directory": {
 				"title": "📇 Directory Integrations"
 			},
@@ -214,6 +217,13 @@
 				"description": "Add contacts that should appear in the directory feeds even if they are not in the org chart. Use one entry per line in the format Name,Number.",
 				"placeholder": "Ada Lovelace,555-123-4567",
 				"hint": "Lines starting with # are ignored. Numbers accept digits, spaces, and punctuation."
+			}
+		},
+		"userScanner": {
+			"enable": {
+				"label": "User Scanner (OSINT)",
+				"description": "Enable the User Scanner tool to check email presence across multiple platforms. This uses an external open-source tool (user-scanner) which will be downloaded automatically from PyPI when enabled and kept up to date.",
+				"toggleLabel": "Enable User Scanner"
 			}
 		},
 		"emailReports": {
@@ -436,7 +446,38 @@
 				"missingManager": "Employees without managers",
 				"lastLogins": "Users by last sign-in activity",
 				"hiredThisYear": "Employees hired in the last 365 days",
-				"filteredUsers": "Users hidden by filters"
+				"filteredUsers": "Users hidden by filters",
+				"userScanner": "User Scanner (OSINT)"
+			}
+		},
+		"userScanner": {
+			"searchLabel": "Scan a user",
+			"searchPlaceholder": "Search employee or enter any email address...",
+			"scanButton": "Run Scan",
+			"tabs": {
+				"single": "Individual",
+				"all": "Organization"
+			},
+			"siteFilter": {
+				"label": "Filter by sites",
+				"placeholder": "Type a site name...",
+				"reset": "Reset"
+			},
+			"categoryFilter": {
+				"label": "Filter by categories",
+				"placeholder": "Type a category...",
+				"reset": "Reset"
+			},
+			"options": {
+				"allowLoud": "Include loud sites (may notify the target)",
+				"onlyFound": "Only show registered / found results"
+			},
+			"fullScan": {
+				"title": "Full Organization Scan",
+				"description": "Scan all employees by email. Results are downloaded automatically when complete.",
+				"filtersTitle": "User Filters",
+				"emailPlaceholder": "(Optional) Email to send report to...",
+				"button": "Run Full Scan"
 			}
 		},
 		"buttons": {
@@ -582,6 +623,37 @@
 				"tableTitle": "Users hidden by org chart filters",
 				"empty": "No users are currently hidden by your filters.",
 				"countSummary": "Showing {count} users hidden by filters"
+			},
+			"userScanner": {
+				"summaryLabel": "User Scanner Results",
+				"tableTitle": "User Scanner OSINT Results",
+				"empty": "No scan results yet. Run a scan to see results here.",
+				"countSummary": "Showing results for {count} employees",
+				"noResults": "No results found for this scan.",
+				"scanning": "Scanning…",
+				"singleResultTitle": "Scan Results",
+				"columns": {
+					"totalChecked": "Sites Checked",
+					"registeredCount": "Registered"
+				},
+				"fullScan": {
+					"starting": "Starting full organization scan…",
+					"started": "Full scan started for {count} employees.",
+					"willNotify": "Report will also be emailed to {email}.",
+					"running": "A full scan is currently running…",
+					"progressStatus": "Scanning {current} of {total} employees…",
+					"stop": "Stop Scan",
+					"stopping": "Stopping scan after current employee…",
+					"stopped": "Scan stopped. Partial results available below.",
+					"complete": "Scan complete. Download available below.",
+					"failed": "Scan failed: {error}",
+					"terminalTitle": "Scan Output",
+					"historyTitle": "Recent Scan Results",
+					"historyEmployees": "employees",
+					"historyRegistered": "registered",
+					"download": "Download",
+					"clearHistory": "Clear"
+				}
 			}
 		},
 		"errors": {

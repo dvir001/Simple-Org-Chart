@@ -4,6 +4,28 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
 import atexit
+import contextlib
+try:
+    import fcntl as _fcntl
+except ImportError:
+    class _FcntlFallback:
+        """
+        Minimal no-op fallback for fcntl on non-POSIX platforms.
+        Provides the attributes used for file locking but does nothing.
+        """
+
+        LOCK_EX = 0
+        LOCK_NB = 0
+        LOCK_UN = 0
+
+        @staticmethod
+        def flock(fd, op):
+            # No-op fallback: on platforms without fcntl, we skip locking.
+            return None
+
+    fcntl = _FcntlFallback()
+else:
+    fcntl = _fcntl
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -109,6 +131,7 @@ from simple_org_chart.exports import (
     build_microsip_directory_items,
     format_hire_date,
 )
+from simple_org_chart import user_scanner_service
 
 load_dotenv()
 
@@ -2419,6 +2442,597 @@ def auth_check():
         return jsonify({'authenticated': True})
     else:
         return jsonify({'authenticated': False}), 401
+
+# ---------------------------------------------------------------------------
+# User Scanner API routes
+# ---------------------------------------------------------------------------
+
+
+def _load_all_scannable_users():
+    """Load all non-guest users from the last-login cache (includes disabled,
+    filtered, etc.).  Falls back to the org-chart tree if the login cache is
+    unavailable.  Returns the full record from last_login_records.json so
+    callers can apply filters (mailbox type, account status, etc.)."""
+    users = []
+
+    # Primary source: last_login_records.json — has every user from Graph
+    if os.path.exists(LAST_LOGIN_FILE):
+        try:
+            with open(LAST_LOGIN_FILE, 'r') as f:
+                records = json.load(f)
+            for r in records:
+                if (r.get('userType') or '').lower() == 'guest':
+                    continue
+                email = r.get('email') or ''
+                if not email:
+                    continue
+                # Preserve all fields for downstream filtering
+                user = dict(r)
+                user.setdefault('name', '')
+                user.setdefault('email', email)
+                users.append(user)
+            if users:
+                return users
+        except Exception as exc:
+            logger.warning('Could not load last-login cache for scanner: %s', exc)
+
+    # Fallback: flatten the org tree
+    try:
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, 'r') as f:
+                data = json.load(f)
+
+            def flatten(node, out=None):
+                if out is None:
+                    out = []
+                if node and isinstance(node, dict):
+                    out.append(node)
+                    for child in node.get('children', []):
+                        flatten(child, out)
+                return out
+
+            users = flatten(data)
+    except Exception as exc:
+        logger.warning('Could not load employee tree for scanner: %s', exc)
+
+    return users
+
+
+@app.route('/api/user-scanner/users')
+@require_auth
+def user_scanner_users():
+    """Search all non-guest users (incl. disabled/filtered) for the scanner."""
+    settings = load_settings()
+    if not settings.get('userScannerEnabled'):
+        return jsonify({'error': 'User Scanner is not enabled'}), 403
+
+    query = (request.args.get('q') or '').lower().strip()
+    if len(query) < 2:
+        return jsonify([])
+
+    all_users = _load_all_scannable_users()
+    results = []
+    for u in all_users:
+        name = (u.get('name') or '').lower()
+        email = (u.get('email') or '').lower()
+        title = (u.get('title') or '').lower()
+        department = (u.get('department') or '').lower()
+        if query in name or query in email or query in title or query in department:
+            results.append(u)
+        if len(results) >= 15:
+            break
+
+    return jsonify(results)
+
+
+@app.route('/api/user-scanner/status')
+@require_auth
+def user_scanner_status():
+    """Return installation / enablement status for the user-scanner tool."""
+    settings = load_settings()
+    enabled = settings.get('userScannerEnabled', False)
+    installed = user_scanner_service.is_installed()
+    version = user_scanner_service.get_version() if installed else None
+    return jsonify({
+        'enabled': enabled,
+        'installed': installed,
+        'version': version,
+    })
+
+
+@app.route('/api/user-scanner/check-update')
+@require_auth
+def user_scanner_check_update():
+    """Check PyPI for a newer version and optionally auto-upgrade."""
+    info = user_scanner_service.check_for_update()
+    return jsonify(info)
+
+
+@app.route('/api/user-scanner/update', methods=['POST'])
+@require_auth
+def user_scanner_update():
+    """Upgrade user-scanner to the latest PyPI release."""
+    success = user_scanner_service.install()   # install() uses --upgrade
+    if success:
+        version = user_scanner_service.get_version()
+        return jsonify({'success': True, 'version': version})
+    return jsonify({'success': False, 'error': 'Update failed. Check server logs.'}), 500
+
+
+@app.route('/api/user-scanner/install', methods=['POST'])
+@require_auth
+def user_scanner_install():
+    """Download / upgrade user-scanner from PyPI."""
+    success = user_scanner_service.install()
+    if success:
+        version = user_scanner_service.get_version()
+        return jsonify({'success': True, 'version': version})
+    return jsonify({'success': False, 'error': 'Installation failed. Check server logs.'}), 500
+
+
+@app.route('/api/user-scanner/sites')
+@require_auth
+def user_scanner_sites():
+    """Return the list of all site names the scanner can check."""
+    if not user_scanner_service.is_installed():
+        return jsonify([]), 200
+    try:
+        names = user_scanner_service.get_available_sites(is_email=True)
+        return jsonify(names)
+    except Exception as exc:
+        logger.error('Failed to list scanner sites: %s', exc)
+        return jsonify([]), 200
+
+
+@app.route('/api/user-scanner/loud-sites')
+@require_auth
+def user_scanner_loud_sites():
+    """Return the list of site names that are considered loud."""
+    if not user_scanner_service.is_installed():
+        return jsonify([]), 200
+    try:
+        names = user_scanner_service.get_loud_sites(is_email=True)
+        return jsonify(names)
+    except Exception as exc:
+        logger.error('Failed to list loud sites: %s', exc)
+        return jsonify([]), 200
+
+
+@app.route('/api/user-scanner/categories')
+@require_auth
+def user_scanner_categories():
+    """Return the list of scanner category names."""
+    if not user_scanner_service.is_installed():
+        return jsonify([]), 200
+    try:
+        cats = user_scanner_service.get_available_categories(is_email=True)
+        return jsonify(cats)
+    except Exception as exc:
+        logger.error('Failed to list scanner categories: %s', exc)
+        return jsonify([]), 200
+
+
+@app.route('/api/user-scanner/scan', methods=['POST'])
+@require_auth
+def user_scanner_scan():
+    """Run an on-demand scan for a single user (email and/or username)."""
+    settings = load_settings()
+    if not settings.get('userScannerEnabled'):
+        return jsonify({'error': 'User Scanner is not enabled'}), 403
+    if not user_scanner_service.is_installed():
+        return jsonify({'error': 'User Scanner is not installed'}), 400
+
+    body = request.json or {}
+    email = (body.get('email') or '').strip() or None
+    sites = body.get('sites') or None
+    categories = body.get('categories') or None
+    allow_loud = bool(body.get('allowLoud', False))
+    only_found = bool(body.get('onlyFound', False))
+
+    if not email:
+        return jsonify({'error': 'Provide an email to scan'}), 400
+
+    try:
+        result = user_scanner_service.scan_user(
+            email=email,
+            sites=sites,
+            categories=categories,
+            allow_loud=allow_loud,
+            only_found=only_found,
+        )
+        return jsonify(result)
+    except Exception as exc:
+        logger.error('User scanner scan failed: %s', exc)
+        return jsonify({'error': 'User scanner scan failed'}), 500
+
+
+# ---------------------------------------------------------------------------
+# Full-scan state tracking  –  persisted to disk so all gunicorn workers
+# share the same view (module-level dicts are per-process).
+# ---------------------------------------------------------------------------
+_FULL_SCAN_STATE_FILE = os.path.join(DATA_DIR, 'full_scan_state.json')
+_FULL_SCAN_CANCEL_FILE = os.path.join(DATA_DIR, 'full_scan_cancel.flag')
+_FULL_SCAN_LOCK_FILE = os.path.join(DATA_DIR, 'full_scan.lock')
+_FULL_SCAN_LOG_MAX = 200
+_full_scan_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def _full_scan_file_lock():
+    """Acquire an exclusive inter-process file lock around the scan state.
+
+    Combines a threading lock (intra-process) with an fcntl exclusive lock
+    (inter-process) so that multiple Gunicorn workers cannot race on the
+    check-and-set of the running flag.
+    """
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with _full_scan_lock:
+        with open(_FULL_SCAN_LOCK_FILE, 'a') as _lf:
+            try:
+                fcntl.flock(_lf, fcntl.LOCK_EX)
+                yield
+            finally:
+                fcntl.flock(_lf, fcntl.LOCK_UN)
+
+_FULL_SCAN_DEFAULTS: dict = {
+    'running': False,
+    'scanId': None,
+    'error': None,
+    'generation': 0,
+    'cancelled': False,
+    'progress': None,
+    'log': [],
+}
+
+
+def _read_scan_state() -> dict:
+    """Load scan state from disk (called under _full_scan_lock)."""
+    try:
+        if os.path.exists(_FULL_SCAN_STATE_FILE):
+            with open(_FULL_SCAN_STATE_FILE, 'r', encoding='utf-8') as fh:
+                data = json.load(fh)
+                if isinstance(data, dict):
+                    return data
+    except Exception:
+        pass
+    return dict(_FULL_SCAN_DEFAULTS)
+
+
+def _write_scan_state(state: dict) -> None:
+    """Persist scan state to disk (called under _full_scan_lock).
+
+    Writes to a temporary file and then atomically replaces the
+    existing state file so that readers never observe a partially
+    written JSON document.
+    """
+    try:
+        os.makedirs(os.path.dirname(_FULL_SCAN_STATE_FILE), exist_ok=True)
+        temp_path = _FULL_SCAN_STATE_FILE + '.tmp'
+        with open(temp_path, 'w', encoding='utf-8') as fh:
+            json.dump(state, fh)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temp_path, _FULL_SCAN_STATE_FILE)
+    except Exception as exc:
+        logger.warning('Failed to write full-scan state: %s', exc)
+
+
+def _set_cancel_flag():
+    """Create the cancel sentinel file."""
+    try:
+        with open(_FULL_SCAN_CANCEL_FILE, 'w') as fh:
+            fh.write('1')
+    except Exception:
+        pass
+
+
+def _clear_cancel_flag():
+    """Remove the cancel sentinel file."""
+    try:
+        if os.path.exists(_FULL_SCAN_CANCEL_FILE):
+            os.remove(_FULL_SCAN_CANCEL_FILE)
+    except Exception:
+        pass
+
+
+def _is_cancel_requested() -> bool:
+    """Check if the cancel sentinel exists (cross-process safe)."""
+    return os.path.exists(_FULL_SCAN_CANCEL_FILE)
+
+
+# On startup, reset stale "running" state (e.g. after container restart)
+def _reset_stale_scan_state():
+    try:
+        if os.path.exists(_FULL_SCAN_STATE_FILE):
+            with open(_FULL_SCAN_STATE_FILE, 'r', encoding='utf-8') as fh:
+                data = json.load(fh)
+            if isinstance(data, dict) and data.get('running'):
+                data['running'] = False
+                data['error'] = 'Scan interrupted by server restart.'
+                with open(_FULL_SCAN_STATE_FILE, 'w', encoding='utf-8') as fh:
+                    json.dump(data, fh)
+        _clear_cancel_flag()
+    except Exception:
+        pass
+
+_reset_stale_scan_state()
+
+
+@app.route('/api/user-scanner/full-scan', methods=['POST'])
+@require_auth
+def user_scanner_full_scan():
+    """Run a full org scan in a background thread.  Optionally email results."""
+    settings = load_settings()
+    if not settings.get('userScannerEnabled'):
+        return jsonify({'error': 'User Scanner is not enabled'}), 403
+    if not user_scanner_service.is_installed():
+        return jsonify({'error': 'User Scanner is not installed'}), 400
+
+    body = request.json or {}
+    notify_email = (body.get('notifyEmail') or '').strip() or None
+    sites = body.get('sites') or None
+    categories = body.get('categories') or None
+    allow_loud = bool(body.get('allowLoud', False))
+    only_found = bool(body.get('onlyFound', False))
+
+    # User-level filters (mirrored from the last-logins report filters)
+    include_user_mailboxes = body.get('includeUserMailboxes', True)
+    include_shared_mailboxes = body.get('includeSharedMailboxes', False)
+    include_room_equipment_mailboxes = body.get('includeRoomEquipmentMailboxes', False)
+    include_enabled = body.get('includeEnabled', True)
+    include_disabled = body.get('includeDisabled', False)
+    include_licensed = body.get('includeLicensed', True)
+    include_unlicensed = body.get('includeUnlicensed', False)
+    include_members = body.get('includeMembers', True)
+    include_guests = body.get('includeGuests', False)
+
+    # Load all non-guest users (includes disabled, filtered, etc.)
+    employees = _load_all_scannable_users()
+
+    if not employees:
+        return jsonify({'error': 'No employee data available. Run a data sync first.'}), 400
+
+    # Apply user-level filters to narrow the scan population
+    employees = apply_last_login_filters(
+        employees,
+        include_user_mailboxes=include_user_mailboxes,
+        include_shared_mailboxes=include_shared_mailboxes,
+        include_room_equipment_mailboxes=include_room_equipment_mailboxes,
+        include_enabled=include_enabled,
+        include_disabled=include_disabled,
+        include_licensed=include_licensed,
+        include_unlicensed=include_unlicensed,
+        include_members=include_members,
+        include_guests=include_guests,
+    )
+
+    if not employees:
+        return jsonify({'error': 'No employees match the selected filters.'}), 400
+
+    # Prevent concurrent scans – use an inter-process file lock so that
+    # multiple Gunicorn workers cannot both pass the running=false check.
+    with _full_scan_file_lock():
+        state = _read_scan_state()
+        if state.get('running'):
+            return jsonify({'error': 'A full scan is already running.'}), 409
+        state['running'] = True
+        state['scanId'] = None
+        state['error'] = None
+        state['cancelled'] = False
+        state['progress'] = None
+        state['log'] = []
+        state['generation'] = state.get('generation', 0) + 1
+        current_gen = state['generation']
+        _write_scan_state(state)
+        _clear_cancel_flag()
+
+    def _scan_progress(info: dict):
+        """Callback from run_full_scan – updates shared progress state on disk."""
+        kind = info.get('kind', '')
+        with _full_scan_lock:
+            st = _read_scan_state()
+            if kind == 'scanning':
+                st['progress'] = {
+                    'current': info.get('current', 0),
+                    'total': info.get('total', 0),
+                    'email': info.get('email', ''),
+                    'name': info.get('name', ''),
+                }
+                line = f"[{info.get('current')}/{info.get('total')}] Scanning {info.get('name', '')} ({info.get('email', '')})…"
+            elif kind == 'scanned':
+                reg = info.get('registered', 0)
+                chk = info.get('checked', 0)
+                line = f"  ✓ {info.get('email', '')} — {reg}/{chk} registered"
+            elif kind == 'error':
+                line = f"  ✗ {info.get('email', '')} — error: {info.get('error', 'unknown')}"
+            elif kind == 'cancelled':
+                line = f"Scan cancelled after {info.get('scanned', 0)}/{info.get('total', 0)} employees."
+            elif kind == 'start':
+                line = f"Starting scan for {info.get('total', 0)} employees…"
+            else:
+                return
+            log = st.get('log', [])
+            log.append(line)
+            if len(log) > _FULL_SCAN_LOG_MAX:
+                log = log[-_FULL_SCAN_LOG_MAX:]
+            st['log'] = log
+            _write_scan_state(st)
+
+    def _background_full_scan():
+        try:
+            result = user_scanner_service.run_full_scan(
+                employees,
+                sites=sites,
+                categories=categories,
+                allow_loud=allow_loud,
+                only_found=only_found,
+                cancel_event=None,          # replaced by file-based cancel
+                cancel_check=_is_cancel_requested,
+                progress_callback=_scan_progress,
+            )
+            was_cancelled = result.get('_cancelled', False)
+            logger.info('Full user scan %s',
+                        'cancelled' if was_cancelled else 'complete')
+            scan_id = result.get('_scanId')
+            with _full_scan_lock:
+                st = _read_scan_state()
+                st['scanId'] = scan_id
+                st['running'] = False
+                st['cancelled'] = was_cancelled
+                _write_scan_state(st)
+
+            if notify_email:
+                xlsx_file = result.get('_xlsxFile')
+                xlsx_path = (user_scanner_service.USER_SCANNER_XLSX_DIR / xlsx_file) if xlsx_file else None
+                _send_full_scan_email(notify_email, result, xlsx_path)
+        except Exception as exc:
+            logger.error('Background full scan failed: %s', exc)
+            with _full_scan_lock:
+                st = _read_scan_state()
+                st['running'] = False
+                st['error'] = str(exc)
+                _write_scan_state(st)
+
+    worker = threading.Thread(target=_background_full_scan, daemon=True)
+    worker.start()
+
+    return jsonify({
+        'message': 'Full scan started in background.',
+        'employeeCount': len(employees),
+        'notifyEmail': notify_email,
+        'generation': current_gen,
+    })
+
+
+@app.route('/api/user-scanner/full-scan/status')
+@require_auth
+def user_scanner_full_scan_status():
+    """Return the current state of the background full-scan."""
+    with _full_scan_lock:
+        state = _read_scan_state()
+    return jsonify({
+        'running': state.get('running', False),
+        'scanId': state.get('scanId'),
+        'error': state.get('error'),
+        'generation': state.get('generation', 0),
+        'cancelled': state.get('cancelled', False),
+        'progress': state.get('progress'),
+        'log': state.get('log', []),
+    })
+
+
+@app.route('/api/user-scanner/full-scan/stop', methods=['POST'])
+@require_auth
+def user_scanner_full_scan_stop():
+    """Signal the running full-scan to stop after the current employee."""
+    with _full_scan_lock:
+        state = _read_scan_state()
+        if not state.get('running'):
+            return jsonify({'error': 'No scan is currently running.'}), 409
+    _set_cancel_flag()
+    return jsonify({'message': 'Stop signal sent. The scan will stop after the current employee.'})
+
+
+@app.route('/api/user-scanner/full-scan/history')
+@require_auth
+def user_scanner_full_scan_history():
+    """Return metadata for the last N scan runs."""
+    return jsonify(user_scanner_service.load_scan_history())
+
+
+@app.route('/api/user-scanner/full-scan/history', methods=['DELETE'])
+@require_auth
+def user_scanner_clear_scan_history():
+    """Delete all scan history entries and XLSX files."""
+    removed = user_scanner_service.clear_scan_history()
+    return jsonify({'removed': removed})
+
+
+@app.route('/api/user-scanner/full-scan/download/<scan_id>')
+@require_auth
+def user_scanner_full_scan_download(scan_id):
+    """Serve the XLSX file for a given scan run."""
+    xlsx_path = user_scanner_service.get_xlsx_path(scan_id)
+    if not xlsx_path:
+        return jsonify({'error': 'File not found'}), 404
+    return send_file(
+        str(xlsx_path),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=xlsx_path.name,
+    )
+
+
+@app.route('/api/user-scanner/full-scan/results')
+@require_auth
+def user_scanner_full_scan_results():
+    """Return cached full-scan results."""
+    cached = user_scanner_service.load_cached_full_scan()
+    if cached:
+        return jsonify(cached)
+    return jsonify({'records': [], 'scannedAt': None, 'totalEmployees': 0})
+
+
+def _send_full_scan_email(recipient: str, scan_result: dict, xlsx_path=None):
+    """Send the full-scan XLSX as an email attachment (no inline HTML table)."""
+    try:
+        from simple_org_chart.email_config import get_smtp_config, is_smtp_configured
+        if not is_smtp_configured():
+            logger.warning('SMTP not configured; cannot email full scan results')
+            return
+
+        smtp_config = get_smtp_config()
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from simple_org_chart.email_sender import _send_email_smtp, _parse_recipients, _attach_file
+
+        recipients = _parse_recipients(recipient)
+        if not recipients:
+            return
+
+        settings = load_settings()
+        chart_title = (settings.get('chartTitle') or '').strip() or 'SimpleOrgChart'
+        total = scan_result.get('totalEmployees', 0)
+        scanned_at = scan_result.get('scannedAt', '')
+        registered_total = sum(
+            r.get('registeredCount', 0) for r in scan_result.get('records', [])
+        )
+
+        body = f"""
+        <html>
+        <body style="font-family:Arial,sans-serif;color:#333">
+            <h2 style="color:#0078D4">{chart_title} - User Scanner Full Report</h2>
+            <p>Scanned <strong>{total}</strong> employees at {scanned_at}.</p>
+            <p>Total registrations found: <strong>{registered_total}</strong></p>
+            <p>The full report is attached as an Excel workbook (XLSX). Each site has its own tab.</p>
+            <p style="margin-top:20px;color:#666;font-size:12px">
+                This is an automated report from {chart_title}.
+            </p>
+        </body>
+        </html>
+        """
+
+        msg = MIMEMultipart()
+        msg['From'] = smtp_config['fromAddress']
+        msg['To'] = ', '.join(recipients)
+        msg['Subject'] = f'{chart_title} - User Scanner Full Report - {datetime.now(timezone.utc).strftime("%Y-%m-%d")}'
+        msg.attach(MIMEText(body, 'html'))
+
+        # Attach the XLSX file
+        if xlsx_path and xlsx_path.exists():
+            with open(xlsx_path, 'rb') as fh:
+                xlsx_bytes = fh.read()
+            _attach_file(
+                msg,
+                xlsx_bytes,
+                xlsx_path.name,
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            )
+
+        _send_email_smtp(smtp_config, msg, recipients)
+        logger.info('Full user-scan report emailed to %s', recipient)
+    except Exception as exc:
+        logger.error('Failed to email full scan results: %s', exc)
 
 @app.route('/api/search')
 def search_employees():

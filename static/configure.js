@@ -1204,6 +1204,13 @@ function applySettings(settings) {
         xmlFilenameEl.value = settings.directoryXmlFilename || 'contacts';
     }
 
+    // User Scanner
+    const userScannerEl = document.getElementById('userScannerEnabled');
+    if (userScannerEl) {
+        userScannerEl.checked = settings.userScannerEnabled === true;
+    }
+    _initUserScannerConfigUI(settings.userScannerEnabled === true);
+
     const updateMeta = settings.dataUpdateStatus || {};
     if (updateMeta.state === 'running') {
         updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
@@ -1709,7 +1716,8 @@ async function saveAllSettings() {
         directoryJsonEnabled: document.getElementById('directoryJsonEnabled')?.checked || false,
         directoryJsonFilename: (document.getElementById('directoryJsonFilename')?.value || 'contacts').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'contacts',
         directoryXmlEnabled: document.getElementById('directoryXmlEnabled')?.checked || false,
-        directoryXmlFilename: (document.getElementById('directoryXmlFilename')?.value || 'contacts').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'contacts'
+        directoryXmlFilename: (document.getElementById('directoryXmlFilename')?.value || 'contacts').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'contacts',
+        userScannerEnabled: document.getElementById('userScannerEnabled')?.checked || false
     };
 
     try {
@@ -2282,4 +2290,104 @@ async function enhancedSaveAllSettings() {
 
 // Replace saveAllSettings with enhanced version
 saveAllSettings = enhancedSaveAllSettings;
+
+// ---------------------------------------------------------------------------
+// User Scanner – config page status & update helpers
+// ---------------------------------------------------------------------------
+
+async function _initUserScannerConfigUI(isEnabled) {
+    const statusEl = document.getElementById('userScannerStatus');
+    const updateRow = document.getElementById('userScannerUpdateRow');
+    const checkBtn = document.getElementById('checkUserScannerUpdateBtn');
+    const applyBtn = document.getElementById('applyUserScannerUpdateBtn');
+    const updateStatusEl = document.getElementById('userScannerUpdateStatus');
+
+    if (!statusEl) return;
+
+    if (!isEnabled) {
+        statusEl.textContent = 'User Scanner is disabled.';
+        if (updateRow) updateRow.style.display = 'none';
+        return;
+    }
+
+    // Fetch current status
+    try {
+        const resp = await fetch(`${window.location.origin}/api/user-scanner/status`, { credentials: 'include' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        if (!data.installed) {
+            statusEl.textContent = 'Not installed yet — it will be downloaded automatically on first use.';
+            if (updateRow) updateRow.style.display = 'none';
+        } else {
+            const ver = data.version || 'unknown';
+            statusEl.innerHTML = '';
+            const versionText = document.createElement('span');
+            versionText.textContent = `Installed — v${ver}`;
+            statusEl.appendChild(versionText);
+            const sep = document.createTextNode('  ·  ');
+            statusEl.appendChild(sep);
+            const repoLink = document.createElement('a');
+            repoLink.href = 'https://github.com/kaifcodec/user-scanner';
+            repoLink.target = '_blank';
+            repoLink.rel = 'noopener noreferrer';
+            repoLink.textContent = 'GitHub repo ↗';
+            repoLink.style.fontSize = 'inherit';
+            statusEl.appendChild(repoLink);
+            if (updateRow) updateRow.style.display = 'flex';
+        }
+    } catch { /* ignore */ }
+
+    // Check for updates button
+    if (checkBtn) {
+        checkBtn.addEventListener('click', async () => {
+            checkBtn.disabled = true;
+            if (updateStatusEl) updateStatusEl.textContent = 'Checking…';
+            if (applyBtn) applyBtn.style.display = 'none';
+            try {
+                const resp = await fetch(`${window.location.origin}/api/user-scanner/check-update`, { credentials: 'include' });
+                const info = await resp.json();
+                if (info.updateAvailable) {
+                    if (updateStatusEl) updateStatusEl.textContent = `Update available: v${info.currentVersion} → v${info.latestVersion}`;
+                    if (applyBtn) applyBtn.style.display = '';
+                } else {
+                    if (updateStatusEl) updateStatusEl.textContent = `Up to date (v${info.currentVersion || info.latestVersion || 'unknown'})`;
+                }
+            } catch (err) {
+                if (updateStatusEl) updateStatusEl.textContent = 'Failed to check for updates.';
+            } finally {
+                checkBtn.disabled = false;
+            }
+        });
+    }
+
+    // Apply update button
+    if (applyBtn) {
+        applyBtn.addEventListener('click', async () => {
+            applyBtn.disabled = true;
+            if (updateStatusEl) updateStatusEl.textContent = 'Updating…';
+            try {
+                const resp = await fetch(`${window.location.origin}/api/user-scanner/update`, {
+                    method: 'POST',
+                    credentials: 'include',
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    if (updateStatusEl) updateStatusEl.textContent = `Updated to v${result.version}`;
+                    if (statusEl) {
+                        const verSpan = statusEl.querySelector('span');
+                        if (verSpan) verSpan.textContent = `Installed — v${result.version}`;
+                    }
+                    applyBtn.style.display = 'none';
+                } else {
+                    if (updateStatusEl) updateStatusEl.textContent = result.error || 'Update failed.';
+                }
+            } catch (err) {
+                if (updateStatusEl) updateStatusEl.textContent = 'Update failed: ' + err.message;
+            } finally {
+                applyBtn.disabled = false;
+            }
+        });
+    }
+}
 
