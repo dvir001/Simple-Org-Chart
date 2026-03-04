@@ -677,6 +677,7 @@ def get_employees():
 
 
 @app.route('/api/presence', methods=['POST'])
+@limiter.limit("60 per minute")
 def get_presence():
     """Return Teams presence for the supplied user IDs."""
     try:
