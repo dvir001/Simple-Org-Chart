@@ -6,3 +6,4 @@ repositories/
 # Python bytecode
 __pycache__/
 *.pyc
+flask_session/
