@@ -318,7 +318,7 @@ Presence icons follow the standard Teams visual language:
 3. Toggle **Enable Teams Presence**
 4. Save settings
 
-Once enabled, the org chart fetches presence for all visible employees on load and refreshes automatically (every two minutes by default; configurable via the `PRESENCE_REFRESH_SECONDS` environment variable). Each card shows a small Teams-style icon at the bottom-right corner of the profile image; hovering displays the detailed status (e.g., "In a Meeting" rather than just "Busy").
+Once enabled, the org chart fetches presence for all visible employees on load and refreshes automatically (every two minutes by default; configurable via the `PRESENCE_REFRESH_SECONDS` environment variable). Each card shows a small Teams-style icon at the top-left corner of the card; hovering displays the detailed status (e.g., "In a Meeting" rather than just "Busy").
 
 The backend calls the Graph `POST /communications/getPresencesByUserId` endpoint in batches of up to `PRESENCE_BATCH_SIZE` user IDs per request (default 650, the Graph API maximum), respecting the API rate limit of 1 500 requests per 30-second window.
 
