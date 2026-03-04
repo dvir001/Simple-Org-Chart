@@ -40,10 +40,19 @@ class TestConfigPaths:
 
 
 class TestEnsureDirectories:
-    def test_creates_directories(self, tmp_path: Path):
-        """ensure_directories should not raise."""
-        # Calling with real paths is safe since it uses exist_ok=True
+    def test_creates_directories(self, tmp_path: Path, monkeypatch):
+        """ensure_directories should create DATA_DIR and STATIC_DIR."""
+        import simple_org_chart.config as cfg
+
+        fake_data = tmp_path / "data"
+        fake_static = tmp_path / "static"
+        monkeypatch.setattr(cfg, "DATA_DIR", fake_data)
+        monkeypatch.setattr(cfg, "STATIC_DIR", fake_static)
+
         ensure_directories()
+
+        assert fake_data.exists(), "DATA_DIR was not created by ensure_directories()"
+        assert fake_static.exists(), "STATIC_DIR was not created by ensure_directories()"
 
 
 class TestAsPosixEnv:

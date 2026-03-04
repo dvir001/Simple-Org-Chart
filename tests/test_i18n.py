@@ -13,8 +13,12 @@ LOCALE_FILE = PROJECT_ROOT / "static" / "locales" / "en-US.json"
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
 STATIC_DIR = PROJECT_ROOT / "static"
 
-# Regex to capture data-i18n="some.key" attribute values from HTML templates
-_DATA_I18N_RE = re.compile(r'data-i18n="([^"]+)"')
+# Regex to capture i18n key attributes from HTML templates.
+# Matches data-i18n and all data-i18n-* variants that hold keys
+# (e.g. data-i18n-placeholder, data-i18n-title, data-i18n-html,
+# data-i18n-aria-label, data-i18n-ariaLabel, data-i18n-alt).
+# Excludes data-i18n-params which holds JSON parameter data, not a key.
+_DATA_I18N_RE = re.compile(r'data-i18n(?:-(?!params)[a-zA-Z-]+)?="([^"]+)"')
 # Regex to capture i18n key references in JS (translator calls like t('key'))
 _JS_I18N_RE = re.compile(r"""(?:getTranslator\(\)|[^a-zA-Z]t)\(\s*['"]([a-zA-Z0-9_.]+)['"]\s*[,)]""")
 
