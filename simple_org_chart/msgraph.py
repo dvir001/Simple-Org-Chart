@@ -898,7 +898,7 @@ def fetch_presence_by_user_ids(
         except requests.RequestException as exc:
             logger.error("Error fetching presence batch (offset %s): %s", i, exc)
 
-    logger.info("Fetched presence for %s / %s users", len(result), len(user_ids))
+    logger.debug("Fetched presence for %s / %s users", len(result), len(user_ids))
     return result
 
 
