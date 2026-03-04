@@ -176,8 +176,19 @@ RATE_LIMIT_UPLOAD = os.environ.get('RATE_LIMIT_UPLOAD', '5 per minute')
 RATE_LIMIT_REFRESH = os.environ.get('RATE_LIMIT_REFRESH', '1 per minute')
 
 # Teams Presence
-PRESENCE_REFRESH_SECONDS = int(os.environ.get('PRESENCE_REFRESH_SECONDS', '120'))
-PRESENCE_BATCH_SIZE = int(os.environ.get('PRESENCE_BATCH_SIZE', '650'))
+_PRESENCE_REFRESH_RAW = os.environ.get('PRESENCE_REFRESH_SECONDS', '120')
+try:
+    PRESENCE_REFRESH_SECONDS = int(_PRESENCE_REFRESH_RAW)
+except (ValueError, TypeError):
+    logger.warning("Invalid PRESENCE_REFRESH_SECONDS=%r; defaulting to 120", _PRESENCE_REFRESH_RAW)
+    PRESENCE_REFRESH_SECONDS = 120
+_PRESENCE_REFRESH_MIN = 10
+if PRESENCE_REFRESH_SECONDS < _PRESENCE_REFRESH_MIN:
+    logger.warning(
+        "PRESENCE_REFRESH_SECONDS=%s is too low; clamping to %s",
+        PRESENCE_REFRESH_SECONDS, _PRESENCE_REFRESH_MIN,
+    )
+    PRESENCE_REFRESH_SECONDS = _PRESENCE_REFRESH_MIN
 
 # Security headers (configurable via .env)
 SECURITY_HEADER_CONTENT_TYPE_OPTIONS = os.environ.get('SECURITY_HEADER_CONTENT_TYPE_OPTIONS', 'nosniff')

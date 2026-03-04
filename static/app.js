@@ -45,6 +45,7 @@ let currentOverrideFocusField = 'title';
 // --- Teams Presence ---
 const presenceData = new Map();
 let presenceRefreshTimer = null;
+let presenceFetchInFlight = false;
 const PRESENCE_ICON_RADIUS = 7;
 
 // Human-readable labels for activity values are stored in the locale file
@@ -177,6 +178,7 @@ function buildPresenceBadgeHTML(userId) {
 
 async function fetchPresenceData() {
     if (!appSettings.teamsPresenceEnabled) return;
+    if (presenceFetchInFlight) return;
 
     // Derive IDs from currently-rendered nodes so we only fetch presence for visible employees.
     if (!nodeLayer) return;
@@ -193,6 +195,7 @@ async function fetchPresenceData() {
     // Match the server-side PRESENCE_BATCH_SIZE (default 650) to avoid truncation per request.
     const batchSize = 650;
 
+    presenceFetchInFlight = true;
     try {
         // Start fresh for this fetch cycle.
         presenceData.clear();
@@ -227,6 +230,8 @@ async function fetchPresenceData() {
         }
     } catch (err) {
         console.error('Error fetching presence:', err);
+    } finally {
+        presenceFetchInFlight = false;
     }
 }
 
