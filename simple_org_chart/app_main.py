@@ -26,6 +26,7 @@ except ImportError:
     fcntl = _FcntlFallback()
 else:
     fcntl = _fcntl
+from typing import Optional
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -56,6 +57,7 @@ except ImportError:
     Workbook = None
 
 import simple_org_chart.config as app_config
+from simple_org_chart.config import EMPLOYEE_LIST_FILE
 from simple_org_chart.auth import login_required, require_auth, sanitize_next_path
 from simple_org_chart.email_config import (
     get_smtp_config,
@@ -194,6 +196,27 @@ if PRESENCE_REFRESH_SECONDS < _PRESENCE_REFRESH_MIN:
 
 # Maximum number of IDs accepted per /api/presence request.
 _PRESENCE_MAX_IDS_PER_REQUEST = 5000
+
+# In-memory cache for the known-employee ID set used to filter /api/presence requests.
+# Invalidated automatically when the employee cache file's mtime changes.
+_known_employee_ids_cache: Optional[set[str]] = None
+_known_employee_ids_mtime: Optional[float] = None
+
+
+def _get_known_employee_ids() -> Optional[set[str]]:
+    """Return a cached set of known employee IDs, refreshed only when the file changes."""
+    global _known_employee_ids_cache, _known_employee_ids_mtime
+    try:
+        mtime = os.path.getmtime(str(EMPLOYEE_LIST_FILE))
+    except OSError:
+        return None
+    if _known_employee_ids_cache is None or mtime != _known_employee_ids_mtime:
+        cached = load_cached_employees()
+        if not cached:
+            return None
+        _known_employee_ids_cache = {emp['id'] for emp in cached if emp.get('id')}
+        _known_employee_ids_mtime = mtime
+    return _known_employee_ids_cache
 
 # Security headers (configurable via .env)
 SECURITY_HEADER_CONTENT_TYPE_OPTIONS = os.environ.get('SECURITY_HEADER_CONTENT_TYPE_OPTIONS', 'nosniff')
@@ -736,14 +759,9 @@ def get_presence():
         # arbitrary Graph queries for non-employee IDs. If the cache is unavailable
         # or contains no IDs, skip the presence lookup entirely and return an empty
         # map rather than treating it as a hard service outage.
-        cached_employees = load_cached_employees()
-        if not cached_employees:
-            logger.warning("Employee cache unavailable; returning empty presence map")
-            return jsonify({}), 200
-
-        known_ids: set[str] = {emp['id'] for emp in cached_employees if emp.get('id')}
+        known_ids = _get_known_employee_ids()
         if not known_ids:
-            logger.warning("Employee cache contained no IDs; returning empty presence map")
+            logger.warning("Employee cache unavailable; returning empty presence map")
             return jsonify({}), 200
 
         validated_ids = [i for i in validated_ids if i in known_ids]

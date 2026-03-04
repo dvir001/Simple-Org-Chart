@@ -218,8 +218,8 @@ async function fetchPresenceData() {
             }
         }
 
-        // Atomic swap: replace the live map only after all pages are loaded.
-        presenceData.clear();
+        // Merge new data into the live map: update entries that were successfully
+        // fetched, and preserve existing entries for IDs whose batches failed.
         for (const [id, info] of newPresenceData) {
             presenceData.set(id, info);
         }
