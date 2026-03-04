@@ -729,13 +729,21 @@ def get_presence():
             return jsonify({'error': f'Too many IDs; maximum is {_MAX_IDS_PER_REQUEST}'}), 400
 
         # Filter to IDs that are present in the cached employee dataset to prevent
-        # arbitrary Graph queries for non-employee IDs.
-        cached_employees = load_cached_employees() or []
+        # arbitrary Graph queries for non-employee IDs.  Treat an unavailable or
+        # empty cache as an error so we never fall through with unfiltered IDs.
+        cached_employees = load_cached_employees()
+        if not cached_employees:
+            logger.error("Employee cache unavailable; refusing presence lookup")
+            return jsonify({'error': 'Employee cache unavailable'}), 503
+
         known_ids: set[str] = {emp['id'] for emp in cached_employees if emp.get('id')}
-        if known_ids:
-            validated_ids = [i for i in validated_ids if i in known_ids]
-            if not validated_ids:
-                return jsonify({}), 200
+        if not known_ids:
+            logger.error("Employee cache contained no IDs; refusing presence lookup")
+            return jsonify({'error': 'Employee cache unavailable'}), 503
+
+        validated_ids = [i for i in validated_ids if i in known_ids]
+        if not validated_ids:
+            return jsonify({}), 200
 
         from .msgraph import fetch_presence_by_user_ids
         result = fetch_presence_by_user_ids(validated_ids)
