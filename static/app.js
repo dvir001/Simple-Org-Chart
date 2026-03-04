@@ -177,10 +177,20 @@ function buildPresenceBadgeHTML(userId) {
 
 async function fetchPresenceData() {
     if (!appSettings.teamsPresenceEnabled) return;
-    const ids = allEmployees.map(e => e.id).filter(Boolean);
+
+    // Derive IDs from currently-rendered nodes so we only fetch presence for visible employees.
+    if (!nodeLayer) return;
+    const visibleIds = new Set();
+    nodeLayer.selectAll('.presence-indicator').each(function(d) {
+        const id = d && d.data && d.data.id;
+        if (id) {
+            visibleIds.add(id);
+        }
+    });
+    const ids = Array.from(visibleIds);
     if (!ids.length) return;
 
-    // Match the server-side PRESENCE_BATCH_SIZE (default 650) to avoid truncation.
+    // Match the server-side PRESENCE_BATCH_SIZE (default 650) to avoid truncation per request.
     const batchSize = 650;
 
     try {
