@@ -78,7 +78,7 @@ function _presenceIconType(userId) {
     if (avail === 'DoNotDisturb' || act === 'DoNotDisturb' || act === 'UrgentInterruptionsOnly') return 'dnd';
     if (avail === 'Busy' || avail === 'BusyIdle') return 'busy';
     if (avail === 'Away' || avail === 'BeRightBack') return 'away';
-    if (avail === 'Offline') return 'offline';
+    if (avail === 'Offline' || avail === 'OffWork' || act === 'OffWork') return 'offline';
     return 'unknown';
 }
 
