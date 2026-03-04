@@ -904,8 +904,8 @@ def fetch_presence_by_user_ids(
                 uid = entry.get("id")
                 if uid:
                     result[uid] = {
-                        "availability": entry.get("availability", "PresenceUnknown"),
-                        "activity": entry.get("activity", ""),
+                        "availability": entry.get("availability") or "PresenceUnknown",
+                        "activity": entry.get("activity") or "",
                     }
         except requests.RequestException as exc:
             logger.error("Error fetching presence batch (offset %s): %s", i, exc)
