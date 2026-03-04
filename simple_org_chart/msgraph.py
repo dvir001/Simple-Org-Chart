@@ -879,14 +879,14 @@ def fetch_presence_by_user_ids(
         try:
             response = requests.post(url, headers=headers, json={"ids": chunk}, timeout=15)
             if response.status_code == 429:
-                try:
-                    retry_after = int(response.headers.get("Retry-After", "5"))
-                except (ValueError, TypeError):
-                    retry_after = 5
-                retry_after = min(retry_after, _PRESENCE_MAX_RETRY_SLEEP)
-                logger.warning("Presence API rate-limited, waiting %ss", retry_after)
-                time.sleep(retry_after)
-                response = requests.post(url, headers=headers, json={"ids": chunk}, timeout=15)
+                retry_after_header = response.headers.get("Retry-After")
+                logger.warning(
+                    "Presence API rate-limited (status 429) at offset %s; "
+                    "Retry-After=%r. Skipping remaining presence lookups for this request.",
+                    i,
+                    retry_after_header,
+                )
+                break
             response.raise_for_status()
             for entry in response.json().get("value", []):
                 uid = entry.get("id")
