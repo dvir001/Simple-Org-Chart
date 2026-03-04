@@ -1432,7 +1432,9 @@ async function runSingleUserScan() {
     const thead = qs('reportTableHead');
     const tbody = qs('reportTableBody');
     const titleEl = qs('tableTitle');
+    const statusEl = qs('tableStatus');
     if (titleEl) titleEl.textContent = t('reports.types.userScanner.singleResultTitle') + ' — ' + (selectedScanUser.name || selectedScanUser.email);
+    if (statusEl) statusEl.textContent = t('reports.types.userScanner.scanning');
     if (thead) thead.innerHTML = '';
     if (tbody) tbody.innerHTML = '<tr><td colspan="4">' + t('reports.types.userScanner.scanning') + '</td></tr>';
 
@@ -1466,6 +1468,12 @@ async function runSingleUserScan() {
         const errorResults = rawResults.filter(r => (r.status || '').toLowerCase() === 'error');
         const allResults = nonErrorResults;
         latestRecords = allResults;
+
+        // Update status text with individual scan count
+        if (statusEl) {
+            const found = allResults.filter(r => r.status === 'Registered' || r.status === 'Found').length;
+            statusEl.textContent = allResults.length + ' sites checked · ' + found + ' registered';
+        }
 
         if (thead) {
             thead.innerHTML = '';
@@ -2177,10 +2185,12 @@ function initUserScannerPanel() {
             const thead = qs('reportTableHead');
             const tbody = qs('reportTableBody');
             const titleEl = qs('tableTitle');
+            const statusEl = qs('tableStatus');
             // Always clear the shared table on tab switch
             if (thead) thead.innerHTML = '';
             if (tbody) tbody.innerHTML = '';
             if (titleEl) titleEl.textContent = '';
+            if (statusEl) statusEl.textContent = '';
 
             if (target === 'all') {
                 // Organization tab: hide results table, only show terminal + downloads
