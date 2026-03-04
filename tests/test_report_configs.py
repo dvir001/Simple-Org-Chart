@@ -42,10 +42,12 @@ def _extract_report_config_keys() -> list[str]:
     if start == -1:
         return []
 
-    # Find all quoted strings that look like i18n keys
+    # Find all quoted strings that look like i18n keys.
+    # This covers top-level keys, column labelKeys, filter group labelKeys,
+    # filter option labelKeys, and any additional summary label keys.
     keys = []
     config_pattern = re.compile(
-        r"""(?:labelKey|summaryLabelKey|tableTitleKey|emptyKey|countSummaryKey)\s*:\s*['"]([^'"]+)['"]"""
+        r"""(?:labelKey|groupLabelKey|summaryLabelKey|licenseSummaryLabelKey|tableTitleKey|emptyKey|countSummaryKey)\s*:\s*['"]([^'"]+)['"]"""
     )
     for match in config_pattern.finditer(text, start):
         keys.append(match.group(1))
