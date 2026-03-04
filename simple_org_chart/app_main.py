@@ -191,6 +191,9 @@ if PRESENCE_REFRESH_SECONDS < _PRESENCE_REFRESH_MIN:
     )
     PRESENCE_REFRESH_SECONDS = _PRESENCE_REFRESH_MIN
 
+# Maximum number of IDs accepted per /api/presence request.
+_PRESENCE_MAX_IDS_PER_REQUEST = 5000
+
 # Security headers (configurable via .env)
 SECURITY_HEADER_CONTENT_TYPE_OPTIONS = os.environ.get('SECURITY_HEADER_CONTENT_TYPE_OPTIONS', 'nosniff')
 SECURITY_HEADER_FRAME_OPTIONS = os.environ.get('SECURITY_HEADER_FRAME_OPTIONS', 'DENY')
@@ -702,6 +705,10 @@ def get_presence():
         if not isinstance(ids, list) or not ids:
             return jsonify({'error': 'ids array required'}), 400
 
+        # Reject oversized requests early to bound CPU/memory work before any iteration.
+        if len(ids) > _PRESENCE_MAX_IDS_PER_REQUEST:
+            return jsonify({'error': f'Too many IDs; maximum is {_PRESENCE_MAX_IDS_PER_REQUEST}'}), 400
+
         # Validate that each ID is a GUID/UUID string.
         def _is_valid_uuid(val: str) -> bool:
             try:
@@ -710,8 +717,7 @@ def get_presence():
             except (ValueError, AttributeError):
                 return False
 
-        # Deduplicate, validate format, and cap to a sane per-request maximum.
-        _MAX_IDS_PER_REQUEST = 5000
+        # Deduplicate and validate format.
         seen: set[str] = set()
         validated_ids: list[str] = []
         for raw_id in ids:
@@ -724,9 +730,6 @@ def get_presence():
 
         if not validated_ids:
             return jsonify({'error': 'No valid UUIDs supplied'}), 400
-
-        if len(validated_ids) > _MAX_IDS_PER_REQUEST:
-            return jsonify({'error': f'Too many IDs; maximum is {_MAX_IDS_PER_REQUEST}'}), 400
 
         # Filter to IDs that are present in the cached employee dataset to prevent
         # arbitrary Graph queries for non-employee IDs.  Treat an unavailable or
