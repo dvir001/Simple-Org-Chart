@@ -22,24 +22,6 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
 
 @pytest.fixture()
-def tmp_data_dir(tmp_path: Path):
-    """Provide a temporary data directory and patch config paths to use it."""
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    settings_file = data_dir / "app_settings.json"
-
-    patches = {
-        "simple_org_chart.config.DATA_DIR": data_dir,
-        "simple_org_chart.config.SETTINGS_FILE": settings_file,
-    }
-    with patch.dict("simple_org_chart.config.__dict__", {
-        "DATA_DIR": data_dir,
-        "SETTINGS_FILE": settings_file,
-    }):
-        yield data_dir
-
-
-@pytest.fixture()
 def sample_employees() -> List[Dict[str, Any]]:
     """Small employee list for hierarchy tests."""
     return [
