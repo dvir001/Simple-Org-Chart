@@ -13,6 +13,8 @@ STATIC_DIR = PROJECT_ROOT / "static"
 
 # Regex to match things like href="/static/foo.css" or src="/static/bar.js"
 _STATIC_REF_RE = re.compile(r'(?:href|src)="/static/([^"]+)"')
+# Regex to match Jinja2 url_for references: url_for('static', filename='foo.css')
+_URL_FOR_STATIC_RE = re.compile(r"""url_for\(\s*['"]static['"]\s*,\s*filename\s*=\s*['"]([^'"]+)['"]\s*\)""")
 # ID references from JS: qs('someId') or getElementById('someId')
 _QS_RE = re.compile(r"""qs\(\s*['"]([^'"]+)['"]\s*\)""")
 _GETBYID_RE = re.compile(r"""getElementById\(\s*['"]([^'"]+)['"]\s*\)""")
@@ -37,10 +39,12 @@ class TestStaticAssets:
 
     def _collect_references(self) -> list[tuple[str, str]]:
         refs = []
+        patterns = [_STATIC_REF_RE, _URL_FOR_STATIC_RE]
         for html_file in TEMPLATES_DIR.glob("*.html"):
             text = html_file.read_text(encoding="utf-8")
-            for match in _STATIC_REF_RE.finditer(text):
-                refs.append((html_file.name, match.group(1)))
+            for pattern in patterns:
+                for match in pattern.finditer(text):
+                    refs.append((html_file.name, match.group(1)))
         return refs
 
     def test_all_static_refs_exist(self):
