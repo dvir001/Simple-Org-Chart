@@ -19,6 +19,7 @@ let siteFilterPicker = null;                // TagPicker-style instance (single 
 let categoryFilterPicker = null;            // TagPicker-style instance for categories (single tab)
 let fullScanSiteFilterPicker = null;        // TagPicker-style instance (all tab)
 let fullScanCategoryFilterPicker = null;    // TagPicker-style instance for categories (all tab)
+let scannerLoudSites = new Set();           // loud sites set, populated after fetch
 
 /** State for the full-scan user-level filters (mirrors last-logins filter toggles). */
 const fullScanFilterState = {

@@ -4,6 +4,8 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
 import atexit
+import contextlib
+import fcntl
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -2630,8 +2632,27 @@ def user_scanner_scan():
 # ---------------------------------------------------------------------------
 _FULL_SCAN_STATE_FILE = os.path.join(DATA_DIR, 'full_scan_state.json')
 _FULL_SCAN_CANCEL_FILE = os.path.join(DATA_DIR, 'full_scan_cancel.flag')
+_FULL_SCAN_LOCK_FILE = os.path.join(DATA_DIR, 'full_scan.lock')
 _FULL_SCAN_LOG_MAX = 200
 _full_scan_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def _full_scan_file_lock():
+    """Acquire an exclusive inter-process file lock around the scan state.
+
+    Combines a threading lock (intra-process) with an fcntl exclusive lock
+    (inter-process) so that multiple Gunicorn workers cannot race on the
+    check-and-set of the running flag.
+    """
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with _full_scan_lock:
+        with open(_FULL_SCAN_LOCK_FILE, 'a') as _lf:
+            try:
+                fcntl.flock(_lf, fcntl.LOCK_EX)
+                yield
+            finally:
+                fcntl.flock(_lf, fcntl.LOCK_UN)
 
 _FULL_SCAN_DEFAULTS: dict = {
     'running': False,
@@ -2759,8 +2780,9 @@ def user_scanner_full_scan():
     if not employees:
         return jsonify({'error': 'No employees match the selected filters.'}), 400
 
-    # Prevent concurrent scans
-    with _full_scan_lock:
+    # Prevent concurrent scans – use an inter-process file lock so that
+    # multiple Gunicorn workers cannot both pass the running=false check.
+    with _full_scan_file_lock():
         state = _read_scan_state()
         if state.get('running'):
             return jsonify({'error': 'A full scan is already running.'}), 409
