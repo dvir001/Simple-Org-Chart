@@ -211,6 +211,10 @@ async function fetchPresenceData() {
                 renderPresenceIcon(d3.select(this), d.data.id);
             });
         }
+        // Also refresh the open employee detail panel so its HTML presence badges stay in sync
+        if (typeof refreshEmployeeDetailPanel === 'function') {
+            refreshEmployeeDetailPanel();
+        }
     } catch (err) {
         console.error('Error fetching presence:', err);
     }
