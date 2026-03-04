@@ -2268,7 +2268,22 @@ function initUserScannerPanel() {
                 employees.forEach(emp => {
                     const item = document.createElement('div');
                     item.className = 'user-scanner-search__item';
-                    item.innerHTML = '<strong>' + (emp.name || '—') + '</strong> <span>' + (emp.email || emp.mail || '') + '</span> <span class="badge badge--neutral">' + (emp.title || '') + '</span>';
+
+                    const nameEl = document.createElement('strong');
+                    nameEl.textContent = emp.name || '—';
+
+                    const emailEl = document.createElement('span');
+                    emailEl.textContent = emp.email || emp.mail || '';
+
+                    const titleEl = document.createElement('span');
+                    titleEl.className = 'badge badge--neutral';
+                    titleEl.textContent = emp.title || '';
+
+                    item.appendChild(nameEl);
+                    item.appendChild(document.createTextNode(' '));
+                    item.appendChild(emailEl);
+                    item.appendChild(document.createTextNode(' '));
+                    item.appendChild(titleEl);
                     item.addEventListener('click', () => {
                         selectedScanUser = {
                             name: emp.name || '',
