@@ -733,17 +733,18 @@ def get_presence():
             return jsonify({'error': 'No valid UUIDs supplied'}), 400
 
         # Filter to IDs that are present in the cached employee dataset to prevent
-        # arbitrary Graph queries for non-employee IDs.  Treat an unavailable or
-        # empty cache as an error so we never fall through with unfiltered IDs.
+        # arbitrary Graph queries for non-employee IDs. If the cache is unavailable
+        # or contains no IDs, skip the presence lookup entirely and return an empty
+        # map rather than treating it as a hard service outage.
         cached_employees = load_cached_employees()
         if not cached_employees:
-            logger.error("Employee cache unavailable; refusing presence lookup")
-            return jsonify({'error': 'Employee cache unavailable'}), 503
+            logger.warning("Employee cache unavailable; returning empty presence map")
+            return jsonify({}), 200
 
         known_ids: set[str] = {emp['id'] for emp in cached_employees if emp.get('id')}
         if not known_ids:
-            logger.error("Employee cache contained no IDs; refusing presence lookup")
-            return jsonify({'error': 'Employee cache unavailable'}), 503
+            logger.warning("Employee cache contained no IDs; returning empty presence map")
+            return jsonify({}), 200
 
         validated_ids = [i for i in validated_ids if i in known_ids]
         if not validated_ids:
