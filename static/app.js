@@ -186,19 +186,32 @@ async function fetchPresenceData() {
     const ids = allEmployees.map(e => e.id).filter(Boolean);
     if (!ids.length) return;
 
+    // Match the server-side PRESENCE_BATCH_SIZE (default 650) to avoid truncation.
+    const batchSize = 650;
+
     try {
-        const response = await fetch(`${API_BASE_URL}/api/presence`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids }),
-        });
-        if (!response.ok) return;
-        const data = await response.json();
+        // Start fresh for this fetch cycle.
         presenceData.clear();
-        for (const [id, info] of Object.entries(data)) {
-            presenceData.set(id, info);
+
+        for (let start = 0; start < ids.length; start += batchSize) {
+            const batchIds = ids.slice(start, start + batchSize);
+            const response = await fetch(`${API_BASE_URL}/api/presence`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: batchIds }),
+            });
+            if (!response.ok) {
+                // Skip this batch but continue with others.
+                console.error('Error fetching presence batch:', response.status, response.statusText);
+                continue;
+            }
+            const data = await response.json();
+            for (const [id, info] of Object.entries(data)) {
+                presenceData.set(id, info);
+            }
         }
-        // Refresh icons on visible nodes
+
+        // Refresh icons on visible nodes once all batches are processed.
         if (nodeLayer) {
             nodeLayer.selectAll('.presence-indicator').each(function(d) {
                 renderPresenceIcon(d3.select(this), d.data.id);
