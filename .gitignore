@@ -2,3 +2,7 @@
 
 # External tools downloaded at runtime
 repositories/
+
+# Python bytecode
+__pycache__/
+*.pyc

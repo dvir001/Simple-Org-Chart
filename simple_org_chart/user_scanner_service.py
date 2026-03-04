@@ -321,6 +321,8 @@ def _scan_filtered(
             continue
         for mod in load_modules(cat_path):
             name = get_site_name(mod)
+            if not name:
+                continue
             if site_lower and name.lower() not in site_lower:
                 continue
             if not allow_loud and is_loud(name, is_email=is_email):
