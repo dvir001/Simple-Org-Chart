@@ -839,7 +839,14 @@ def collect_disabled_licensed_users(
 # Teams Presence
 # ---------------------------------------------------------------------------
 
-_PRESENCE_BATCH_LIMIT = int(os.environ.get('PRESENCE_BATCH_SIZE', '650'))
+_PRESENCE_BATCH_LIMIT: int = int(os.environ.get('PRESENCE_BATCH_SIZE', '650'))
+if not 1 <= _PRESENCE_BATCH_LIMIT <= 650:
+    logger.warning(
+        "PRESENCE_BATCH_SIZE=%s is outside the valid range [1, 650]; clamping.",
+        _PRESENCE_BATCH_LIMIT,
+    )
+    _PRESENCE_BATCH_LIMIT = max(1, min(_PRESENCE_BATCH_LIMIT, 650))
+_PRESENCE_MAX_RETRY_SLEEP = 60  # cap Retry-After sleep to avoid tying up a worker
 
 
 def fetch_presence_by_user_ids(
@@ -872,7 +879,11 @@ def fetch_presence_by_user_ids(
         try:
             response = requests.post(url, headers=headers, json={"ids": chunk}, timeout=15)
             if response.status_code == 429:
-                retry_after = int(response.headers.get("Retry-After", "5"))
+                try:
+                    retry_after = int(response.headers.get("Retry-After", "5"))
+                except (ValueError, TypeError):
+                    retry_after = 5
+                retry_after = min(retry_after, _PRESENCE_MAX_RETRY_SLEEP)
                 logger.warning("Presence API rate-limited, waiting %ss", retry_after)
                 time.sleep(retry_after)
                 response = requests.post(url, headers=headers, json={"ids": chunk}, timeout=15)
