@@ -192,28 +192,32 @@ async function fetchPresenceData() {
     const ids = Array.from(visibleIds);
     if (!ids.length) return;
 
-    // Match the server-side PRESENCE_BATCH_SIZE (default 650) to avoid truncation per request.
-    const batchSize = 650;
+    // Send all visible IDs in a single request; the server handles Graph-level batching
+    // internally (up to 5 000 IDs accepted per request).
+    const maxIdsPerRequest = 5000;
+    const requestIds = ids.slice(0, maxIdsPerRequest);
 
     presenceFetchInFlight = true;
     try {
-        // Start fresh for this fetch cycle.
-        presenceData.clear();
+        // Accumulate into a fresh map so we can swap atomically at the end,
+        // preventing UI flicker while the request is in flight.
+        const newPresenceData = new Map();
 
-        for (let start = 0; start < ids.length; start += batchSize) {
-            const batchIds = ids.slice(start, start + batchSize);
-            const response = await fetch(`${API_BASE_URL}/api/presence`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: batchIds }),
-            });
-            if (!response.ok) {
-                // Skip this batch but continue with others.
-                console.error('Error fetching presence batch:', response.status, response.statusText);
-                continue;
-            }
+        const response = await fetch(`${API_BASE_URL}/api/presence`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: requestIds }),
+        });
+        if (!response.ok) {
+            console.error('Error fetching presence:', response.status, response.statusText);
+        } else {
             const data = await response.json();
             for (const [id, info] of Object.entries(data)) {
+                newPresenceData.set(id, info);
+            }
+            // Atomic swap: replace the live map only after data is fully loaded.
+            presenceData.clear();
+            for (const [id, info] of newPresenceData) {
                 presenceData.set(id, info);
             }
         }
