@@ -71,9 +71,16 @@ def save_email_config(config: Dict[str, Any]) -> bool:
     """Save email configuration to disk."""
     EMAIL_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     
+    # Preserve lastSent from existing on-disk config when the caller
+    # (e.g. the configure page) does not supply it.
+    existing = load_email_config()
+    
     # Merge with defaults
     persisted = DEFAULT_EMAIL_CONFIG.copy()
     persisted.update(config)
+    
+    if 'lastSent' not in config:
+        persisted['lastSent'] = existing.get('lastSent')
     
     # Validate file types
     valid_file_types = {"svg", "png", "pdf", "xlsx"}
@@ -120,69 +127,95 @@ def get_report_types() -> List[str]:
     ]
 
 
+def _is_scheduled_day(
+    now: datetime,
+    frequency: str,
+    day_of_week: str,
+    day_of_month: str,
+) -> bool:
+    """Return True if *today* is a valid send day for the configured schedule."""
+    if frequency == 'daily':
+        return True
+
+    if frequency == 'weekly':
+        return now.strftime('%A').lower() == day_of_week
+
+    if frequency == 'monthly':
+        if day_of_month == 'first':
+            return now.day == 1
+        if day_of_month == 'last':
+            tomorrow = now + timedelta(days=1)
+            return tomorrow.day == 1
+
+    return False
+
+
+def _already_sent_this_period(
+    now: datetime,
+    last_sent: datetime,
+    frequency: str,
+) -> bool:
+    """Return True if an email was already sent during the current calendar period."""
+    if frequency == 'daily':
+        # Same UTC calendar day → already sent
+        return last_sent.date() >= now.date()
+
+    if frequency == 'weekly':
+        # Sent fewer than ~7 days ago on or after the most recent scheduled day
+        return (now - last_sent) < timedelta(days=6, hours=23)
+
+    if frequency == 'monthly':
+        # Same calendar month (UTC) → already sent
+        return (last_sent.year, last_sent.month) >= (now.year, now.month)
+
+    return False
+
+
 def should_send_email_now() -> bool:
     """
     Check if an email should be sent based on the current schedule.
-    
+
+    The check is **calendar-based**: it first verifies that today matches
+    the configured schedule day, then verifies that no email has already
+    been sent for the current period.  The ``lastSent`` timestamp is
+    persisted in ``email_config.json`` so the decision survives restarts
+    and container rebuilds as long as the ``data/`` directory is retained.
+
     Returns:
         True if email should be sent, False otherwise
     """
     email_config = load_email_config()
-    
+
     if not email_config.get('enabled'):
         return False
-    
-    last_sent_str = email_config.get('lastSent')
+
     frequency = email_config.get('frequency', 'weekly')
     day_of_week = email_config.get('dayOfWeek', 'monday').lower()
     day_of_month = email_config.get('dayOfMonth', 'first')
-    
+
     now = datetime.now(timezone.utc)
-    
-    # If never sent before, send now
+
+    # 1. Is today a valid send day for this schedule?
+    if not _is_scheduled_day(now, frequency, day_of_week, day_of_month):
+        return False
+
+    # 2. Have we already sent during this period?
+    last_sent_str = email_config.get('lastSent')
     if not last_sent_str:
-        logger.info("Email never sent before, sending now")
+        logger.info("Email never sent before and today matches schedule — sending now")
         return True
-    
+
     try:
         last_sent = datetime.fromisoformat(last_sent_str.replace('Z', '+00:00'))
     except (ValueError, AttributeError):
-        logger.warning(f"Invalid lastSent timestamp: {last_sent_str}, treating as never sent")
+        logger.warning("Invalid lastSent timestamp: %s; treating as never sent", last_sent_str)
         return True
-    
-    # Calculate if enough time has passed based on frequency
-    if frequency == 'daily':
-        # Send if it's the configured day of week and last sent was yesterday or earlier
-        # Use 23-hour buffer to prevent timing issues from skipping emails
-        current_day = now.strftime('%A').lower()
-        if current_day == day_of_week:
-            time_since_last = now - last_sent
-            return time_since_last >= timedelta(hours=23)
-    
-    elif frequency == 'weekly':
-        # Send if it's the configured day of week and at least 7 days have passed
-        # Use 6d23h buffer to prevent timing issues from skipping emails
-        current_day = now.strftime('%A').lower()
-        if current_day == day_of_week:
-            time_since_last = now - last_sent
-            return time_since_last >= timedelta(days=6, hours=23)
-    
-    elif frequency == 'monthly':
-        # Send on first or last day of month if at least 28 days have passed
-        time_since_last = now - last_sent
-        if time_since_last < timedelta(days=28):
-            return False
-        
-        if day_of_month == 'first':
-            # Send on the 1st of the month
-            return now.day == 1
-        elif day_of_month == 'last':
-            # Send on the last day of the month
-            # Check if tomorrow is the 1st of next month
-            tomorrow = now + timedelta(days=1)
-            return tomorrow.day == 1
-    
-    return False
+
+    if _already_sent_this_period(now, last_sent, frequency):
+        return False
+
+    logger.info("Schedule period elapsed since last send (%s) — sending now", last_sent_str)
+    return True
 
 
 def mark_email_sent() -> None:
@@ -203,4 +236,6 @@ __all__ = [
     "get_report_types",
     "should_send_email_now",
     "mark_email_sent",
+    "_is_scheduled_day",
+    "_already_sent_this_period",
 ]
