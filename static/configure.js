@@ -1204,6 +1204,12 @@ function applySettings(settings) {
         xmlFilenameEl.value = settings.directoryXmlFilename || 'contacts';
     }
 
+    // Teams Presence
+    const teamsPresenceEl = document.getElementById('teamsPresenceEnabled');
+    if (teamsPresenceEl) {
+        teamsPresenceEl.checked = settings.teamsPresenceEnabled === true;
+    }
+
     // User Scanner
     const userScannerEl = document.getElementById('userScannerEnabled');
     if (userScannerEl) {
@@ -1644,6 +1650,7 @@ function resetAllSettings() {
     document.getElementById('hideNoTitle').checked = true;
     document.getElementById('printOrientation').value = 'landscape';
     document.getElementById('printSize').value = 'a4';
+    document.getElementById('teamsPresenceEnabled').checked = false;
 
     markUnsavedChange('resetAll');
     showStatus('Default settings applied. Save to confirm.', 'info');
@@ -1717,7 +1724,8 @@ async function saveAllSettings() {
         directoryJsonFilename: (document.getElementById('directoryJsonFilename')?.value || 'contacts').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'contacts',
         directoryXmlEnabled: document.getElementById('directoryXmlEnabled')?.checked || false,
         directoryXmlFilename: (document.getElementById('directoryXmlFilename')?.value || 'contacts').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'contacts',
-        userScannerEnabled: document.getElementById('userScannerEnabled')?.checked || false
+        userScannerEnabled: document.getElementById('userScannerEnabled')?.checked || false,
+        teamsPresenceEnabled: document.getElementById('teamsPresenceEnabled')?.checked || false
     };
 
     try {

@@ -70,6 +70,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "ignoredTitles": "",
     "customDirectoryContacts": "",
     "userScannerEnabled": False,
+    "teamsPresenceEnabled": False,
 }
 
 _filter_legacy_split_re = re.compile(r"\s*[;,]+\s*")

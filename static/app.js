@@ -42,6 +42,228 @@ let currentTitleEditEmployeeId = null;
 let lastFocusBeforeTitleModal = null;
 let currentOverrideFocusField = 'title';
 
+// --- Teams Presence ---
+const presenceData = new Map();
+let presenceRefreshTimer = null;
+let presenceFetchInFlight = false;
+const PRESENCE_ICON_RADIUS = 7;
+
+// Human-readable labels for activity values are stored in the locale file
+// under the key "presence.activity.<ActivityValue>".
+
+function getPresenceLabel(userId) {
+    const p = presenceData.get(userId);
+    if (!p) return '';
+    if (p.activity) {
+        const actLabel = t(`presence.activity.${p.activity}`);
+        if (actLabel && actLabel !== `presence.activity.${p.activity}`) return actLabel;
+    }
+    if (p.availability) {
+        const availLabel = t(`presence.activity.${p.availability}`);
+        if (availLabel && availLabel !== `presence.activity.${p.availability}`) return availLabel;
+    }
+    return p.availability || '';
+}
+
+/**
+ * Resolve the icon type from availability + activity.
+ * Returns one of: available, busy, dnd, away, ooo, offline, unknown.
+ */
+function _presenceIconType(userId) {
+    const p = presenceData.get(userId);
+    if (!p) return null;
+    const avail = p.availability || '';
+    const act = p.activity || '';
+    if (act === 'OutOfOffice') return 'ooo';
+    if (avail === 'Available' || avail === 'AvailableIdle') return 'available';
+    if (avail === 'DoNotDisturb' || act === 'DoNotDisturb' || act === 'UrgentInterruptionsOnly') return 'dnd';
+    if (avail === 'Busy' || avail === 'BusyIdle') return 'busy';
+    if (avail === 'Away' || avail === 'BeRightBack') return 'away';
+    if (avail === 'Offline' || avail === 'OffWork' || act === 'OffWork') return 'offline';
+    return 'unknown';
+}
+
+/**
+ * Draw a Teams-style presence icon inside a <g> group.
+ * The group should already be translated to the desired position.
+ */
+function renderPresenceIcon(group, userId) {
+    group.selectAll('*').remove();
+    const type = _presenceIconType(userId);
+    if (!type) { group.style('display', 'none'); return; }
+    group.style('display', null);
+    const r = PRESENCE_ICON_RADIUS;
+
+    switch (type) {
+        case 'available': {
+            // Green circle + white checkmark
+            group.append('circle').attr('r', r).attr('fill', '#6BB700').attr('stroke', '#fff').attr('stroke-width', 1.5);
+            group.append('path')
+                .attr('d', `M${-r*0.35},${r*0.05} L${-r*0.05},${r*0.38} L${r*0.4},${-r*0.3}`)
+                .attr('fill', 'none').attr('stroke', '#fff').attr('stroke-width', 1.8)
+                .attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
+            break;
+        }
+        case 'busy': {
+            // Red solid circle
+            group.append('circle').attr('r', r).attr('fill', '#C4314B').attr('stroke', '#fff').attr('stroke-width', 1.5);
+            break;
+        }
+        case 'dnd': {
+            // Red circle + white horizontal bar
+            group.append('circle').attr('r', r).attr('fill', '#C4314B').attr('stroke', '#fff').attr('stroke-width', 1.5);
+            group.append('line')
+                .attr('x1', -r * 0.45).attr('y1', 0).attr('x2', r * 0.45).attr('y2', 0)
+                .attr('stroke', '#fff').attr('stroke-width', 2).attr('stroke-linecap', 'round');
+            break;
+        }
+        case 'away': {
+            // Yellow circle + white clock
+            group.append('circle').attr('r', r).attr('fill', '#FFAA44').attr('stroke', '#fff').attr('stroke-width', 1.5);
+            // Clock face
+            group.append('circle').attr('r', r * 0.48).attr('fill', 'none').attr('stroke', '#fff').attr('stroke-width', 1.2);
+            // Hour hand (12 o'clock)
+            group.append('line').attr('x1', 0).attr('y1', r * 0.05).attr('x2', 0).attr('y2', -r * 0.32)
+                .attr('stroke', '#fff').attr('stroke-width', 1.2).attr('stroke-linecap', 'round');
+            // Minute hand (3 o'clock)
+            group.append('line').attr('x1', 0).attr('y1', r * 0.05).attr('x2', r * 0.28).attr('y2', r * 0.05)
+                .attr('stroke', '#fff').attr('stroke-width', 1.2).attr('stroke-linecap', 'round');
+            break;
+        }
+        case 'ooo': {
+            // Purple circle + white right arrow
+            group.append('circle').attr('r', r).attr('fill', '#B4009E').attr('stroke', '#fff').attr('stroke-width', 1.5);
+            group.append('path')
+                .attr('d', `M${-r*0.4},0 L${r*0.3},0 M${r*0.05},${-r*0.28} L${r*0.3},0 L${r*0.05},${r*0.28}`)
+                .attr('fill', 'none').attr('stroke', '#fff').attr('stroke-width', 1.8)
+                .attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
+            break;
+        }
+        case 'offline': {
+            // White circle with gray border + gray X
+            group.append('circle').attr('r', r).attr('fill', '#fff').attr('stroke', '#B4B4B4').attr('stroke-width', 1.5);
+            const s = r * 0.32;
+            group.append('line').attr('x1', -s).attr('y1', -s).attr('x2', s).attr('y2', s)
+                .attr('stroke', '#B4B4B4').attr('stroke-width', 1.8).attr('stroke-linecap', 'round');
+            group.append('line').attr('x1', s).attr('y1', -s).attr('x2', -s).attr('y2', s)
+                .attr('stroke', '#B4B4B4').attr('stroke-width', 1.8).attr('stroke-linecap', 'round');
+            break;
+        }
+        default: {
+            // Gray circle (unknown)
+            group.append('circle').attr('r', r).attr('fill', '#B4B4B4').attr('stroke', '#fff').attr('stroke-width', 1.5);
+            break;
+        }
+    }
+
+    group.append('title').text(getPresenceLabel(userId));
+}
+
+/**
+ * Build an HTML presence badge (dot + label) for the side detail panel.
+ * Returns an HTML string or empty string when presence is unavailable.
+ */
+function buildPresenceBadgeHTML(userId) {
+    if (!appSettings.teamsPresenceEnabled) return '';
+    const type = _presenceIconType(userId);
+    if (!type) return '';
+    const label = getPresenceLabel(userId);
+    const colorMap = {
+        available: '#6BB700', busy: '#C4314B', dnd: '#C4314B',
+        away: '#FFAA44', ooo: '#B4009E', offline: '#B4B4B4', unknown: '#B4B4B4'
+    };
+    const color = colorMap[type] || '#B4B4B4';
+    return `<span class="presence-badge" title="${escapeHtml(label)}"><span class="presence-dot" style="background:${color}"></span> ${escapeHtml(label)}</span>`;
+}
+
+async function fetchPresenceData() {
+    if (!appSettings.teamsPresenceEnabled) return;
+    if (presenceFetchInFlight) return;
+
+    // Derive IDs from currently-rendered nodes so we only fetch presence for visible employees.
+    if (!nodeLayer) return;
+    const visibleIds = new Set();
+    nodeLayer.selectAll('.presence-indicator').each(function(d) {
+        const id = d && d.data && d.data.id;
+        if (id) {
+            visibleIds.add(id);
+        }
+    });
+    const ids = Array.from(visibleIds);
+    if (!ids.length) return;
+
+    // Page requests so that all visible IDs are covered (server accepts up to 5 000 per call).
+    const maxIdsPerRequest = 5000;
+
+    presenceFetchInFlight = true;
+    try {
+        // Accumulate into a fresh map so we can swap atomically at the end,
+        // preventing UI flicker while the request is in flight.
+        const newPresenceData = new Map();
+
+        for (let start = 0; start < ids.length; start += maxIdsPerRequest) {
+            const batchIds = ids.slice(start, start + maxIdsPerRequest);
+            const response = await fetch(`${API_BASE_URL}/api/presence`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: batchIds }),
+            });
+            if (!response.ok) {
+                console.error(`Error fetching presence batch (offset ${start}):`, response.status, response.statusText);
+                continue;
+            }
+            const data = await response.json();
+            for (const [id, info] of Object.entries(data)) {
+                newPresenceData.set(id, info);
+            }
+        }
+
+        // Merge new data into the live map: update entries that were successfully
+        // fetched, and preserve existing entries for IDs whose batches failed.
+        for (const [id, info] of newPresenceData) {
+            presenceData.set(id, info);
+        }
+
+        // Refresh icons on visible nodes once all batches are processed.
+        if (nodeLayer) {
+            nodeLayer.selectAll('.presence-indicator').each(function(d) {
+                renderPresenceIcon(d3.select(this), d.data.id);
+            });
+        }
+        // Also refresh the open employee detail panel so its HTML presence badges stay in sync
+        if (typeof refreshEmployeeDetailPanel === 'function') {
+            refreshEmployeeDetailPanel();
+        }
+    } catch (err) {
+        console.error('Error fetching presence:', err);
+    } finally {
+        presenceFetchInFlight = false;
+    }
+}
+
+function startPresencePolling() {
+    stopPresencePolling();
+    if (!appSettings.teamsPresenceEnabled) {
+        // Feature disabled – clear stale data and hide icons
+        presenceData.clear();
+        if (nodeLayer) {
+            nodeLayer.selectAll('.presence-indicator').each(function() {
+                d3.select(this).style('display', 'none');
+            });
+        }
+        return;
+    }
+    fetchPresenceData();
+    presenceRefreshTimer = setInterval(fetchPresenceData, (appSettings.presenceRefreshSeconds || 120) * 1000);
+}
+
+function stopPresencePolling() {
+    if (presenceRefreshTimer) {
+        clearInterval(presenceRefreshTimer);
+        presenceRefreshTimer = null;
+    }
+}
+
 function loadTitleOverrides() {
     try {
         if (!window.sessionStorage) {
@@ -1848,6 +2070,7 @@ async function init() {
             initializeTopUserSearch();
             preloadEmployeeImages(allEmployees);
             renderOrgChart(currentData);
+            startPresencePolling();
         } else {
             throw new Error('No data received from server');
         }
@@ -1893,6 +2116,7 @@ async function refreshOrgChart() {
             initializeTopUserSearch();
             preloadEmployeeImages(allEmployees);
             renderOrgChart(currentData);
+            startPresencePolling();
         }
     } catch (error) {
         console.error('Error refreshing org chart:', error);
@@ -2655,6 +2879,7 @@ async function reloadEmployeeData() {
             pruneDepartmentOverrides(validIds);
             preloadEmployeeImages(allEmployees);
             renderOrgChart(currentData);
+            startPresencePolling();
         } else {
             throw new Error('No data received from server');
         }
@@ -2948,6 +3173,14 @@ function update(source) {
         applyProfileImageAttributes(nodeEnter.append('image'));
     }
 
+    // Teams Presence icon (top-left corner of card)
+    nodeEnter.append('g')
+        .attr('class', 'presence-indicator')
+        .attr('transform', `translate(${-nodeWidth / 2 + 10}, ${-nodeHeight / 2 + 10})`)
+        .each(function(d) {
+            renderPresenceIcon(d3.select(this), d.data.id);
+        });
+
     const namesInitiallyVisible = isNameVisible();
     const titlesInitiallyVisible = isJobTitleVisible();
     const departmentsInitiallyVisible = isDepartmentVisible();
@@ -3108,6 +3341,11 @@ function update(source) {
 
     nodeMerge.selectAll('.new-employee-badge')
         .style('display', d => (highlightEnabled && d.data.isNewEmployee) ? 'block' : 'none');
+
+    // Update presence icons
+    nodeMerge.selectAll('.presence-indicator').each(function(d) {
+        renderPresenceIcon(d3.select(this), d.data.id);
+    });
 
     const nodeUpdate = nodeMerge
         .attr('class', d => {
@@ -4731,12 +4969,15 @@ function showEmployeeDetail(employee) {
         </div>
     `;
 
+    const presenceBadge = buildPresenceBadgeHTML(detailEmployee.id);
+
     headerContent.innerHTML = `
         <div class="employee-avatar-container">
             ${employeeAvatar}
         </div>
         <div class="employee-name">
             ${displayName ? `<h2>${escapeHtml(displayName)}</h2>` : ''}
+            ${presenceBadge}
         </div>
         ${titleMarkup}
         ${departmentMarkup}
@@ -4835,6 +5076,8 @@ function showEmployeeDetail(employee) {
                 ? `<div class="manager-title">${escapeHtml(managerTitleDisplay)}</div>`
                 : '';
 
+            const managerPresence = buildPresenceBadgeHTML(manager.id);
+
             infoHTML += `
                 <div class="manager-section">
                     <h3>${managerHeading}</h3>
@@ -4845,6 +5088,7 @@ function showEmployeeDetail(employee) {
                         <div class="manager-details">
                             <div class="manager-name">${escapeHtml(managerDisplayName)}</div>
                             ${managerTitleMarkup}
+                            ${managerPresence}
                         </div>
                     </div>
                 </div>
@@ -4883,6 +5127,8 @@ function showEmployeeDetail(employee) {
                         ? `<div class="report-title">${escapeHtml(reportTitleDisplay)}</div>`
                         : '';
 
+                    const reportPresence = buildPresenceBadgeHTML(report.id);
+
                     return `
                         <div class="report-item" data-employee-id="${escapeHtml(report.id)}">
                             <div class="report-avatar-container">
@@ -4891,6 +5137,7 @@ function showEmployeeDetail(employee) {
                             <div class="report-details">
                                 <div class="report-name">${escapeHtml(reportDisplayName)}</div>
                                 ${reportTitleMarkup}
+                                ${reportPresence}
                             </div>
                         </div>
                     `;

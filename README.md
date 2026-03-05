@@ -37,6 +37,7 @@ SimpleOrgChart is a Flask application backed by Azure Active Directory (Entra ID
 
 2. **Assign Microsoft Graph Application Permissions**
    - `User.Read.All`
+   - `Presence.Read.All` *(enables live Teams presence status indicators on org chart cards)*
    - `LicenseAssignment.Read.All` *(required for licensing insights and admin reports)*
    - `AuditLog.Read.All` *(required for last sign-in metrics and disabled-user audit timestamps)*
    - `MailboxSettings.Read` *(enables mailbox-type metadata used by last sign-in filters; without it, all mailboxes are treated as standard users)*
@@ -91,6 +92,9 @@ python -c "import secrets; print(secrets.token_hex(32))"
 | `RATE_LIMIT_SETTINGS` | `20 per minute` | Rate limit for settings endpoints. |
 | `RATE_LIMIT_UPLOAD` | `5 per minute` | Rate limit for file upload endpoints. |
 | `RATE_LIMIT_REFRESH` | `1 per minute` | Rate limit for data refresh endpoints. |
+| `RATE_LIMIT_PRESENCE` | `60 per minute` | Rate limit for the Teams presence endpoint. |
+| `PRESENCE_REFRESH_SECONDS` | `120` | How often the client refreshes Teams presence status (seconds). |
+| `PRESENCE_BATCH_SIZE` | `650` | Maximum user IDs per Graph presence batch request (Graph API max is 650). |
 | `SECURITY_HEADER_CONTENT_TYPE_OPTIONS` | `nosniff` | `X-Content-Type-Options` header value. |
 | `SECURITY_HEADER_FRAME_OPTIONS` | `DENY` | `X-Frame-Options` header value. |
 | `SECURITY_HEADER_XSS_PROTECTION` | `1; mode=block` | `X-XSS-Protection` header value. |
@@ -127,6 +131,7 @@ docker compose up -d
 ## Key Features
 
 - **Interactive D3 Org Chart**: Pan, zoom, and expand/collapse hierarchies with persistent hidden subtrees.
+- **Teams Presence Indicators**: Live Microsoft Teams status icons on each card (Available, Busy, Do Not Disturb, Away, Out of Office, Offline) with automatic refresh.
 - **Search & Discovery**: Real-time directory search, quick navigation helpers, and configurable filters for guests/disabled users.
 - **Configuration UI** (`/configure`): Adjust styling, filtering, export columns, scheduling, and email reports without editing files.
 - **Admin Reports** (`/reports`):
@@ -291,6 +296,32 @@ Example XML structure:
   </DirectoryEntry>
 </YealinkIPPhoneDirectory>
 ```
+
+## Teams Presence
+
+SimpleOrgChart displays live Microsoft Teams presence status on each org chart card. **Disabled by default.**
+
+Presence icons follow the standard Teams visual language:
+
+| Icon | Status | Color |
+| --- | --- | --- |
+| ✓ checkmark | Available | Green |
+| solid circle | Busy / In a Call / In a Meeting / Presenting | Red |
+| — bar | Do Not Disturb | Red |
+| clock | Away / Be Right Back | Yellow |
+| → arrow | Out of Office | Purple |
+| ✕ cross | Offline / Off Work | Gray |
+
+### Enabling
+
+1. Ensure `Presence.Read.All` (Application) is granted and admin-consented in your Entra ID app registration
+2. Navigate to `/configure` and locate the **🟢 Teams Presence** section
+3. Toggle **Enable Teams Presence**
+4. Save settings
+
+Once enabled, the org chart fetches presence for all visible employees on load and refreshes automatically (every two minutes by default; configurable via the `PRESENCE_REFRESH_SECONDS` environment variable). Each card shows a small Teams-style icon at the top-left corner of the card; hovering displays the detailed status (e.g., "In a Meeting" rather than just "Busy").
+
+The backend calls the Graph `POST /communications/getPresencesByUserId` endpoint in batches of up to `PRESENCE_BATCH_SIZE` user IDs per request (default 650, the Graph API maximum) and relies on Microsoft Graph's built-in rate limiting (it may receive 429 responses if limits are exceeded under heavy load).
 
 ## User Scanner (OSINT)
 

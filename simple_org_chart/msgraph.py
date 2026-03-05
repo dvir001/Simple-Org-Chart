@@ -835,6 +835,85 @@ def collect_disabled_licensed_users(
     return licensed_records
 
 
+# ---------------------------------------------------------------------------
+# Teams Presence
+# ---------------------------------------------------------------------------
+
+try:
+    _PRESENCE_BATCH_LIMIT: int = int(os.environ.get('PRESENCE_BATCH_SIZE', '650'))
+except (ValueError, TypeError):
+    logger.warning(
+        "PRESENCE_BATCH_SIZE env var is not a valid integer; using default 650.",
+    )
+    _PRESENCE_BATCH_LIMIT = 650
+if not 1 <= _PRESENCE_BATCH_LIMIT <= 650:
+    logger.warning(
+        "PRESENCE_BATCH_SIZE=%s is outside the valid range [1, 650]; clamping.",
+        _PRESENCE_BATCH_LIMIT,
+    )
+    _PRESENCE_BATCH_LIMIT = max(1, min(_PRESENCE_BATCH_LIMIT, 650))
+
+
+def fetch_presence_by_user_ids(
+    user_ids: Sequence[str],
+    *,
+    token: Optional[str] = None,
+) -> dict[str, dict]:
+    """Fetch Teams presence for a list of user IDs via the batch endpoint.
+
+    Returns ``{userId: {"availability": ..., "activity": ...}}`` dict.
+    Users whose presence could not be resolved are omitted.
+    """
+
+    token = token or get_access_token()
+    if not token:
+        logger.error("Cannot fetch presence – no access token")
+        return {}
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    result: dict[str, dict] = {}
+    url = f"{GRAPH_API_ENDPOINT}/communications/getPresencesByUserId"
+
+    # Process in chunks of _PRESENCE_BATCH_LIMIT
+    for i in range(0, len(user_ids), _PRESENCE_BATCH_LIMIT):
+        chunk = list(user_ids[i : i + _PRESENCE_BATCH_LIMIT])
+        try:
+            response = requests.post(url, headers=headers, json={"ids": chunk}, timeout=15)
+            if response.status_code == 429:
+                retry_after_header = response.headers.get("Retry-After")
+                logger.warning(
+                    "Presence API rate-limited (status 429) at offset %s; "
+                    "Retry-After=%r. Skipping remaining presence lookups for this request.",
+                    i,
+                    retry_after_header,
+                )
+                break
+            response.raise_for_status()
+            try:
+                data = response.json()
+            except ValueError as json_err:
+                logger.error(
+                    "Error decoding presence response JSON (offset %s): %s", i, json_err
+                )
+                continue
+            for entry in data.get("value", []):
+                uid = entry.get("id")
+                if uid:
+                    result[uid] = {
+                        "availability": entry.get("availability") or "PresenceUnknown",
+                        "activity": entry.get("activity") or "",
+                    }
+        except requests.RequestException as exc:
+            logger.error("Error fetching presence batch (offset %s): %s", i, exc)
+
+    logger.debug("Fetched presence for %s / %s users", len(result), len(user_ids))
+    return result
+
+
 __all__ = [
     "calculate_days_since",
     "collect_disabled_licensed_users",
@@ -843,6 +922,7 @@ __all__ = [
     "datetime_to_iso",
     "fetch_all_employees",
     "fetch_employee_photo",
+    "fetch_presence_by_user_ids",
     "fetch_subscribed_sku_map",
     "get_access_token",
     "parse_graph_datetime",
