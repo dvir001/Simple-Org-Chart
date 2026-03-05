@@ -3693,6 +3693,8 @@ function toggle(d) {
     }
     update(d);
     updateToggleExpandButton();
+    // Fetch presence for any newly-visible nodes
+    fetchPresenceData();
 }
 
 function hasAnyCollapsedNodes() {
@@ -3732,6 +3734,8 @@ function expandAll() {
     });
     update(root);
     updateToggleExpandButton();
+    // Fetch presence for newly-visible nodes
+    fetchPresenceData();
 }
 
 function collapseAll() {
