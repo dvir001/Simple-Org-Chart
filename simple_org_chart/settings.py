@@ -13,7 +13,7 @@ from .config import SETTINGS_FILE
 logger = logging.getLogger(__name__)
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "chartTitle": "DB Auto Org Chart",
+    "chartTitle": "Simple Org Chart",
     "headerColor": "#0078D4",
     "logoPath": "/static/icon.png",
     "faviconPath": "/favicon.ico",
@@ -68,7 +68,6 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "ignoredEmployees": "",
     "ignoredDepartments": "",
     "ignoredTitles": "",
-    "customDirectoryContacts": "",
     "userScannerEnabled": False,
     "teamsPresenceEnabled": False,
 }

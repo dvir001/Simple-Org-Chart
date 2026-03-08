@@ -107,7 +107,7 @@ logconfig_dict = {
 }
 
 # Process naming
-proc_name = 'db_autorgchart'
+proc_name = 'simple_org_chart'
 
 # Server mechanics
 daemon = False

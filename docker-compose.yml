@@ -1,7 +1,7 @@
 services:
-  orgchart:
+  simple-org-chart:
     image: ghcr.io/dvir001/db-auto-org-chart:latest
-    container_name: orgchart
+    container_name: simple-org-chart
     restart: unless-stopped
     ports:
       - "${APP_PORT:-5000}:${APP_PORT:-5000}"

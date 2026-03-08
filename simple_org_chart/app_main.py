@@ -130,10 +130,7 @@ from simple_org_chart.data_update import (
     update_employee_data,
     _load_fetch_all_employees_fallback,
 )
-from simple_org_chart.exports import (
-    build_microsip_directory_items,
-    format_hire_date,
-)
+from simple_org_chart.exports import format_hire_date
 from simple_org_chart import user_scanner_service
 
 load_dotenv()
@@ -394,7 +391,7 @@ def login():
             return jsonify({'error': 'Login failed'}), 500
 
     settings = load_settings()
-    chart_title = (settings.get('chartTitle') or '').strip() or 'DB AutoOrgChart'
+    chart_title = (settings.get('chartTitle') or '').strip() or 'Simple Org Chart'
     favicon_path = settings.get('faviconPath', '/favicon.ico')
 
     return render_template(
@@ -433,7 +430,7 @@ def configure():
     settings = load_settings()
     favicon_path = settings.get('faviconPath', '/favicon.ico')
     logo_path = settings.get('logoPath', '/static/icon.png')
-    chart_title = (settings.get('chartTitle') or '').strip() or 'DB AutoOrgChart'
+    chart_title = (settings.get('chartTitle') or '').strip() or 'Simple Org Chart'
     
     # Inject favicon link into template
     favicon_link = f'<link rel="icon" type="image/x-icon" href="{favicon_path}">'
@@ -774,121 +771,6 @@ def get_presence():
     except Exception as e:
         logger.error("Error in get_presence: %s", e, exc_info=True)
         return jsonify({'error': 'Failed to fetch presence'}), 500
-
-
-@app.route('/<filename>.json')
-def get_microsip_directory(filename):
-    """Expose a MicroSIP-compatible directory derived from cached employees."""
-    settings = load_settings()
-    
-    # Check if the requested filename matches the configured one
-    configured_filename = (settings.get('directoryJsonFilename') or 'contacts').strip() or 'contacts'
-    if filename != configured_filename:
-        return jsonify({'error': 'Not found'}), 404
-    
-    # Check if the feed is enabled
-    if not settings.get('directoryJsonEnabled', False):
-        logger.info(f"MicroSIP directory request denied - feed is disabled")
-        return jsonify({'error': 'Directory feed is disabled'}), 403
-    
-    logger.info("Request received for MicroSIP directory export")
-
-    employees = get_employee_list_for_metadata()
-    if not employees:
-        logger.warning("No cached employees available for MicroSIP directory; attempting refresh")
-        try:
-            update_employee_data(source='contacts-refresh')
-        except Exception as refresh_error:
-            logger.error(f"Failed to refresh employee cache for MicroSIP directory: {refresh_error}")
-        employees = get_employee_list_for_metadata()
-
-    items = build_microsip_directory_items(employees, settings=settings)
-    payload = {
-        'refresh': int(time.time()),
-        'items': items,
-    }
-
-    response = jsonify(payload)
-    response.headers['Cache-Control'] = 'no-store'
-
-    if not items:
-        logger.warning("MicroSIP directory generated without any entries")
-
-    return response
-
-
-@app.route('/<filename>.xml')
-def get_contacts_xml(filename):
-    """Expose a phone-compatible remote phonebook XML derived from cached employees.
-    
-    Query parameters:
-        format: Phone vendor format (default: yealink). Currently supported: yealink
-    
-    Yealink T31P setup:
-        1. Open phone web UI -> Directory -> Remote Phone Book
-        2. Set Remote URL to: http://<server>/<filename>.xml
-        3. Set Display Name to: Company Directory
-        4. Save and reboot if prompted
-    """
-    from simple_org_chart.exports import build_yealink_phonebook_xml
-
-    settings = load_settings()
-    
-    # Check if the requested filename matches the configured one
-    configured_filename = (settings.get('directoryXmlFilename') or 'contacts').strip() or 'contacts'
-    if filename != configured_filename:
-        return app.response_class(
-            response='<?xml version="1.0" encoding="UTF-8"?>\n<Error>Not found</Error>',
-            status=404,
-            mimetype='application/xml'
-        )
-    
-    # Check if the feed is enabled
-    if not settings.get('directoryXmlEnabled', False):
-        logger.info(f"XML directory request denied - feed is disabled")
-        return app.response_class(
-            response='<?xml version="1.0" encoding="UTF-8"?>\n<Error>Directory feed is disabled</Error>',
-            status=403,
-            mimetype='application/xml'
-        )
-
-    phone_format = request.args.get('format', 'yealink').lower()
-
-    if phone_format != 'yealink':
-        logger.warning(f"Unsupported contacts.xml format requested: {phone_format}")
-        return app.response_class(
-            response='<?xml version="1.0" encoding="UTF-8"?>\n<Error>Unsupported format. Supported: yealink</Error>',
-            status=400,
-            mimetype='application/xml'
-        )
-
-    logger.info(f"Request received for contacts.xml (format={phone_format})")
-
-    employees = get_employee_list_for_metadata()
-    if not employees:
-        logger.warning("No cached employees available for XML directory; attempting refresh")
-        try:
-            update_employee_data(source='contacts-xml-refresh')
-        except Exception as refresh_error:
-            logger.error(f"Failed to refresh employee cache for XML directory: {refresh_error}")
-        employees = get_employee_list_for_metadata()
-
-    settings = load_settings()
-    chart_title = settings.get('chartTitle', 'Organization Directory')
-    xml_content = build_yealink_phonebook_xml(employees, settings=settings, title=chart_title)
-
-    response = app.response_class(
-        response=xml_content,
-        status=200,
-        mimetype='application/xml'
-    )
-    response.headers['Cache-Control'] = 'no-store'
-    response.headers['Content-Disposition'] = 'inline; filename="contacts.xml"'
-
-    if not employees:
-        logger.warning("XML phonebook generated without any entries")
-
-    return response
 
 
 @app.route('/api/settings', methods=['GET', 'POST'])

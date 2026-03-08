@@ -1174,36 +1174,6 @@ function applySettings(settings) {
         if (el2) el2.value = settings.multiLineChildrenThreshold;
     }
 
-    const customContactsField = document.getElementById('customDirectoryContacts');
-    if (customContactsField) {
-        const rawValue = settings.customDirectoryContacts;
-        if (typeof rawValue === 'string') {
-            customContactsField.value = rawValue;
-        } else if (Array.isArray(rawValue)) {
-            customContactsField.value = rawValue.join('\n');
-        } else {
-            customContactsField.value = '';
-        }
-    }
-
-    // Directory feed settings
-    const jsonEnabledEl = document.getElementById('directoryJsonEnabled');
-    if (jsonEnabledEl) {
-        jsonEnabledEl.checked = settings.directoryJsonEnabled === true;
-    }
-    const jsonFilenameEl = document.getElementById('directoryJsonFilename');
-    if (jsonFilenameEl) {
-        jsonFilenameEl.value = settings.directoryJsonFilename || 'contacts';
-    }
-    const xmlEnabledEl = document.getElementById('directoryXmlEnabled');
-    if (xmlEnabledEl) {
-        xmlEnabledEl.checked = settings.directoryXmlEnabled === true;
-    }
-    const xmlFilenameEl = document.getElementById('directoryXmlFilename');
-    if (xmlFilenameEl) {
-        xmlFilenameEl.value = settings.directoryXmlFilename || 'contacts';
-    }
-
     // Teams Presence
     const teamsPresenceEl = document.getElementById('teamsPresenceEnabled');
     if (teamsPresenceEl) {
@@ -1618,15 +1588,6 @@ function resetTopLevelUser() {
     markUnsavedChange();
 }
 
-function resetCustomDirectoryContacts() {
-    const textarea = document.getElementById('customDirectoryContacts');
-    if (!textarea) {
-        return;
-    }
-    textarea.value = '';
-    markUnsavedChange();
-}
-
 function resetAllSettings() {
     resetChartTitle();
     resetHeaderColor();
@@ -1639,7 +1600,6 @@ function resetAllSettings() {
     resetIgnoredTitles();
     resetIgnoredEmployees();
     resetExportColumns();
-    resetCustomDirectoryContacts();
 
     document.getElementById('searchAutoExpand').checked = true;
     document.getElementById('searchHighlight').checked = true;
@@ -1719,11 +1679,6 @@ async function saveAllSettings() {
         topLevelUserEmail: document.getElementById('topLevelUserInput')?.value || '',
         topLevelUserId: document.getElementById('topLevelUserIdInput')?.value || '',
         exportXlsxColumns: getExportColumnSettings(),
-        customDirectoryContacts: (document.getElementById('customDirectoryContacts')?.value || '').trim(),
-        directoryJsonEnabled: document.getElementById('directoryJsonEnabled')?.checked || false,
-        directoryJsonFilename: (document.getElementById('directoryJsonFilename')?.value || 'contacts').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'contacts',
-        directoryXmlEnabled: document.getElementById('directoryXmlEnabled')?.checked || false,
-        directoryXmlFilename: (document.getElementById('directoryXmlFilename')?.value || 'contacts').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'contacts',
         userScannerEnabled: document.getElementById('userScannerEnabled')?.checked || false,
         teamsPresenceEnabled: document.getElementById('teamsPresenceEnabled')?.checked || false
     };
@@ -1902,7 +1857,6 @@ function registerConfigActions() {
         'reset-ignored-departments': resetIgnoredDepartments,
     'reset-ignored-employees': resetIgnoredEmployees,
         'reset-top-level-user': resetTopLevelUser,
-        'reset-custom-directory-contacts': resetCustomDirectoryContacts,
         'reset-multiline-settings': resetMultiLineSettings,
         'reset-export-columns': resetExportColumns,
         'trigger-update': triggerUpdate,
