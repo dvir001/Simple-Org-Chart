@@ -10,14 +10,14 @@
         }
     };
 
-    addCandidate(htmlLang);
-    addCandidate(normalizedLowerLang);
-
-    if (normalizedLowerLang.includes('-')) {
-        const [langPart, regionPart] = normalizedLowerLang.split('-', 2);
-        addCandidate(`${langPart}-${(regionPart || '').toUpperCase()}`);
-    } else if (normalizedLowerLang) {
-        addCandidate(`${normalizedLowerLang}-${normalizedLowerLang.toUpperCase()}`);
+    // Build locale candidates from most-specific to least-specific.
+    // Only add candidates that follow the xx-YY pattern used by our locale
+    // files to avoid 404s for bare language codes like "en" or invented
+    // region codes like "en-EN".
+    if (htmlLang && htmlLang.includes('-')) {
+        // e.g. "en-US" or "en-us" → normalise to "en-US"
+        const [langPart, regionPart] = htmlLang.split('-', 2);
+        addCandidate(`${langPart.toLowerCase()}-${(regionPart || '').toUpperCase()}`);
     }
 
     addCandidate(DEFAULT_LOCALE);
