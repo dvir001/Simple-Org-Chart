@@ -554,10 +554,11 @@ def get_employee_photo(user_id):
                 with open(photo_file, 'wb') as f:  # lgtm[py/clear-text-storage-sensitive-data]
                     f.write(photo_data)
                 
-                # Serve the photo
-                response = send_file(
+                # Serve the photo (data fetched from MS Graph, not a user-controlled path)
+                response = send_file(  # nosec - photo_data is from Graph API, not filesystem
                     BytesIO(photo_data),
                     mimetype='image/jpeg',
+                    download_name='photo.jpg',
                     as_attachment=False
                 )
                 response.headers['Cache-Control'] = f'public, max-age={PHOTO_CACHE_SECONDS}'
