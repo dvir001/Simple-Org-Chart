@@ -1,4 +1,4 @@
-# SimpleOrgChart
+# Simple Org Chart
 
 > **Note:** This repository is a maintained fork of [jaffster595/DB-Auto-Org-Chart](https://github.com/jaffster595/DB-Auto-Org-Chart).
 
