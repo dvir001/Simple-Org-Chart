@@ -539,7 +539,9 @@ def get_employee_photo(user_id):
         if os.path.exists(photo_file):
             # Check if cache is still valid
             if time.time() - os.path.getmtime(photo_file) < PHOTO_CACHE_FILE_SECONDS:
-                response = send_file(photo_file, mimetype='image/jpeg')
+                response = send_from_directory(
+                    photos_dir_real, f"{safe_name}.jpg", mimetype='image/jpeg'
+                )
                 # Add cache headers to prevent browser caching issues
                 response.headers['Cache-Control'] = f'public, max-age={PHOTO_CACHE_SECONDS}'
                 response.headers['Last-Modified'] = datetime.fromtimestamp(os.path.getmtime(photo_file)).strftime('%a, %d %b %Y %H:%M:%S GMT')
