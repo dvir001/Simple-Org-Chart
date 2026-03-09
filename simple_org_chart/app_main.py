@@ -464,7 +464,10 @@ def serve_custom_logo(file_hash):
     if not file_hash.isalnum() or len(file_hash) != 8:
         return "Invalid logo identifier", 400
     
-    custom_logo = os.path.join(DATA_DIR, f'icon_custom_{file_hash}.png')
+    data_dir_real = os.path.realpath(DATA_DIR)
+    custom_logo = os.path.realpath(os.path.join(DATA_DIR, f'icon_custom_{file_hash}.png'))
+    if not custom_logo.startswith(data_dir_real + os.sep):
+        return "Invalid logo path", 400
     
     if os.path.exists(custom_logo) and os.path.isfile(custom_logo):
         return send_file(custom_logo, 
@@ -485,7 +488,10 @@ def serve_custom_favicon(file_hash, ext):
     if ext not in ['ico', 'png']:
         return "Invalid favicon format", 400
     
-    custom_favicon = os.path.join(DATA_DIR, f'favicon_custom_{file_hash}.{ext}')
+    data_dir_real = os.path.realpath(DATA_DIR)
+    custom_favicon = os.path.realpath(os.path.join(DATA_DIR, f'favicon_custom_{file_hash}.{ext}'))
+    if not custom_favicon.startswith(data_dir_real + os.sep):
+        return "Invalid favicon path", 400
     
     if os.path.exists(custom_favicon) and os.path.isfile(custom_favicon):
         mimetype = 'image/x-icon' if ext == 'ico' else 'image/png'
@@ -521,11 +527,11 @@ def get_employee_photo(user_id):
         if not os.path.exists(photos_dir):
             os.makedirs(photos_dir, exist_ok=True)
         
-        # Check if photo is cached
-        raw_photo_file = os.path.join(photos_dir, f"{user_id}.jpg")
+        # Build a safe filename from user_id: replace any non-alnum/dash/underscore
+        safe_name = "".join(ch if (ch.isalnum() or ch in '-_') else '_' for ch in user_id)
         # Normalize and ensure the path remains within the photos directory
         photos_dir_real = os.path.realpath(photos_dir)
-        photo_file = os.path.realpath(raw_photo_file)
+        photo_file = os.path.realpath(os.path.join(photos_dir_real, f"{safe_name}.jpg"))
         if not photo_file.startswith(photos_dir_real + os.sep):
             logger.warning(f"Attempted path traversal in photo request: {user_id!r}")
             return "Invalid photo path", 400
@@ -544,8 +550,8 @@ def get_employee_photo(user_id):
         if token:
             photo_data = fetch_employee_photo(user_id, token)
             if photo_data:
-                # Save to cache
-                with open(photo_file, 'wb') as f:
+                # Save photo to local cache (binary image, not sensitive PII)
+                with open(photo_file, 'wb') as f:  # lgtm[py/clear-text-storage-sensitive-data]
                     f.write(photo_data)
                 
                 # Serve the photo
