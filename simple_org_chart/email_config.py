@@ -61,14 +61,18 @@ def load_email_config() -> Dict[str, Any]:
         try:
             with SETTINGS_FILE.open("r", encoding="utf-8") as handle:
                 stored = json.load(handle)
-                merged = DEFAULT_EMAIL_CONFIG.copy()
-                for key in _EMAIL_KEYS:
-                    if key in stored:
-                        merged[key] = stored[key]
-                return merged
         except Exception as error:
             logger.error("Error loading email config: %s", error)
-    
+        else:
+            if not isinstance(stored, dict):
+                logger.warning("app_settings.json does not contain a JSON object; using email defaults")
+                return DEFAULT_EMAIL_CONFIG.copy()
+            merged = DEFAULT_EMAIL_CONFIG.copy()
+            for key in _EMAIL_KEYS:
+                if key in stored:
+                    merged[key] = stored[key]
+            return merged
+
     return DEFAULT_EMAIL_CONFIG.copy()
 
 
@@ -76,9 +80,11 @@ def save_email_config(config: Dict[str, Any]) -> bool:
     """Save email configuration into app_settings.json."""
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # Merge with defaults
+    # Restrict to known email keys only — never let caller overwrite unrelated settings
     persisted = DEFAULT_EMAIL_CONFIG.copy()
-    persisted.update(config)
+    for key in _EMAIL_KEYS:
+        if key in config:
+            persisted[key] = config[key]
 
     if 'lastSent' not in config:
         # lastSent will be preserved from the existing file inside the lock below

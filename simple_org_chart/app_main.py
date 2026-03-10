@@ -1200,7 +1200,10 @@ def import_settings():
         elif key in email_keys:
             email_data[key] = value
 
-    settings_ok = save_settings(settings_data)
+    # Only save settings if at least one valid settings key was provided
+    settings_ok = True
+    if settings_data:
+        settings_ok = save_settings(settings_data)
 
     email_ok = True
     if email_data:
