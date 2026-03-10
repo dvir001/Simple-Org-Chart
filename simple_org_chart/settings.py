@@ -13,10 +13,83 @@ from typing import Any, Dict, Iterable, Set
 
 from .config import SETTINGS_FILE
 
-# Shared in-process lock protecting all reads/writes to SETTINGS_FILE.
+
+class _InterProcessSettingsFileLock:
+    """Combined thread + process lock for protecting SETTINGS_FILE.
+
+    Serialises concurrent access across both threads within a single worker
+    and across multiple Gunicorn worker processes by combining a
+    ``threading.Lock`` with an ``fcntl.flock`` advisory file lock.  On
+    platforms where ``fcntl`` is unavailable (e.g. Windows) the class
+    falls back gracefully to thread-only locking.
+    """
+
+    def __init__(self, lock_file_path: str) -> None:
+        self._lock_file_path = lock_file_path
+        self._thread_lock = threading.Lock()
+        self._fd: int | None = None
+
+    def acquire(self, blocking: bool = True) -> bool:
+        acquired = self._thread_lock.acquire(blocking)
+        if not acquired:
+            return False
+        fd = None
+        try:
+            import fcntl
+            fd = os.open(self._lock_file_path, os.O_CREAT | os.O_RDWR, 0o600)
+            flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+            fcntl.flock(fd, flags)
+            self._fd = fd
+        except ImportError:
+            # fcntl not available (Windows); thread lock is sufficient.
+            if fd is not None:
+                os.close(fd)
+        except BlockingIOError:
+            if fd is not None:
+                os.close(fd)
+            self._thread_lock.release()
+            return False
+        except Exception:
+            if fd is not None:
+                os.close(fd)
+            self._thread_lock.release()
+            raise
+        return True
+
+    def release(self) -> None:
+        try:
+            if self._fd is not None:
+                try:
+                    import fcntl
+                    fcntl.flock(self._fd, fcntl.LOCK_UN)
+                except (ImportError, OSError):
+                    pass
+                finally:
+                    try:
+                        os.close(self._fd)
+                    except OSError:
+                        pass
+                    self._fd = None
+        finally:
+            self._thread_lock.release()
+
+    def __enter__(self) -> "_InterProcessSettingsFileLock":
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.release()
+
+
+# Shared inter-process lock protecting all reads/writes to SETTINGS_FILE.
 # Both settings.py and email_config.py import this lock so that concurrent
-# writes from different code paths (scheduler, HTTP handlers) are serialised.
-_settings_file_lock = threading.Lock()
+# writes from different code paths (scheduler, HTTP handlers, workers) are
+# serialised across all Gunicorn worker processes.
+_settings_lock_file = os.path.join(
+    os.fspath(SETTINGS_FILE.parent),
+    f"{SETTINGS_FILE.name}.lock",
+)
+_settings_file_lock = _InterProcessSettingsFileLock(_settings_lock_file)
 
 logger = logging.getLogger(__name__)
 
