@@ -31,6 +31,12 @@ DEFAULT_EMAIL_CONFIG: Dict[str, Any] = {
 # Keys that belong to the email configuration
 _EMAIL_KEYS = set(DEFAULT_EMAIL_CONFIG.keys())
 
+
+def _filter_email_keys(source: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a new dict containing only keys that belong to the email config."""
+    return {key: source[key] for key in _EMAIL_KEYS if key in source}
+
+
 def get_smtp_config() -> Dict[str, Any]:
     """Load SMTP configuration from environment variables."""
     # Get encryption setting (TLS, SSL, or None)
@@ -68,9 +74,7 @@ def load_email_config() -> Dict[str, Any]:
                 logger.warning("app_settings.json does not contain a JSON object; using email defaults")
                 return DEFAULT_EMAIL_CONFIG.copy()
             merged = DEFAULT_EMAIL_CONFIG.copy()
-            for key in _EMAIL_KEYS:
-                if key in stored:
-                    merged[key] = stored[key]
+            merged.update(_filter_email_keys(stored))
             return merged
 
     return DEFAULT_EMAIL_CONFIG.copy()
@@ -82,9 +86,7 @@ def save_email_config(config: Dict[str, Any]) -> bool:
 
     # Restrict to known email keys only — never let caller overwrite unrelated settings
     persisted = DEFAULT_EMAIL_CONFIG.copy()
-    for key in _EMAIL_KEYS:
-        if key in config:
-            persisted[key] = config[key]
+    persisted.update(_filter_email_keys(config))
 
     if 'lastSent' not in config:
         # lastSent will be preserved from the existing file inside the lock below

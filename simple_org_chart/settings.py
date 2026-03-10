@@ -33,19 +33,25 @@ class _InterProcessSettingsFileLock:
         acquired = self._thread_lock.acquire(blocking)
         if not acquired:
             return False
+        fd = None
         try:
             import fcntl
             fd = os.open(self._lock_file_path, os.O_CREAT | os.O_RDWR, 0o600)
-            self._fd = fd
             flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
             fcntl.flock(fd, flags)
+            self._fd = fd
         except ImportError:
             # fcntl not available (Windows); thread lock is sufficient.
-            pass
+            if fd is not None:
+                os.close(fd)
         except BlockingIOError:
+            if fd is not None:
+                os.close(fd)
             self._thread_lock.release()
             return False
         except Exception:
+            if fd is not None:
+                os.close(fd)
             self._thread_lock.release()
             raise
         return True
@@ -65,8 +71,7 @@ class _InterProcessSettingsFileLock:
                         pass
                     self._fd = None
         finally:
-            if self._thread_lock.locked():
-                self._thread_lock.release()
+            self._thread_lock.release()
 
     def __enter__(self) -> "_InterProcessSettingsFileLock":
         self.acquire()
