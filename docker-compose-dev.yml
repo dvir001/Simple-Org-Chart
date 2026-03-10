@@ -10,16 +10,6 @@ services:
     env_file:
       - .env
     volumes:
-      - orgchart_data_dev:/app/data
-      - orgchart_repos_dev:/app/repositories
-    labels:
-        com.docker.compose.project: "docker"
-    networks:
-      - orgchart_dev_default
-
-networks:
-  orgchart_dev_default:
-
-volumes:
-  orgchart_data_dev:
-  orgchart_repos_dev:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./repositories:/app/repositories

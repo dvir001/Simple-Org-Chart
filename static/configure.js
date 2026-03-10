@@ -1637,6 +1637,7 @@ async function logout() {
 }
 
 async function saveAllSettings() {
+    try {
     const logoResetRequested = pendingLogoReset;
     const faviconResetRequested = pendingFaviconReset;
 
@@ -1650,7 +1651,7 @@ async function saveAllSettings() {
     };
 
     const settings = {
-        chartTitle: document.getElementById('chartTitle').value || 'Organization Chart',
+        chartTitle: document.getElementById('chartTitle')?.value || 'Organization Chart',
         headerColor: resolveColorValue('headerColor', 'headerColorHex', DEFAULT_HEADER_COLOR),
         nodeColors: Object.keys(NODE_COLOR_DEFAULTS).reduce((accumulator, level) => {
             accumulator[level] = resolveColorValue(
@@ -1660,21 +1661,21 @@ async function saveAllSettings() {
             );
             return accumulator;
         }, {}),
-        autoUpdateEnabled: document.getElementById('autoUpdateEnabled').checked,
-        updateTime: localTimeToUtc(document.getElementById('updateTime').value),
-        collapseLevel: document.getElementById('collapseLevel').value,
-        searchAutoExpand: document.getElementById('searchAutoExpand').checked,
-        searchHighlight: document.getElementById('searchHighlight').checked,
-        searchHighlightDuration: parseInt(document.getElementById('searchHighlightDuration').value, 10),
-        newEmployeeMonths: parseInt(document.getElementById('newEmployeeMonths').value, 10),
-        hideDisabledUsers: document.getElementById('hideDisabledUsers').checked,
-        hideGuestUsers: document.getElementById('hideGuestUsers').checked,
-        hideNoTitle: document.getElementById('hideNoTitle').checked,
+        autoUpdateEnabled: document.getElementById('autoUpdateEnabled')?.checked ?? true,
+        updateTime: localTimeToUtc(document.getElementById('updateTime')?.value || '20:00'),
+        collapseLevel: document.getElementById('collapseLevel')?.value || '2',
+        searchAutoExpand: document.getElementById('searchAutoExpand')?.checked ?? true,
+        searchHighlight: document.getElementById('searchHighlight')?.checked ?? true,
+        searchHighlightDuration: parseInt(document.getElementById('searchHighlightDuration')?.value || '10', 10),
+        newEmployeeMonths: parseInt(document.getElementById('newEmployeeMonths')?.value || '3', 10),
+        hideDisabledUsers: document.getElementById('hideDisabledUsers')?.checked ?? true,
+        hideGuestUsers: document.getElementById('hideGuestUsers')?.checked ?? true,
+        hideNoTitle: document.getElementById('hideNoTitle')?.checked ?? true,
         ignoredDepartments: getIgnoredDepartmentsValue(),
         ignoredTitles: getIgnoredTitlesValue(),
-    ignoredEmployees: getIgnoredEmployeesValue(),
-        printOrientation: document.getElementById('printOrientation').value,
-        printSize: document.getElementById('printSize').value,
+        ignoredEmployees: getIgnoredEmployeesValue(),
+        printOrientation: document.getElementById('printOrientation')?.value || 'landscape',
+        printSize: document.getElementById('printSize')?.value || 'a4',
         multiLineChildrenThreshold: parseInt(document.getElementById('multiLineChildrenThreshold')?.value || '20', 10),
         topLevelUserEmail: document.getElementById('topLevelUserInput')?.value || '',
         topLevelUserId: document.getElementById('topLevelUserIdInput')?.value || '',
@@ -1683,7 +1684,6 @@ async function saveAllSettings() {
         teamsPresenceEnabled: document.getElementById('teamsPresenceEnabled')?.checked || false
     };
 
-    try {
         if (logoResetRequested) {
             const response = await fetch(`${API_BASE_URL}/api/reset-logo`, { method: 'POST' });
             if (!response.ok) {
@@ -1837,11 +1837,60 @@ async function triggerUpdate() {
 
 function showStatus(message, type) {
     const statusEl = document.getElementById('statusMessage');
+    if (!statusEl) return;
     statusEl.textContent = message;
     statusEl.className = `status-message ${type}`;
     setTimeout(() => {
         statusEl.className = 'status-message';
     }, 3000);
+}
+
+/* ---------- config export / import ---------- */
+
+function exportConfig() {
+    window.location.href = `${API_BASE_URL}/api/settings/export`;
+}
+
+function importConfig() {
+    const fileInput = document.getElementById('configFileInput');
+    if (!fileInput) return;
+    fileInput.click();
+}
+
+function handleConfigFileSelected(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch(`${API_BASE_URL}/api/settings/import`, {
+        method: 'POST',
+        body: formData,
+    })
+    .then(res => res.json().then(data => ({ ok: res.ok, data })))
+    .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error || 'Import failed');
+        showStatus(
+            getTranslation('configure.configTransfer.flash.importSuccess', 'Configuration imported successfully.'),
+            'success'
+        );
+        isInitializing = true;
+        loadSettings().then(() => {
+            isInitializing = false;
+            clearUnsavedChangeState();
+        });
+    })
+    .catch(err => {
+        console.error('Config import failed', err);
+        showStatus(
+            getTranslation('configure.configTransfer.flash.importError', 'Failed to import configuration: ') + err.message,
+            'error'
+        );
+    })
+    .finally(() => {
+        event.target.value = '';
+    });
 }
 
 function registerConfigActions() {
@@ -1860,6 +1909,8 @@ function registerConfigActions() {
         'reset-multiline-settings': resetMultiLineSettings,
         'reset-export-columns': resetExportColumns,
         'trigger-update': triggerUpdate,
+        'export-config': exportConfig,
+        'import-config': importConfig,
         'discard-unsaved': discardUnsavedChanges,
         'save-all': saveAllSettings,
         'reset-all': resetAllSettings,
@@ -1930,6 +1981,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize email reports configuration
     await initEmailReportsConfig();
+
+    // Config import file listener
+    document.getElementById('configFileInput')?.addEventListener('change', handleConfigFileSelected);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2259,6 +2313,9 @@ saveAllSettings = enhancedSaveAllSettings;
 
 async function _initUserScannerConfigUI(isEnabled) {
     const statusEl = document.getElementById('userScannerStatus');
+    const installRow = document.getElementById('userScannerInstallRow');
+    const installBtn = document.getElementById('installUserScannerBtn');
+    const installStatusEl = document.getElementById('userScannerInstallStatus');
     const updateRow = document.getElementById('userScannerUpdateRow');
     const checkBtn = document.getElementById('checkUserScannerUpdateBtn');
     const applyBtn = document.getElementById('applyUserScannerUpdateBtn');
@@ -2268,6 +2325,7 @@ async function _initUserScannerConfigUI(isEnabled) {
 
     if (!isEnabled) {
         statusEl.textContent = 'User Scanner is disabled.';
+        if (installRow) installRow.style.display = 'none';
         if (updateRow) updateRow.style.display = 'none';
         return;
     }
@@ -2279,9 +2337,37 @@ async function _initUserScannerConfigUI(isEnabled) {
         const data = await resp.json();
 
         if (!data.installed) {
-            statusEl.textContent = 'Not installed yet — it will be downloaded automatically on first use.';
+            statusEl.textContent = 'Not installed — download to enable the scanner.';
+            if (installRow) installRow.style.display = 'flex';
             if (updateRow) updateRow.style.display = 'none';
+
+            // Wire up install button
+            if (installBtn) {
+                installBtn.onclick = async () => {
+                    installBtn.disabled = true;
+                    if (installStatusEl) installStatusEl.textContent = 'Downloading…';
+                    try {
+                        const installResp = await fetch(`${window.location.origin}/api/user-scanner/install`, {
+                            method: 'POST',
+                            credentials: 'include',
+                        });
+                        const result = await installResp.json();
+                        if (result.success) {
+                            if (installStatusEl) installStatusEl.textContent = '';
+                            // Re-init to show installed state
+                            _initUserScannerConfigUI(true);
+                        } else {
+                            if (installStatusEl) installStatusEl.textContent = result.error || 'Installation failed.';
+                            installBtn.disabled = false;
+                        }
+                    } catch (err) {
+                        if (installStatusEl) installStatusEl.textContent = 'Download failed: ' + err.message;
+                        installBtn.disabled = false;
+                    }
+                };
+            }
         } else {
+            if (installRow) installRow.style.display = 'none';
             const ver = data.version || 'unknown';
             statusEl.innerHTML = '';
             const versionText = document.createElement('span');

@@ -23,6 +23,7 @@ from simple_org_chart.email_config import (
     save_email_config,
     should_send_email_now,
 )
+import simple_org_chart.email_config as _email_config_mod
 
 
 # ---------------------------------------------------------------------------
@@ -249,8 +250,8 @@ class TestSavePreservesLastSent:
     """Ensure saving from the configure page doesn't wipe lastSent."""
 
     def test_last_sent_preserved_on_save(self, tmp_path, monkeypatch):
-        config_file = tmp_path / "email_config.json"
-        monkeypatch.setattr("simple_org_chart.email_config.EMAIL_CONFIG_FILE", config_file)
+        config_file = tmp_path / "app_settings.json"
+        monkeypatch.setattr(_email_config_mod, "SETTINGS_FILE", config_file)
 
         # Simulate a previous email send
         initial = DEFAULT_EMAIL_CONFIG.copy()
@@ -265,8 +266,8 @@ class TestSavePreservesLastSent:
         assert reloaded["lastSent"] == "2026-03-01T12:00:00+00:00"
 
     def test_last_sent_overwritten_when_explicitly_provided(self, tmp_path, monkeypatch):
-        config_file = tmp_path / "email_config.json"
-        monkeypatch.setattr("simple_org_chart.email_config.EMAIL_CONFIG_FILE", config_file)
+        config_file = tmp_path / "app_settings.json"
+        monkeypatch.setattr(_email_config_mod, "SETTINGS_FILE", config_file)
 
         initial = DEFAULT_EMAIL_CONFIG.copy()
         initial["lastSent"] = "2026-03-01T12:00:00+00:00"
@@ -279,8 +280,8 @@ class TestSavePreservesLastSent:
         assert reloaded["lastSent"] == "2026-04-01T08:00:00+00:00"
 
     def test_last_sent_none_when_no_prior_config(self, tmp_path, monkeypatch):
-        config_file = tmp_path / "email_config.json"
-        monkeypatch.setattr("simple_org_chart.email_config.EMAIL_CONFIG_FILE", config_file)
+        config_file = tmp_path / "app_settings.json"
+        monkeypatch.setattr(_email_config_mod, "SETTINGS_FILE", config_file)
 
         save_email_config({"enabled": True, "frequency": "weekly"})
 

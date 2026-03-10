@@ -204,8 +204,14 @@
 		"userScanner": {
 			"enable": {
 				"label": "User Scanner (OSINT)",
-				"description": "Enable the User Scanner tool to check email presence across multiple platforms. This uses an external open-source tool (user-scanner) which will be downloaded automatically from PyPI when enabled and kept up to date.",
+				"description": "Enable the User Scanner tool to check email presence across multiple platforms. This uses an external open-source tool (user-scanner) which must be downloaded from the config page before use.",
 				"toggleLabel": "Enable User Scanner"
+			},
+			"install": {
+				"button": "Download & Install",
+				"downloading": "Downloading…",
+				"success": "Installed successfully.",
+				"failed": "Installation failed."
 			}
 		},
 		"presence": {
@@ -409,6 +415,28 @@
 				"lastUpdatedUpdating": "Updating...",
 				"statusComplete": "✔ Update complete",
 				"statusFailed": "✗ Update failed"
+			}
+		},
+		"configTransfer": {
+			"title": "📦 Configuration Transfer",
+			"export": {
+				"label": "Export Configuration",
+				"description": "Download all settings as a JSON file. Employee data is not included.",
+				"button": "Export"
+			},
+			"import": {
+				"label": "Import Configuration",
+				"description": "Upload a previously exported JSON file to restore settings.",
+				"button": "Import"
+			},
+			"reset": {
+				"label": "Reset to Defaults",
+				"description": "Restore all settings to their factory defaults. Employee data is not affected.",
+				"button": "Reset"
+			},
+			"flash": {
+				"importSuccess": "Configuration imported successfully.",
+				"importError": "Failed to import configuration: "
 			}
 		},
 		"buttons": {

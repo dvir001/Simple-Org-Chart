@@ -151,6 +151,15 @@ def save_settings(settings: Dict[str, Any]) -> bool:
     """Persist settings to disk, returning True on success."""
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
+    # Read the current file so we keep all other keys intact
+    existing: Dict[str, Any] = {}
+    if SETTINGS_FILE.exists():
+        try:
+            with SETTINGS_FILE.open("r", encoding="utf-8") as handle:
+                existing = json.load(handle)
+        except Exception:
+            pass
+
     # Update stored defaults with provided overrides
     persisted = DEFAULT_SETTINGS.copy()
     persisted.update(settings)
@@ -171,10 +180,12 @@ def save_settings(settings: Dict[str, Any]) -> bool:
         for level, color in default_node_colors.items()
     }
 
+    existing.update(persisted)
+
     logger.info("Attempting to save settings to: %s", SETTINGS_FILE)
     try:
         with SETTINGS_FILE.open("w", encoding="utf-8") as handle:
-            json.dump(persisted, handle, indent=2)
+            json.dump(existing, handle, indent=2)
     except Exception as error:  # noqa: BLE001 - mirror legacy behaviour
         logger.error("Error saving settings to %s: %s", SETTINGS_FILE, error)
         return False
