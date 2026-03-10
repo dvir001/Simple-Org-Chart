@@ -2337,7 +2337,7 @@ async function _initUserScannerConfigUI(isEnabled) {
         const data = await resp.json();
 
         if (!data.installed) {
-            statusEl.textContent = 'Not installed — download to enable the scanner.';
+            statusEl.textContent = resolveTranslation('configure.userScanner.install.notInstalled', 'Not installed — download to enable the scanner.');
             if (installRow) installRow.style.display = 'flex';
             if (updateRow) updateRow.style.display = 'none';
 
@@ -2345,7 +2345,7 @@ async function _initUserScannerConfigUI(isEnabled) {
             if (installBtn) {
                 installBtn.onclick = async () => {
                     installBtn.disabled = true;
-                    if (installStatusEl) installStatusEl.textContent = 'Downloading…';
+                    if (installStatusEl) installStatusEl.textContent = resolveTranslation('configure.userScanner.install.downloading', 'Downloading…');
                     try {
                         const installResp = await fetch(`${window.location.origin}/api/user-scanner/install`, {
                             method: 'POST',
@@ -2354,14 +2354,41 @@ async function _initUserScannerConfigUI(isEnabled) {
                         const result = await installResp.json();
                         if (result.success) {
                             if (installStatusEl) installStatusEl.textContent = '';
-                            // Re-init to show installed state
-                            _initUserScannerConfigUI(true);
+                            // Refresh status UI without re-running full init to avoid duplicate listeners
+                            try {
+                                const statusResp = await fetch(`${window.location.origin}/api/user-scanner/status`, {
+                                    credentials: 'include',
+                                });
+                                if (statusResp.ok) {
+                                    const latest = await statusResp.json();
+                                    if (latest.installed) {
+                                        if (installRow) installRow.style.display = 'none';
+                                        const ver = latest.version || 'unknown';
+                                        statusEl.innerHTML = '';
+                                        const versionText = document.createElement('span');
+                                        versionText.textContent = `Installed — v${ver}`;
+                                        statusEl.appendChild(versionText);
+                                        const sep = document.createTextNode('  ·  ');
+                                        statusEl.appendChild(sep);
+                                        const repoLink = document.createElement('a');
+                                        repoLink.href = 'https://github.com/kaifcodec/user-scanner';
+                                        repoLink.target = '_blank';
+                                        repoLink.rel = 'noopener noreferrer';
+                                        repoLink.textContent = 'GitHub repo ↗';
+                                        repoLink.style.fontSize = 'inherit';
+                                        statusEl.appendChild(repoLink);
+                                        if (updateRow) updateRow.style.display = 'flex';
+                                    }
+                                }
+                            } catch {
+                                // Ignore refresh errors; installation itself succeeded
+                            }
                         } else {
-                            if (installStatusEl) installStatusEl.textContent = result.error || 'Installation failed.';
+                            if (installStatusEl) installStatusEl.textContent = result.error || resolveTranslation('configure.userScanner.install.failed', 'Installation failed.');
                             installBtn.disabled = false;
                         }
                     } catch (err) {
-                        if (installStatusEl) installStatusEl.textContent = 'Download failed: ' + err.message;
+                        if (installStatusEl) installStatusEl.textContent = resolveTranslation('configure.userScanner.install.downloadFailed', 'Download failed: ') + err.message;
                         installBtn.disabled = false;
                     }
                 };

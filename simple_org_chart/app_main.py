@@ -1149,9 +1149,10 @@ def export_settings():
     """Download all configuration as a single flat JSON file."""
     settings = load_settings()
     email_config = load_email_config()
-    # Merge everything flat; strip transient runtime fields
+    # Merge everything flat; strip transient runtime fields and non-default keys
+    settings_public = {k: v for k, v in settings.items() if k in DEFAULT_SETTINGS}
     merged = {}
-    merged.update(settings)
+    merged.update(settings_public)
     merged.update({k: v for k, v in email_config.items() if k != 'lastSent'})
     payload = json.dumps(merged, indent=2)
     return app.response_class(
@@ -1170,6 +1171,13 @@ def import_settings():
     uploaded = request.files.get('file')
     if not uploaded:
         return jsonify({'error': 'No file uploaded'}), 400
+
+    # Enforce file size limit consistent with other upload endpoints
+    uploaded.seek(0, 2)
+    file_size = uploaded.tell()
+    uploaded.seek(0)
+    if file_size > MAX_FILE_SIZE:
+        return jsonify({'error': f'File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)}MB'}), 413
 
     try:
         raw = uploaded.read()

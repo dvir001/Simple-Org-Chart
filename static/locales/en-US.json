@@ -1,732 +1,734 @@
 {
-	"buttons": {
-		"configure": "Configure",
-		"logout": "Logout",
-		"save": "Save",
-		"reset": "Reset",
-		"reports": "Reports",
-		"adminLogin": "Admin Login",
-		"sync": "Sync",
-		"syncing": "Syncing...",
-		"syncComplete": "Sync complete",
-		"syncFailed": "Sync failed"
-	},
-	"index": {
-		"pageTitle": "Organization Chart",
-		"header": {
-			"logoAlt": "Logo",
-			"title": "Organization Chart",
-			"subtitle": "Updates daily @ 8:00 PM",
-			"autoUpdate": {
-				"enabled": "Updates daily @ {time}",
-				"enabledWithLastUpdate": "Updates daily @ {time} · Last synced: {lastUpdate}",
-				"disabled": "Auto-update disabled",
-				"disabledWithLastUpdate": "Auto-update disabled · Last synced: {lastUpdate}",
-				"syncing": "Syncing..."
-			}
-		},
-		"search": {
-			"placeholder": "Search for employees by name, title, or department...",
-			"noResults": "No matches found"
-		},
-		"topUser": {
-			"label": "Top-Level User:",
-			"placeholder": "Search for top-level user or leave empty for auto-detect...",
-			"saving": "Saving...",
-			"saved": "Saved for this session!",
-			"error": "Unable to save",
-			"resetting": "Resetting...",
-			"resetDone": "Reset complete"
-		},
-		"toolbar": {
-			"layout": {
-				"vertical": "Vertical layout",
-				"horizontal": "Horizontal layout",
-				"fullscreenTitle": "Toggle fullscreen mode (F11)",
-				"compactTitle": "Toggle compact layout for teams",
-				"compactTitleAdmin": "Toggle compact layout for large teams (admin)",
-				"compactTitleGuest": "Toggle compact layout for large teams",
-				"compactLabel": "Compact Teams",
-				"compactLabelWithThreshold": "Compact Teams ({count}+ reports)",
-				"employeeCountTitle": "Toggle employee count badges",
-				"employeeCountHide": "Hide employee count badges",
-				"employeeCountShow": "Show employee count badges",
-				"newEmployeeHighlightTitle": "Toggle new employee highlights",
-				"newEmployeeHighlightHide": "Hide new employee highlights",
-				"newEmployeeHighlightShow": "Show new employee highlights",
-				"profileTitle": "Toggle profile images",
-				"profileHide": "Hide profile images",
-				"profileShow": "Show profile images",
-				"nameTitle": "Toggle name visibility",
-				"nameHide": "Hide names",
-				"nameShow": "Show names",
-				"departmentTitle": "Toggle department visibility",
-				"departmentHide": "Hide departments",
-				"departmentShow": "Show departments",
-				"jobTitleTitle": "Toggle job title visibility",
-				"jobTitleHide": "Hide job titles",
-				"jobTitleShow": "Show job titles",
-				"officeTitle": "Toggle office visibility",
-				"officeHide": "Hide office locations",
-				"officeShow": "Show office locations"
-			},
-			"controls": {
-				"zoomIn": "Zoom in",
-				"zoomOut": "Zoom out",
-				"resetZoom": "Reset Zoom",
-				"expandAll": "Expand All",
-				"collapseAll": "Collapse All",
-				"resetHidden": "Reset Hidden",
-				"resetHiddenTitle": "Show all previously hidden subtrees",
-				"resetTitles": "Reset Titles",
-				"resetTitlesTitle": "Restore all job titles to their original values",
-				"resetDepartments": "Reset Departments",
-				"resetDepartmentsTitle": "Restore all departments to their original values",
-				"print": "Print",
-				"exportVisibleSvg": "SVG",
-				"exportVisiblePng": "PNG",
-				"exportVisiblePdf": "PDF",
-				"exportXlsx": "XLSX (Full)",
-				"exportXlsxAdmin": "XLSX (Admin)"
-			}
-		},
-		"status": {
-			"errorLoading": "Unable to load organization data.",
-			"updating": "Updating organization chart..."
-		},
-		"alerts": {
-			"adminLoginExpired": "Your admin session has expired. Please log in again.",
-			"pngLoadError": "Couldn't load the chart image for export.",
-			"pngExportError": "Something went wrong while exporting the PNG.",
-			"pngBlobError": "Couldn't finalize the PNG export.",
-			"pngSetupError": "Couldn't prepare PNG export: {message}",
-			"pdfNoData": "There's no chart data to export to PDF.",
-			"pdfNoChartVisible": "No visible chart to export. Try zooming or expanding first.",
-			"pdfLibraryMissing": "PDF export library is missing. Refresh the page and try again.",
-			"pdfGenericError": "PDF export failed: {message}",
-			"unknownError": "An unknown error occurred.",
-			"xlsxExportFailed": "XLSX export failed: {message}",
-			"xlsxExportError": "Unexpected error during XLSX export."
-		},
-		"badges": {
-			"new": "NEW"
-		},
-		"tree": {
-			"toggleShow": "Show this subtree",
-			"toggleHide": "Hide this subtree",
-			"editTitle": "Edit job title"
-		},
-		"titleEdit": {
-			"heading": "Edit Job Title or Department",
-			"instructions": "Set temporary titles or departments for this session. Leave any field blank to restore the original value.",
-			"employeeLabel": "Employee",
-			"originalLabel": "Original title",
-			"overrideLabel": "Custom title",
-			"overridePlaceholder": "Enter a custom title",
-			"originalDepartmentLabel": "Original department",
-			"overrideDepartmentLabel": "Custom department",
-			"overrideDepartmentPlaceholder": "Enter a custom department",
-			"save": "Save Changes",
-			"clear": "Clear Custom Title",
-			"clearDepartment": "Clear Custom Department",
-			"cancel": "Cancel"
-		},
-		"employee": {
-			"noTitle": "No title available",
-			"editTitleButton": "✏️",
-			"editDepartmentButton": "✏️",
-			"titleEditedBadge": "Edited",
-			"departmentEditedBadge": "Edited",
-			"detail": {
-				"nameHidden": "Name hidden",
-				"nameUnknown": "Unknown name",
-				"department": "Department",
-				"departmentUnknown": "Department unavailable",
-				"email": "Email",
-				"emailUnknown": "Email unavailable",
-				"phone": "Phone",
-				"phoneUnknown": "Phone unavailable",
-				"businessPhone": "Business Phone",
-				"businessPhoneUnknown": "Business phone unavailable",
-				"hireDate": "Hire Date",
-				"office": "Office",
-				"location": "Location",
-				"manager": "Manager",
-				"directReportsWithCount": "Direct Reports ({count})"
-			}
-		},
-		"loading": "Loading organization chart..."
-	},
-	"login": {
-		"pageTitle": "Admin Login - {chartTitle}",
-		"backToMain": "← Back to Main Page",
-		"heading": "Admin Login",
-		"description": "Enter admin password to access configuration",
-		"password": {
-			"label": "Password",
-			"placeholder": "Enter admin password"
-		},
-		"submit": "Login"
-	},
-	"configure": {
-		"pageTitle": "Configuration - SimpleOrgChart",
-		"navBack": "← Back to Org Chart",
-		"header": {
-			"title": "Configuration Settings",
-			"subtitle": "Customize your organization chart appearance and behavior"
-		},
-		"unsavedChanges": {
-			"message": "You have unsaved changes",
-			"hint": "Save your updates or they will be lost.",
-			"confirmLeave": "You have unsaved changes. Leave without saving?",
-			"confirmDiscard": "Discard all unsaved changes?"
-		},
-		"sections": {
-			"appearance": {
-				"title": "🎨 Appearance Settings"
-			},
-			"behavior": {
-				"title": "⚙️ Behavior Settings"
-			},
-			"userScanner": {
-				"title": "🔍 User Scanner"
-			},
-			"presence": {
-				"title": "🟢 Teams Presence"
-			},
-			"export": {
-				"title": "📄 Export to XLSX Options"
-			},
-			"emailReports": {
-				"title": "📧 Email Reports"
-			}
-		},
-		"userScanner": {
-			"enable": {
-				"label": "User Scanner (OSINT)",
-				"description": "Enable the User Scanner tool to check email presence across multiple platforms. This uses an external open-source tool (user-scanner) which must be downloaded from the config page before use.",
-				"toggleLabel": "Enable User Scanner"
-			},
-			"install": {
-				"button": "Download & Install",
-				"downloading": "Downloading…",
-				"success": "Installed successfully.",
-				"failed": "Installation failed."
-			}
-		},
-		"presence": {
-			"enable": {
-				"label": "Teams Presence Indicators",
-				"description": "Show a live status dot on each org chart card based on the employee's Microsoft Teams availability. Requires the Presence.Read.All permission in your Entra ID app registration.",
-				"toggleLabel": "Enable Teams Presence"
-			}
-		},
-		"emailReports": {
-			"enable": {
-				"label": "Automated Email Reports",
-				"description": "Send scheduled organization chart reports via email after data synchronization",
-				"toggleLabel": "Enable email reports"
-			},
-			"recipient": {
-				"label": "Recipient Email",
-				"description": "Email address(es) to receive automated reports (comma-separated for multiple)",
-				"placeholder": "reports@yourcompany.com, admin@yourcompany.com"
-			},
-			"frequency": {
-				"label": "Report Frequency",
-				"description": "How often to send automated reports",
-				"daily": "Daily",
-				"weekly": "Weekly",
-				"monthly": "Monthly"
-			},
-			"dayOfWeek": {
-				"label": "Day of Week",
-				"description": "Select the day of the week to send weekly reports",
-				"monday": "Monday",
-				"tuesday": "Tuesday",
-				"wednesday": "Wednesday",
-				"thursday": "Thursday",
-				"friday": "Friday",
-				"saturday": "Saturday",
-				"sunday": "Sunday"
-			},
-			"dayOfMonth": {
-				"label": "Day of Month",
-				"description": "Which day of the month to send reports",
-				"first": "First day",
-				"last": "Last day"
-			},
-			"fileTypes": {
-				"label": "Attachment Types",
-				"description": "Select which file formats to include as email attachments",
-				"xlsx": "XLSX (Excel)",
-				"png": "PNG (Chart Image)",
-				"note": "PNG export uses server-side rendering to generate the full organization chart."
-			},
-			"test": {
-				"label": "Send Reports",
-				"description": "Test your email configuration or send a report immediately",
-				"button": "Send Test Email",
-				"manualSendButton": "Manual Send Now"
-			}
-		},
-		"appearance": {
-			"chartTitle": {
-				"label": "Chart Title",
-				"description": "Customize the main title displayed in the header",
-				"placeholder": "Organization Chart"
-			},
-			"headerColor": {
-				"label": "Header Bar Color",
-				"description": "Choose the color for the top header bar",
-				"placeholder": "#0078D4",
-				"preview": "Preview Header"
-			},
-			"logo": {
-				"label": "Logo Image",
-				"description": "Upload a custom logo (max 5MB, recommended height 40px, PNG/JPG)",
-				"choose": "Choose Logo",
-				"currentAlt": "Current Logo",
-				"dropText": "Or drag & drop a PNG/JPG here"
-			},
-			"favicon": {
-				"label": "Favicon Image",
-				"description": "Upload a custom favicon for browser tab icon (max 5MB, recommended 32x32px ICO/PNG)",
-				"choose": "Choose Favicon",
-				"currentAlt": "Current Favicon",
-				"dropText": "Or drag & drop an ICO/PNG/JPG here"
-			},
-			"nodeColors": {
-				"label": "Node Colors by Level",
-				"description": "Customize colors for each hierarchy level",
-				"level1": "Level 1:",
-				"placeholderLevel1": "#90EE90",
-				"level2": "Level 2:",
-				"placeholderLevel2": "#FFFFE0",
-				"level3": "Level 3:",
-				"placeholderLevel3": "#E0F2FF",
-				"level4": "Level 4:",
-				"placeholderLevel4": "#FFE4E1",
-				"level5": "Level 5:",
-				"placeholderLevel5": "#E8DFF5",
-				"level6": "Level 6:",
-				"placeholderLevel6": "#FFEAA7",
-				"level7": "Level 7:",
-				"placeholderLevel7": "#FAD7FF",
-				"level8": "Level 8:",
-				"placeholderLevel8": "#D7F8FF"
-			}
-		},
-		"behavior": {
-			"autoUpdate": {
-				"label": "Auto-Update Schedule",
-				"description": "Set the time and daily schedule for automatic data updates",
-				"enable": "Enable Auto-Update"
-			},
-			"collapseLevel": {
-				"label": "Initial Collapse Level",
-				"description": "How many levels to show expanded on initial load",
-				"optionLevel1": "Show Level 1 only",
-				"optionLevel2": "Show 2 levels",
-				"optionLevel3": "Show 3 levels",
-				"optionLevel4": "Show 4 levels",
-				"optionAll": "Show all levels"
-			},
-			"search": {
-				"label": "Search Settings",
-				"description": "Configure search behavior",
-				"autoExpand": "Auto-expand to search results",
-				"highlight": "Highlight search results",
-				"highlightDurationLabel": "Highlight fade duration:",
-				"seconds": "seconds"
-			},
-			"newEmployees": {
-				"label": "New Employee Highlighting",
-				"description": "Set the time window for the \"New\" badge; viewers control highlighting from the chart",
-				"windowLabel": "Consider employees new if joined within:",
-				"month1": "1 month",
-				"month3": "3 months",
-				"month6": "6 months",
-				"month12": "12 months"
-			},
-			"topLevelUser": {
-				"label": "Top-Level User",
-				"description": "Select the root user of the organizational chart (CEO, MD, Chief exec, etc.). Leave empty to auto-detect.",
-				"selectLabel": "Top-level user",
-				"placeholder": "Search for user..."
-			},
-			"filtering": {
-				"label": "Employee Filtering",
-				"description": "Control which employees appear in the organizational chart",
-				"hideDisabled": "Hide disabled users",
-				"hideGuests": "Hide guest users",
-				"hideNoTitle": "Hide employees with no job title",
-				"ignoredTitlesLabel": "Ignored job titles:",
-				"ignoredTitlesPlaceholder": "Search...",
-				"ignoredDepartmentsLabel": "Ignored departments:",
-				"ignoredDepartmentsPlaceholder": "Search...",
-				"ignoredEmployeesLabel": "Ignored employees:",
-				"ignoredEmployeesPlaceholder": "Search..."
-			},
-			"multiLine": {
-				"label": "Multi-line Children Threshold",
-				"description": "Set the number of direct reports at which a manager's team is wrapped into multiple rows.",
-				"threshold": "Threshold:",
-				"placeholder": "20"
-			},
-			"print": {
-				"label": "Print Options",
-				"description": "Configure print layout settings",
-				"landscape": "Landscape",
-				"portrait": "Portrait",
-				"a4": "A4",
-				"letter": "Letter",
-				"a3": "A3"
-			}
-		},
-		"export": {
-			"columnVisibility": {
-				"label": "Column Visibility",
-				"description": "Choose which fields appear in XLSX exports. “Show Admin Only” keeps the column hidden for regular viewers but includes it when an administrator exports."
-			},
-			"columns": {
-				"name": "Name",
-				"title": "Title",
-				"department": "Department",
-				"email": "Email",
-				"phone": "Phone",
-				"businessPhone": "Business Phone",
-				"hireDate": "Hire Date",
-				"country": "Country",
-				"state": "State",
-				"city": "City",
-				"office": "Office",
-				"manager": "Manager"
-			},
-			"options": {
-				"show": "Show",
-				"hide": "Hide",
-				"admin": "Show Admin Only"
-			}
-		},
-		"data": {
-			"manualUpdate": {
-				"lastUpdatedPending": "Pending",
-				"lastUpdatedUpdating": "Updating...",
-				"statusComplete": "✔ Update complete",
-				"statusFailed": "✗ Update failed"
-			}
-		},
-		"configTransfer": {
-			"title": "📦 Configuration Transfer",
-			"export": {
-				"label": "Export Configuration",
-				"description": "Download all settings as a JSON file. Employee data is not included.",
-				"button": "Export"
-			},
-			"import": {
-				"label": "Import Configuration",
-				"description": "Upload a previously exported JSON file to restore settings.",
-				"button": "Import"
-			},
-			"reset": {
-				"label": "Reset to Defaults",
-				"description": "Restore all settings to their factory defaults. Employee data is not affected.",
-				"button": "Reset"
-			},
-			"flash": {
-				"importSuccess": "Configuration imported successfully.",
-				"importError": "Failed to import configuration: "
-			}
-		},
-		"buttons": {
-			"resetDefault": "Reset to Default",
-			"resetAllNodeColors": "Reset All Node Colors",
-			"resetColumns": "Reset Columns to Default",
-			"clear": "Clear",
-			"discard": "Discard Changes",
-			"saveAll": "Save All Settings",
-			"resetAll": "Reset Everything to Defaults",
-			"logout": "Logout"
-		}
-	},
-	"reports": {
-		"pageTitle": "Reports - SimpleOrgChart",
-		"navBack": "← Back to Org Chart",
-		"header": {
-			"title": "Admin Reports",
-			"subtitle": "Analyze data quality and export insights"
-		},
-		"selector": {
-			"label": "Report type",
-			"options": {
-				"missingManager": "Employees without managers",
-				"lastLogins": "Users by last sign-in activity",
-				"hiredThisYear": "Employees hired in the last 365 days",
-				"filteredUsers": "Users hidden by filters",
-				"userScanner": "User Scanner (OSINT)"
-			}
-		},
-		"userScanner": {
-			"searchLabel": "Scan a user",
-			"searchPlaceholder": "Search employee or enter any email address...",
-			"scanButton": "Run Scan",
-			"tabs": {
-				"single": "Individual",
-				"all": "Organization"
-			},
-			"siteFilter": {
-				"label": "Filter by sites",
-				"placeholder": "Type a site name...",
-				"reset": "Reset"
-			},
-			"categoryFilter": {
-				"label": "Filter by categories",
-				"placeholder": "Type a category...",
-				"reset": "Reset"
-			},
-			"options": {
-				"allowLoud": "Include loud sites (may notify the target)",
-				"onlyFound": "Only show registered / found results"
-			},
-			"fullScan": {
-				"title": "Full Organization Scan",
-				"description": "Scan all employees by email. Results are downloaded automatically when complete.",
-				"filtersTitle": "User Filters",
-				"emailPlaceholder": "(Optional) Email to send report to...",
-				"button": "Run Full Scan"
-			}
-		},
-		"buttons": {
-			"refresh": "Refresh Data",
-			"refreshTooltip": "Regenerate the report with the latest directory data",
-			"export": "Export XLSX",
-			"exportTooltip": "Download this report as an Excel workbook",
-			"exportPdf": "Export PDF",
-			"exportPdfTooltip": "Download this report as a PDF document"
-		},
-		"filters": {
-			"title": "Filters",
-			"groups": {
-				"mailboxTypes": "Mailbox type",
-				"accountStatus": "Account status",
-				"licenseStatus": "License status",
-				"userScope": "User type"
-			},
-			"includeUserMailboxes": {
-				"label": "User"
-			},
-			"includeSharedMailboxes": {
-				"label": "Shared"
-			},
-			"includeRoomEquipmentMailboxes": {
-				"label": "Room/Equipment"
-			},
-			"includeEnabled": {
-				"label": "Enabled"
-			},
-			"includeDisabled": {
-				"label": "Disabled"
-			},
-			"includeLicensed": {
-				"label": "Licensed"
-			},
-			"includeUnlicensed": {
-				"label": "Unlicensed"
-			},
-			"inactiveDays": {
-				"label": "Inactive for at least",
-				"options": {
-					"all": "All activity",
-					"thirty": "30 days",
-					"sixty": "60 days",
-					"ninety": "90 days",
-					"oneEighty": "180 days",
-					"year": "365 days",
-					"never": "Never signed in"
-				}
-			},
-			"inactiveDaysMax": {
-				"label": "Inactive for at most",
-				"options": {
-					"noLimit": "No limit",
-					"thirty": "30 days",
-					"sixty": "60 days",
-					"ninety": "90 days",
-					"oneEighty": "180 days",
-					"year": "365 days",
-					"twoYears": "730 days",
-					"threeYears": "1095 days"
-				}
-			},
-			"includeGuests": {
-				"label": "Guest"
-			},
-			"includeMembers": {
-				"label": "Member"
-			}
-		},
-		"summary": {
-			"totalLabel": "Employees without managers",
-			"generatedLabel": "Last Generated",
-			"generatedPending": "Pending",
-			"licensesLabel": "Total Licenses"
-		},
-		"table": {
-			"title": "Employees without managers",
-			"loading": "Loading report...",
-			"countSummary": "Showing {count} employees without managers",
-			"empty": "No users are currently missing manager information. Great job!",
-			"columns": {
-				"name": "Name",
-				"title": "Title",
-				"department": "Department",
-				"email": "Email",
-				"phone": "Phone",
-				"location": "Location",
-				"manager": "Manager",
-				"reason": "Reason",
-				"userPrincipalName": "User Principal Name",
-				"usageLocation": "Usage Location",
-				"hireDate": "Hire Date",
-				"daysSinceHire": "Days Since Hire",
-				"licenseCount": "License Count",
-				"licenses": "Licenses",
-				"lastActivityDate": "Most recent sign-in",
-				"daysSinceMostRecentSignIn": "Days since most recent sign-in",
-				"lastInteractiveSignIn": "Last interactive sign-in",
-				"daysSinceInteractiveSignIn": "Days since interactive sign-in",
-				"lastNonInteractiveSignIn": "Last non-interactive sign-in",
-				"daysSinceNonInteractiveSignIn": "Days since non-interactive sign-in",
-				"neverSignedIn": "Never signed in"
-			},
-			"reasonLabels": {
-				"no_manager": "No manager",
-				"manager_not_found": "Manager not found",
-				"detached": "Detached hierarchy",
-				"filtered": "Filtered",
-				"unknown": "Unknown reason"
-			},
-			"neverSignedIn": "Never signed in"
-		},
-		"types": {
-			"lastLogins": {
-				"summaryLabel": "Users by last sign-in activity",
-				"tableTitle": "Users by last sign-in activity",
-				"empty": "All monitored users have signed in within the selected period.",
-				"countSummary": "Showing {count} users matching the report criteria"
-			},
-			"hiredThisYear": {
-				"summaryLabel": "Employees hired in the last 365 days",
-				"tableTitle": "Employees hired in the last 365 days",
-				"empty": "No employees have been hired in the last 365 days.",
-				"countSummary": "Showing {count} employees hired in the last 365 days"
-			},
-			"filteredLicensed": {
-				"columns": {
-					"filterReasons": "Reason"
-				},
-				"reason": {
-					"disabled": "Disabled",
-					"guest": "Guest",
-					"noTitle": "Title missing",
-					"ignoredTitle": "Title filtered",
-					"ignoredDepartment": "Department filtered",
-					"ignoredEmployee": "User filtered"
-				}
-			},
-			"filteredUsers": {
-				"summaryLabel": "Users hidden by filters",
-				"tableTitle": "Users hidden by org chart filters",
-				"empty": "No users are currently hidden by your filters.",
-				"countSummary": "Showing {count} users hidden by filters"
-			},
-			"userScanner": {
-				"summaryLabel": "User Scanner Results",
-				"tableTitle": "User Scanner OSINT Results",
-				"empty": "No scan results yet. Run a scan to see results here.",
-				"countSummary": "Showing results for {count} employees",
-				"noResults": "No results found for this scan.",
-				"scanning": "Scanning…",
-				"singleResultTitle": "Scan Results",
-				"columns": {
-					"totalChecked": "Sites Checked",
-					"registeredCount": "Registered"
-				},
-				"fullScan": {
-					"starting": "Starting full organization scan…",
-					"started": "Full scan started for {count} employees.",
-					"willNotify": "Report will also be emailed to {email}.",
-					"running": "A full scan is currently running…",
-					"progressStatus": "Scanning {current} of {total} employees…",
-					"stop": "Stop Scan",
-					"stopping": "Stopping scan after current employee…",
-					"stopped": "Scan stopped. Partial results available below.",
-					"complete": "Scan complete. Download available below.",
-					"failed": "Scan failed: {error}",
-					"terminalTitle": "Scan Output",
-					"historyTitle": "Recent Scan Results",
-					"historyEmployees": "employees",
-					"historyRegistered": "registered",
-					"download": "Download",
-					"clearHistory": "Clear"
-				}
-			}
-		},
-		"errors": {
-			"loadFailed": "Unable to load the report.",
-			"exportFailed": "Unable to export the report.",
-			"initializationFailed": "Failed to initialize the reports page.",
-			"pdfLibraryMissing": "PDF export library is not available. Please refresh the page.",
-			"noDataToExport": "No data available to export.",
-			"noTableToExport": "No table data found to export.",
-			"pdfExportFailed": "PDF export failed: {message}"
-		}
-	},
-	"searchTest": {
-		"pageTitle": "Search Functionality Test",
-		"heading": "🔍 Search Functionality Test & Debug",
-		"sections": {
-			"checkData": {
-				"title": "1. Check Data File Status",
-				"checkButton": "Check Data File",
-				"debugButton": "Debug Search System"
-			},
-			"forceUpdate": {
-				"title": "2. Force Data Update",
-				"description": "If the data file doesn't exist or is empty, force an update:",
-				"button": "Force Update Now"
-			},
-			"testSearch": {
-				"title": "3. Test Search",
-				"placeholder": "Enter search term (min 2 chars)",
-				"button": "Test Search"
-			},
-			"viewAll": {
-				"title": "4. View All Employees",
-				"button": "Load All Employees"
-			}
-		}
-	},
-	"presence": {
-		"activity": {
-			"Available": "Available",
-			"Away": "Away",
-			"BeRightBack": "Be Right Back",
-			"Busy": "Busy",
-			"DoNotDisturb": "Do Not Disturb",
-			"InACall": "In a Call",
-			"InAConferenceCall": "In a Conference Call",
-			"InAMeeting": "In a Meeting",
-			"Inactive": "Inactive",
-			"Offline": "Offline",
-			"OffWork": "Off Work",
-			"OutOfOffice": "Out of Office",
-			"PresenceUnknown": "Unknown",
-			"Presenting": "Presenting",
-			"UrgentInterruptionsOnly": "Do Not Disturb",
-			"AvailableIdle": "Available (Idle)",
-			"BusyIdle": "Busy (Idle)"
-		}
-	}
+  "buttons": {
+    "configure": "Configure",
+    "logout": "Logout",
+    "save": "Save",
+    "reset": "Reset",
+    "reports": "Reports",
+    "adminLogin": "Admin Login",
+    "sync": "Sync",
+    "syncing": "Syncing...",
+    "syncComplete": "Sync complete",
+    "syncFailed": "Sync failed"
+  },
+  "index": {
+    "pageTitle": "Organization Chart",
+    "header": {
+      "logoAlt": "Logo",
+      "title": "Organization Chart",
+      "subtitle": "Updates daily @ 8:00 PM",
+      "autoUpdate": {
+        "enabled": "Updates daily @ {time}",
+        "enabledWithLastUpdate": "Updates daily @ {time} · Last synced: {lastUpdate}",
+        "disabled": "Auto-update disabled",
+        "disabledWithLastUpdate": "Auto-update disabled · Last synced: {lastUpdate}",
+        "syncing": "Syncing..."
+      }
+    },
+    "search": {
+      "placeholder": "Search for employees by name, title, or department...",
+      "noResults": "No matches found"
+    },
+    "topUser": {
+      "label": "Top-Level User:",
+      "placeholder": "Search for top-level user or leave empty for auto-detect...",
+      "saving": "Saving...",
+      "saved": "Saved for this session!",
+      "error": "Unable to save",
+      "resetting": "Resetting...",
+      "resetDone": "Reset complete"
+    },
+    "toolbar": {
+      "layout": {
+        "vertical": "Vertical layout",
+        "horizontal": "Horizontal layout",
+        "fullscreenTitle": "Toggle fullscreen mode (F11)",
+        "compactTitle": "Toggle compact layout for teams",
+        "compactTitleAdmin": "Toggle compact layout for large teams (admin)",
+        "compactTitleGuest": "Toggle compact layout for large teams",
+        "compactLabel": "Compact Teams",
+        "compactLabelWithThreshold": "Compact Teams ({count}+ reports)",
+        "employeeCountTitle": "Toggle employee count badges",
+        "employeeCountHide": "Hide employee count badges",
+        "employeeCountShow": "Show employee count badges",
+        "newEmployeeHighlightTitle": "Toggle new employee highlights",
+        "newEmployeeHighlightHide": "Hide new employee highlights",
+        "newEmployeeHighlightShow": "Show new employee highlights",
+        "profileTitle": "Toggle profile images",
+        "profileHide": "Hide profile images",
+        "profileShow": "Show profile images",
+        "nameTitle": "Toggle name visibility",
+        "nameHide": "Hide names",
+        "nameShow": "Show names",
+        "departmentTitle": "Toggle department visibility",
+        "departmentHide": "Hide departments",
+        "departmentShow": "Show departments",
+        "jobTitleTitle": "Toggle job title visibility",
+        "jobTitleHide": "Hide job titles",
+        "jobTitleShow": "Show job titles",
+        "officeTitle": "Toggle office visibility",
+        "officeHide": "Hide office locations",
+        "officeShow": "Show office locations"
+      },
+      "controls": {
+        "zoomIn": "Zoom in",
+        "zoomOut": "Zoom out",
+        "resetZoom": "Reset Zoom",
+        "expandAll": "Expand All",
+        "collapseAll": "Collapse All",
+        "resetHidden": "Reset Hidden",
+        "resetHiddenTitle": "Show all previously hidden subtrees",
+        "resetTitles": "Reset Titles",
+        "resetTitlesTitle": "Restore all job titles to their original values",
+        "resetDepartments": "Reset Departments",
+        "resetDepartmentsTitle": "Restore all departments to their original values",
+        "print": "Print",
+        "exportVisibleSvg": "SVG",
+        "exportVisiblePng": "PNG",
+        "exportVisiblePdf": "PDF",
+        "exportXlsx": "XLSX (Full)",
+        "exportXlsxAdmin": "XLSX (Admin)"
+      }
+    },
+    "status": {
+      "errorLoading": "Unable to load organization data.",
+      "updating": "Updating organization chart..."
+    },
+    "alerts": {
+      "adminLoginExpired": "Your admin session has expired. Please log in again.",
+      "pngLoadError": "Couldn't load the chart image for export.",
+      "pngExportError": "Something went wrong while exporting the PNG.",
+      "pngBlobError": "Couldn't finalize the PNG export.",
+      "pngSetupError": "Couldn't prepare PNG export: {message}",
+      "pdfNoData": "There's no chart data to export to PDF.",
+      "pdfNoChartVisible": "No visible chart to export. Try zooming or expanding first.",
+      "pdfLibraryMissing": "PDF export library is missing. Refresh the page and try again.",
+      "pdfGenericError": "PDF export failed: {message}",
+      "unknownError": "An unknown error occurred.",
+      "xlsxExportFailed": "XLSX export failed: {message}",
+      "xlsxExportError": "Unexpected error during XLSX export."
+    },
+    "badges": {
+      "new": "NEW"
+    },
+    "tree": {
+      "toggleShow": "Show this subtree",
+      "toggleHide": "Hide this subtree",
+      "editTitle": "Edit job title"
+    },
+    "titleEdit": {
+      "heading": "Edit Job Title or Department",
+      "instructions": "Set temporary titles or departments for this session. Leave any field blank to restore the original value.",
+      "employeeLabel": "Employee",
+      "originalLabel": "Original title",
+      "overrideLabel": "Custom title",
+      "overridePlaceholder": "Enter a custom title",
+      "originalDepartmentLabel": "Original department",
+      "overrideDepartmentLabel": "Custom department",
+      "overrideDepartmentPlaceholder": "Enter a custom department",
+      "save": "Save Changes",
+      "clear": "Clear Custom Title",
+      "clearDepartment": "Clear Custom Department",
+      "cancel": "Cancel"
+    },
+    "employee": {
+      "noTitle": "No title available",
+      "editTitleButton": "✏️",
+      "editDepartmentButton": "✏️",
+      "titleEditedBadge": "Edited",
+      "departmentEditedBadge": "Edited",
+      "detail": {
+        "nameHidden": "Name hidden",
+        "nameUnknown": "Unknown name",
+        "department": "Department",
+        "departmentUnknown": "Department unavailable",
+        "email": "Email",
+        "emailUnknown": "Email unavailable",
+        "phone": "Phone",
+        "phoneUnknown": "Phone unavailable",
+        "businessPhone": "Business Phone",
+        "businessPhoneUnknown": "Business phone unavailable",
+        "hireDate": "Hire Date",
+        "office": "Office",
+        "location": "Location",
+        "manager": "Manager",
+        "directReportsWithCount": "Direct Reports ({count})"
+      }
+    },
+    "loading": "Loading organization chart..."
+  },
+  "login": {
+    "pageTitle": "Admin Login - {chartTitle}",
+    "backToMain": "← Back to Main Page",
+    "heading": "Admin Login",
+    "description": "Enter admin password to access configuration",
+    "password": {
+      "label": "Password",
+      "placeholder": "Enter admin password"
+    },
+    "submit": "Login"
+  },
+  "configure": {
+    "pageTitle": "Configuration - SimpleOrgChart",
+    "navBack": "← Back to Org Chart",
+    "header": {
+      "title": "Configuration Settings",
+      "subtitle": "Customize your organization chart appearance and behavior"
+    },
+    "unsavedChanges": {
+      "message": "You have unsaved changes",
+      "hint": "Save your updates or they will be lost.",
+      "confirmLeave": "You have unsaved changes. Leave without saving?",
+      "confirmDiscard": "Discard all unsaved changes?"
+    },
+    "sections": {
+      "appearance": {
+        "title": "🎨 Appearance Settings"
+      },
+      "behavior": {
+        "title": "⚙️ Behavior Settings"
+      },
+      "userScanner": {
+        "title": "🔍 User Scanner"
+      },
+      "presence": {
+        "title": "🟢 Teams Presence"
+      },
+      "export": {
+        "title": "📄 Export to XLSX Options"
+      },
+      "emailReports": {
+        "title": "📧 Email Reports"
+      }
+    },
+    "userScanner": {
+      "enable": {
+        "label": "User Scanner (OSINT)",
+        "description": "Enable the User Scanner tool to check email presence across multiple platforms. This uses an external open-source tool (user-scanner) which must be downloaded from the config page before use.",
+        "toggleLabel": "Enable User Scanner"
+      },
+      "install": {
+        "button": "Download & Install",
+        "downloading": "Downloading…",
+        "success": "Installed successfully.",
+        "failed": "Installation failed.",
+        "notInstalled": "Not installed — download to enable the scanner.",
+        "downloadFailed": "Download failed: "
+      }
+    },
+    "presence": {
+      "enable": {
+        "label": "Teams Presence Indicators",
+        "description": "Show a live status dot on each org chart card based on the employee's Microsoft Teams availability. Requires the Presence.Read.All permission in your Entra ID app registration.",
+        "toggleLabel": "Enable Teams Presence"
+      }
+    },
+    "emailReports": {
+      "enable": {
+        "label": "Automated Email Reports",
+        "description": "Send scheduled organization chart reports via email after data synchronization",
+        "toggleLabel": "Enable email reports"
+      },
+      "recipient": {
+        "label": "Recipient Email",
+        "description": "Email address(es) to receive automated reports (comma-separated for multiple)",
+        "placeholder": "reports@yourcompany.com, admin@yourcompany.com"
+      },
+      "frequency": {
+        "label": "Report Frequency",
+        "description": "How often to send automated reports",
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly"
+      },
+      "dayOfWeek": {
+        "label": "Day of Week",
+        "description": "Select the day of the week to send weekly reports",
+        "monday": "Monday",
+        "tuesday": "Tuesday",
+        "wednesday": "Wednesday",
+        "thursday": "Thursday",
+        "friday": "Friday",
+        "saturday": "Saturday",
+        "sunday": "Sunday"
+      },
+      "dayOfMonth": {
+        "label": "Day of Month",
+        "description": "Which day of the month to send reports",
+        "first": "First day",
+        "last": "Last day"
+      },
+      "fileTypes": {
+        "label": "Attachment Types",
+        "description": "Select which file formats to include as email attachments",
+        "xlsx": "XLSX (Excel)",
+        "png": "PNG (Chart Image)",
+        "note": "PNG export uses server-side rendering to generate the full organization chart."
+      },
+      "test": {
+        "label": "Send Reports",
+        "description": "Test your email configuration or send a report immediately",
+        "button": "Send Test Email",
+        "manualSendButton": "Manual Send Now"
+      }
+    },
+    "appearance": {
+      "chartTitle": {
+        "label": "Chart Title",
+        "description": "Customize the main title displayed in the header",
+        "placeholder": "Organization Chart"
+      },
+      "headerColor": {
+        "label": "Header Bar Color",
+        "description": "Choose the color for the top header bar",
+        "placeholder": "#0078D4",
+        "preview": "Preview Header"
+      },
+      "logo": {
+        "label": "Logo Image",
+        "description": "Upload a custom logo (max 5MB, recommended height 40px, PNG/JPG)",
+        "choose": "Choose Logo",
+        "currentAlt": "Current Logo",
+        "dropText": "Or drag & drop a PNG/JPG here"
+      },
+      "favicon": {
+        "label": "Favicon Image",
+        "description": "Upload a custom favicon for browser tab icon (max 5MB, recommended 32x32px ICO/PNG)",
+        "choose": "Choose Favicon",
+        "currentAlt": "Current Favicon",
+        "dropText": "Or drag & drop an ICO/PNG/JPG here"
+      },
+      "nodeColors": {
+        "label": "Node Colors by Level",
+        "description": "Customize colors for each hierarchy level",
+        "level1": "Level 1:",
+        "placeholderLevel1": "#90EE90",
+        "level2": "Level 2:",
+        "placeholderLevel2": "#FFFFE0",
+        "level3": "Level 3:",
+        "placeholderLevel3": "#E0F2FF",
+        "level4": "Level 4:",
+        "placeholderLevel4": "#FFE4E1",
+        "level5": "Level 5:",
+        "placeholderLevel5": "#E8DFF5",
+        "level6": "Level 6:",
+        "placeholderLevel6": "#FFEAA7",
+        "level7": "Level 7:",
+        "placeholderLevel7": "#FAD7FF",
+        "level8": "Level 8:",
+        "placeholderLevel8": "#D7F8FF"
+      }
+    },
+    "behavior": {
+      "autoUpdate": {
+        "label": "Auto-Update Schedule",
+        "description": "Set the time and daily schedule for automatic data updates",
+        "enable": "Enable Auto-Update"
+      },
+      "collapseLevel": {
+        "label": "Initial Collapse Level",
+        "description": "How many levels to show expanded on initial load",
+        "optionLevel1": "Show Level 1 only",
+        "optionLevel2": "Show 2 levels",
+        "optionLevel3": "Show 3 levels",
+        "optionLevel4": "Show 4 levels",
+        "optionAll": "Show all levels"
+      },
+      "search": {
+        "label": "Search Settings",
+        "description": "Configure search behavior",
+        "autoExpand": "Auto-expand to search results",
+        "highlight": "Highlight search results",
+        "highlightDurationLabel": "Highlight fade duration:",
+        "seconds": "seconds"
+      },
+      "newEmployees": {
+        "label": "New Employee Highlighting",
+        "description": "Set the time window for the \"New\" badge; viewers control highlighting from the chart",
+        "windowLabel": "Consider employees new if joined within:",
+        "month1": "1 month",
+        "month3": "3 months",
+        "month6": "6 months",
+        "month12": "12 months"
+      },
+      "topLevelUser": {
+        "label": "Top-Level User",
+        "description": "Select the root user of the organizational chart (CEO, MD, Chief exec, etc.). Leave empty to auto-detect.",
+        "selectLabel": "Top-level user",
+        "placeholder": "Search for user..."
+      },
+      "filtering": {
+        "label": "Employee Filtering",
+        "description": "Control which employees appear in the organizational chart",
+        "hideDisabled": "Hide disabled users",
+        "hideGuests": "Hide guest users",
+        "hideNoTitle": "Hide employees with no job title",
+        "ignoredTitlesLabel": "Ignored job titles:",
+        "ignoredTitlesPlaceholder": "Search...",
+        "ignoredDepartmentsLabel": "Ignored departments:",
+        "ignoredDepartmentsPlaceholder": "Search...",
+        "ignoredEmployeesLabel": "Ignored employees:",
+        "ignoredEmployeesPlaceholder": "Search..."
+      },
+      "multiLine": {
+        "label": "Multi-line Children Threshold",
+        "description": "Set the number of direct reports at which a manager's team is wrapped into multiple rows.",
+        "threshold": "Threshold:",
+        "placeholder": "20"
+      },
+      "print": {
+        "label": "Print Options",
+        "description": "Configure print layout settings",
+        "landscape": "Landscape",
+        "portrait": "Portrait",
+        "a4": "A4",
+        "letter": "Letter",
+        "a3": "A3"
+      }
+    },
+    "export": {
+      "columnVisibility": {
+        "label": "Column Visibility",
+        "description": "Choose which fields appear in XLSX exports. “Show Admin Only” keeps the column hidden for regular viewers but includes it when an administrator exports."
+      },
+      "columns": {
+        "name": "Name",
+        "title": "Title",
+        "department": "Department",
+        "email": "Email",
+        "phone": "Phone",
+        "businessPhone": "Business Phone",
+        "hireDate": "Hire Date",
+        "country": "Country",
+        "state": "State",
+        "city": "City",
+        "office": "Office",
+        "manager": "Manager"
+      },
+      "options": {
+        "show": "Show",
+        "hide": "Hide",
+        "admin": "Show Admin Only"
+      }
+    },
+    "data": {
+      "manualUpdate": {
+        "lastUpdatedPending": "Pending",
+        "lastUpdatedUpdating": "Updating...",
+        "statusComplete": "✔ Update complete",
+        "statusFailed": "✗ Update failed"
+      }
+    },
+    "configTransfer": {
+      "title": "📦 Configuration Transfer",
+      "export": {
+        "label": "Export Configuration",
+        "description": "Download all settings as a JSON file. Employee data is not included.",
+        "button": "Export"
+      },
+      "import": {
+        "label": "Import Configuration",
+        "description": "Upload a previously exported JSON file to restore settings.",
+        "button": "Import"
+      },
+      "reset": {
+        "label": "Reset to Defaults",
+        "description": "Restore all settings to their factory defaults. Employee data is not affected.",
+        "button": "Reset"
+      },
+      "flash": {
+        "importSuccess": "Configuration imported successfully.",
+        "importError": "Failed to import configuration: "
+      }
+    },
+    "buttons": {
+      "resetDefault": "Reset to Default",
+      "resetAllNodeColors": "Reset All Node Colors",
+      "resetColumns": "Reset Columns to Default",
+      "clear": "Clear",
+      "discard": "Discard Changes",
+      "saveAll": "Save All Settings",
+      "resetAll": "Reset Everything to Defaults",
+      "logout": "Logout"
+    }
+  },
+  "reports": {
+    "pageTitle": "Reports - SimpleOrgChart",
+    "navBack": "← Back to Org Chart",
+    "header": {
+      "title": "Admin Reports",
+      "subtitle": "Analyze data quality and export insights"
+    },
+    "selector": {
+      "label": "Report type",
+      "options": {
+        "missingManager": "Employees without managers",
+        "lastLogins": "Users by last sign-in activity",
+        "hiredThisYear": "Employees hired in the last 365 days",
+        "filteredUsers": "Users hidden by filters",
+        "userScanner": "User Scanner (OSINT)"
+      }
+    },
+    "userScanner": {
+      "searchLabel": "Scan a user",
+      "searchPlaceholder": "Search employee or enter any email address...",
+      "scanButton": "Run Scan",
+      "tabs": {
+        "single": "Individual",
+        "all": "Organization"
+      },
+      "siteFilter": {
+        "label": "Filter by sites",
+        "placeholder": "Type a site name...",
+        "reset": "Reset"
+      },
+      "categoryFilter": {
+        "label": "Filter by categories",
+        "placeholder": "Type a category...",
+        "reset": "Reset"
+      },
+      "options": {
+        "allowLoud": "Include loud sites (may notify the target)",
+        "onlyFound": "Only show registered / found results"
+      },
+      "fullScan": {
+        "title": "Full Organization Scan",
+        "description": "Scan all employees by email. Results are downloaded automatically when complete.",
+        "filtersTitle": "User Filters",
+        "emailPlaceholder": "(Optional) Email to send report to...",
+        "button": "Run Full Scan"
+      }
+    },
+    "buttons": {
+      "refresh": "Refresh Data",
+      "refreshTooltip": "Regenerate the report with the latest directory data",
+      "export": "Export XLSX",
+      "exportTooltip": "Download this report as an Excel workbook",
+      "exportPdf": "Export PDF",
+      "exportPdfTooltip": "Download this report as a PDF document"
+    },
+    "filters": {
+      "title": "Filters",
+      "groups": {
+        "mailboxTypes": "Mailbox type",
+        "accountStatus": "Account status",
+        "licenseStatus": "License status",
+        "userScope": "User type"
+      },
+      "includeUserMailboxes": {
+        "label": "User"
+      },
+      "includeSharedMailboxes": {
+        "label": "Shared"
+      },
+      "includeRoomEquipmentMailboxes": {
+        "label": "Room/Equipment"
+      },
+      "includeEnabled": {
+        "label": "Enabled"
+      },
+      "includeDisabled": {
+        "label": "Disabled"
+      },
+      "includeLicensed": {
+        "label": "Licensed"
+      },
+      "includeUnlicensed": {
+        "label": "Unlicensed"
+      },
+      "inactiveDays": {
+        "label": "Inactive for at least",
+        "options": {
+          "all": "All activity",
+          "thirty": "30 days",
+          "sixty": "60 days",
+          "ninety": "90 days",
+          "oneEighty": "180 days",
+          "year": "365 days",
+          "never": "Never signed in"
+        }
+      },
+      "inactiveDaysMax": {
+        "label": "Inactive for at most",
+        "options": {
+          "noLimit": "No limit",
+          "thirty": "30 days",
+          "sixty": "60 days",
+          "ninety": "90 days",
+          "oneEighty": "180 days",
+          "year": "365 days",
+          "twoYears": "730 days",
+          "threeYears": "1095 days"
+        }
+      },
+      "includeGuests": {
+        "label": "Guest"
+      },
+      "includeMembers": {
+        "label": "Member"
+      }
+    },
+    "summary": {
+      "totalLabel": "Employees without managers",
+      "generatedLabel": "Last Generated",
+      "generatedPending": "Pending",
+      "licensesLabel": "Total Licenses"
+    },
+    "table": {
+      "title": "Employees without managers",
+      "loading": "Loading report...",
+      "countSummary": "Showing {count} employees without managers",
+      "empty": "No users are currently missing manager information. Great job!",
+      "columns": {
+        "name": "Name",
+        "title": "Title",
+        "department": "Department",
+        "email": "Email",
+        "phone": "Phone",
+        "location": "Location",
+        "manager": "Manager",
+        "reason": "Reason",
+        "userPrincipalName": "User Principal Name",
+        "usageLocation": "Usage Location",
+        "hireDate": "Hire Date",
+        "daysSinceHire": "Days Since Hire",
+        "licenseCount": "License Count",
+        "licenses": "Licenses",
+        "lastActivityDate": "Most recent sign-in",
+        "daysSinceMostRecentSignIn": "Days since most recent sign-in",
+        "lastInteractiveSignIn": "Last interactive sign-in",
+        "daysSinceInteractiveSignIn": "Days since interactive sign-in",
+        "lastNonInteractiveSignIn": "Last non-interactive sign-in",
+        "daysSinceNonInteractiveSignIn": "Days since non-interactive sign-in",
+        "neverSignedIn": "Never signed in"
+      },
+      "reasonLabels": {
+        "no_manager": "No manager",
+        "manager_not_found": "Manager not found",
+        "detached": "Detached hierarchy",
+        "filtered": "Filtered",
+        "unknown": "Unknown reason"
+      },
+      "neverSignedIn": "Never signed in"
+    },
+    "types": {
+      "lastLogins": {
+        "summaryLabel": "Users by last sign-in activity",
+        "tableTitle": "Users by last sign-in activity",
+        "empty": "All monitored users have signed in within the selected period.",
+        "countSummary": "Showing {count} users matching the report criteria"
+      },
+      "hiredThisYear": {
+        "summaryLabel": "Employees hired in the last 365 days",
+        "tableTitle": "Employees hired in the last 365 days",
+        "empty": "No employees have been hired in the last 365 days.",
+        "countSummary": "Showing {count} employees hired in the last 365 days"
+      },
+      "filteredLicensed": {
+        "columns": {
+          "filterReasons": "Reason"
+        },
+        "reason": {
+          "disabled": "Disabled",
+          "guest": "Guest",
+          "noTitle": "Title missing",
+          "ignoredTitle": "Title filtered",
+          "ignoredDepartment": "Department filtered",
+          "ignoredEmployee": "User filtered"
+        }
+      },
+      "filteredUsers": {
+        "summaryLabel": "Users hidden by filters",
+        "tableTitle": "Users hidden by org chart filters",
+        "empty": "No users are currently hidden by your filters.",
+        "countSummary": "Showing {count} users hidden by filters"
+      },
+      "userScanner": {
+        "summaryLabel": "User Scanner Results",
+        "tableTitle": "User Scanner OSINT Results",
+        "empty": "No scan results yet. Run a scan to see results here.",
+        "countSummary": "Showing results for {count} employees",
+        "noResults": "No results found for this scan.",
+        "scanning": "Scanning…",
+        "singleResultTitle": "Scan Results",
+        "columns": {
+          "totalChecked": "Sites Checked",
+          "registeredCount": "Registered"
+        },
+        "fullScan": {
+          "starting": "Starting full organization scan…",
+          "started": "Full scan started for {count} employees.",
+          "willNotify": "Report will also be emailed to {email}.",
+          "running": "A full scan is currently running…",
+          "progressStatus": "Scanning {current} of {total} employees…",
+          "stop": "Stop Scan",
+          "stopping": "Stopping scan after current employee…",
+          "stopped": "Scan stopped. Partial results available below.",
+          "complete": "Scan complete. Download available below.",
+          "failed": "Scan failed: {error}",
+          "terminalTitle": "Scan Output",
+          "historyTitle": "Recent Scan Results",
+          "historyEmployees": "employees",
+          "historyRegistered": "registered",
+          "download": "Download",
+          "clearHistory": "Clear"
+        }
+      }
+    },
+    "errors": {
+      "loadFailed": "Unable to load the report.",
+      "exportFailed": "Unable to export the report.",
+      "initializationFailed": "Failed to initialize the reports page.",
+      "pdfLibraryMissing": "PDF export library is not available. Please refresh the page.",
+      "noDataToExport": "No data available to export.",
+      "noTableToExport": "No table data found to export.",
+      "pdfExportFailed": "PDF export failed: {message}"
+    }
+  },
+  "searchTest": {
+    "pageTitle": "Search Functionality Test",
+    "heading": "🔍 Search Functionality Test & Debug",
+    "sections": {
+      "checkData": {
+        "title": "1. Check Data File Status",
+        "checkButton": "Check Data File",
+        "debugButton": "Debug Search System"
+      },
+      "forceUpdate": {
+        "title": "2. Force Data Update",
+        "description": "If the data file doesn't exist or is empty, force an update:",
+        "button": "Force Update Now"
+      },
+      "testSearch": {
+        "title": "3. Test Search",
+        "placeholder": "Enter search term (min 2 chars)",
+        "button": "Test Search"
+      },
+      "viewAll": {
+        "title": "4. View All Employees",
+        "button": "Load All Employees"
+      }
+    }
+  },
+  "presence": {
+    "activity": {
+      "Available": "Available",
+      "Away": "Away",
+      "BeRightBack": "Be Right Back",
+      "Busy": "Busy",
+      "DoNotDisturb": "Do Not Disturb",
+      "InACall": "In a Call",
+      "InAConferenceCall": "In a Conference Call",
+      "InAMeeting": "In a Meeting",
+      "Inactive": "Inactive",
+      "Offline": "Offline",
+      "OffWork": "Off Work",
+      "OutOfOffice": "Out of Office",
+      "PresenceUnknown": "Unknown",
+      "Presenting": "Presenting",
+      "UrgentInterruptionsOnly": "Do Not Disturb",
+      "AvailableIdle": "Available (Idle)",
+      "BusyIdle": "Busy (Idle)"
+    }
+  }
 }

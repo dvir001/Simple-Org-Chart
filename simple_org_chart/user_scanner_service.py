@@ -118,7 +118,7 @@ def _ensure_on_path() -> None:
         sys.path.insert(0, repo_str)
 
 
-def get_latest_pypi_version() -> Optional[str]:
+def get_latest_release_version() -> Optional[str]:
     """Query GitHub releases for the latest version of user-scanner.
 
     Falls back to PyPI if the GitHub API call fails.
@@ -153,10 +153,10 @@ def get_latest_pypi_version() -> Optional[str]:
 
 
 def check_for_update() -> Dict[str, Any]:
-    """Compare installed version against PyPI and return status dict."""
+    """Compare installed version against the latest release and return status dict."""
     installed = is_installed()
     current = get_version() if installed else None
-    latest = get_latest_pypi_version()
+    latest = get_latest_release_version()
     update_available = False
     if current and latest:
         update_available = _version_tuple(latest) > _version_tuple(current)
