@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import re
+import tempfile
+import threading
 from typing import Any, Dict, Iterable, Set
 
 from .config import SETTINGS_FILE
+
+# Shared in-process lock protecting all reads/writes to SETTINGS_FILE.
+# Both settings.py and email_config.py import this lock so that concurrent
+# writes from different code paths (scheduler, HTTP handlers) are serialised.
+_settings_file_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
 
@@ -151,15 +159,6 @@ def save_settings(settings: Dict[str, Any]) -> bool:
     """Persist settings to disk, returning True on success."""
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # Read the current file so we keep all other keys intact
-    existing: Dict[str, Any] = {}
-    if SETTINGS_FILE.exists():
-        try:
-            with SETTINGS_FILE.open("r", encoding="utf-8") as handle:
-                existing = json.load(handle)
-        except Exception:
-            pass
-
     # Update stored defaults with provided overrides
     persisted = DEFAULT_SETTINGS.copy()
     persisted.update(settings)
@@ -180,12 +179,34 @@ def save_settings(settings: Dict[str, Any]) -> bool:
         for level, color in default_node_colors.items()
     }
 
-    existing.update(persisted)
-
     logger.info("Attempting to save settings to: %s", SETTINGS_FILE)
     try:
-        with SETTINGS_FILE.open("w", encoding="utf-8") as handle:
-            json.dump(existing, handle, indent=2)
+        with _settings_file_lock:
+            # Read the current file so we keep all other keys intact
+            existing: Dict[str, Any] = {}
+            if SETTINGS_FILE.exists():
+                try:
+                    with SETTINGS_FILE.open("r", encoding="utf-8") as handle:
+                        loaded = json.load(handle)
+                        if isinstance(loaded, dict):
+                            existing = loaded
+                except Exception:
+                    pass
+
+            existing.update(persisted)
+
+            # Atomic write: write to a temp file then replace
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                dir=SETTINGS_FILE.parent, suffix=".tmp"
+            )
+            try:
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_handle:
+                    json.dump(existing, tmp_handle, indent=2)
+                os.replace(tmp_path, SETTINGS_FILE)
+            except Exception:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
     except Exception as error:  # noqa: BLE001 - mirror legacy behaviour
         logger.error("Error saving settings to %s: %s", SETTINGS_FILE, error)
         return False
@@ -288,6 +309,7 @@ def employee_is_ignored(name: str | None, email: str | None, user_principal_name
 
 __all__ = [
     "DEFAULT_SETTINGS",
+    "_settings_file_lock",
     "department_is_ignored",
     "employee_is_ignored",
     "load_settings",

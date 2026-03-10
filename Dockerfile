@@ -45,7 +45,7 @@ COPY . .
 
 # Create necessary directories for data persistence and adjust ownership
 RUN mkdir -p static data data/photos config repositories && \
-    chmod 777 data config repositories && \
+    chmod 775 data config repositories && \
     chown -R app:app /app
 
 # Make entrypoint executable

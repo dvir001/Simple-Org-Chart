@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
 from .config import SETTINGS_FILE
+from .settings import _settings_file_lock
 
 logger = logging.getLogger(__name__)
 
@@ -73,49 +76,68 @@ def save_email_config(config: Dict[str, Any]) -> bool:
     """Save email configuration into app_settings.json."""
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # Read the current file so we keep all other keys intact
-    existing: Dict[str, Any] = {}
-    if SETTINGS_FILE.exists():
-        try:
-            with SETTINGS_FILE.open("r", encoding="utf-8") as handle:
-                existing = json.load(handle)
-        except Exception:
-            pass
-
     # Merge with defaults
     persisted = DEFAULT_EMAIL_CONFIG.copy()
     persisted.update(config)
-    
+
     if 'lastSent' not in config:
-        persisted['lastSent'] = existing.get('lastSent')
-    
+        # lastSent will be preserved from the existing file inside the lock below
+        persisted.pop('lastSent', None)
+
     # Validate file types
     valid_file_types = {"svg", "png", "pdf", "xlsx"}
     persisted["fileTypes"] = [
-        ft for ft in persisted.get("fileTypes", []) 
+        ft for ft in persisted.get("fileTypes", [])
         if ft in valid_file_types
     ]
-    
+
     # Validate frequency
     if persisted.get("frequency") not in ("daily", "weekly", "monthly"):
         persisted["frequency"] = "weekly"
-    
+
     # Validate day of week
     valid_days = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
     if persisted.get("dayOfWeek", "").lower() not in valid_days:
         persisted["dayOfWeek"] = "monday"
-    
+
     # Validate day of month
     if persisted.get("dayOfMonth") not in ("first", "last"):
         persisted["dayOfMonth"] = "first"
-    
-    # Write email keys back into the shared config file
-    existing.update(persisted)
-    
+
     logger.info("Saving email configuration to: %s", SETTINGS_FILE)
     try:
-        with SETTINGS_FILE.open("w", encoding="utf-8") as handle:
-            json.dump(existing, handle, indent=2)
+        with _settings_file_lock:
+            # Read the current file so we keep all other keys intact
+            existing: Dict[str, Any] = {}
+            if SETTINGS_FILE.exists():
+                try:
+                    with SETTINGS_FILE.open("r", encoding="utf-8") as handle:
+                        loaded = json.load(handle)
+                        if isinstance(loaded, dict):
+                            existing = loaded
+                except Exception:
+                    pass
+
+            # Preserve existing lastSent when caller didn't explicitly supply one
+            if 'lastSent' not in config:
+                persisted['lastSent'] = existing.get('lastSent')
+
+            # Write email keys back into the shared config file
+            existing.update(persisted)
+
+            # Atomic write: write to a temp file then replace
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                dir=SETTINGS_FILE.parent, suffix=".tmp"
+            )
+            try:
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_handle:
+                    json.dump(existing, tmp_handle, indent=2)
+                os.replace(tmp_path, SETTINGS_FILE)
+            except Exception:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
+
         logger.info("Email configuration saved successfully")
         return True
     except Exception as error:
