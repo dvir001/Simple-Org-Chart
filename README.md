@@ -4,7 +4,7 @@
 
 SimpleOrgChart is a Flask application backed by Azure Active Directory (Entra ID) data that renders a fully interactive, client-side organisation chart. A static JavaScript front end (vanilla JS + D3) consumes cached Graph API data, offers rich filtering, and exposes an admin dashboard with compliance-friendly exports.
 
-<img width="1640" height="527" alt="SimpleOrgChart preview (names hidden toggle)" src="https://github.com/user-attachments/assets/cde7e312-f7e6-466c-9750-df84026b3990" />
+<img width="1640" height="527" alt="SimpleOrgChart preview (names hidden toggle)" src="https://github.com/user-attachments/assets/0f8eebbe-b071-42f8-adc4-674051022a9d" />
 
 ## At a Glance
 
