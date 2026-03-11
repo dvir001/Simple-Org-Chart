@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     gcc \
     curl \
+    gosu \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system app \
     && useradd --system --gid app --create-home app
@@ -43,8 +44,13 @@ RUN playwright install --with-deps chromium && \
 COPY . .
 
 # Create necessary directories for data persistence and adjust ownership
-RUN mkdir -p static data data/photos repositories && \
+RUN mkdir -p static data data/photos config repositories && \
+    chmod 775 data config repositories && \
     chown -R app:app /app
+
+# Make entrypoint executable
+COPY deploy/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Expose port
 EXPOSE ${APP_PORT}
@@ -53,8 +59,8 @@ EXPOSE ${APP_PORT}
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${APP_PORT:-5000}/ || exit 1
 
-# Switch to non-root user
-USER app
+# Entrypoint fixes bind-mount permissions then drops to 'app' user
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Run the application using gunicorn
 CMD ["gunicorn", "--config", "deploy/gunicorn.conf.py", "simple_org_chart:app"]

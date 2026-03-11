@@ -60,6 +60,7 @@ import simple_org_chart.config as app_config
 from simple_org_chart.config import EMPLOYEE_LIST_FILE
 from simple_org_chart.auth import login_required, require_auth, sanitize_next_path
 from simple_org_chart.email_config import (
+    DEFAULT_EMAIL_CONFIG,
     get_smtp_config,
     is_smtp_configured,
     load_email_config,
@@ -1128,6 +1129,7 @@ def reset_all_settings():
                 os.remove(logo_path)
         
         save_settings(DEFAULT_SETTINGS)
+        save_email_config(DEFAULT_EMAIL_CONFIG)
         
         threading.Thread(target=restart_scheduler).start()
         
@@ -1135,6 +1137,89 @@ def reset_all_settings():
     except Exception as e:
         logger.error(f"Error resetting all settings: {e}")
         return jsonify({'error': 'Reset failed'}), 500
+
+
+# ---------------------------------------------------------------------------
+# Config export / import
+# ---------------------------------------------------------------------------
+
+@app.route('/api/settings/export', methods=['GET'])
+@require_auth
+def export_settings():
+    """Download all configuration as a single flat JSON file."""
+    settings = load_settings()
+    email_config = load_email_config()
+    # Merge everything flat; strip transient runtime fields and non-default keys
+    settings_public = {k: v for k, v in settings.items() if k in DEFAULT_SETTINGS}
+    merged = {}
+    merged.update(settings_public)
+    merged.update({k: v for k, v in email_config.items() if k != 'lastSent'})
+    payload = json.dumps(merged, indent=2)
+    return app.response_class(
+        payload,
+        mimetype='application/json',
+        headers={
+            'Content-Disposition': 'attachment; filename="simple-org-chart-config.json"',
+        },
+    )
+
+
+@app.route('/api/settings/import', methods=['POST'])
+@require_auth
+def import_settings():
+    """Import configuration from an uploaded JSON file."""
+    uploaded = request.files.get('file')
+    if not uploaded:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    # Enforce file size limit consistent with other upload endpoints
+    uploaded.seek(0, 2)
+    file_size = uploaded.tell()
+    uploaded.seek(0)
+    if file_size > MAX_FILE_SIZE:
+        return jsonify({'error': f'File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)}MB'}), 400
+
+    try:
+        raw = uploaded.read()
+        incoming = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        logger.warning("Config import: invalid JSON – %s", exc)
+        return jsonify({'error': 'Invalid JSON file'}), 400
+
+    if not isinstance(incoming, dict):
+        return jsonify({'error': 'Expected a JSON object'}), 400
+
+    # Split incoming keys into settings vs email config
+    email_keys = set(DEFAULT_EMAIL_CONFIG.keys()) - {'lastSent'}
+    settings_data = {}
+    email_data = {}
+
+    for key, value in incoming.items():
+        if key in DEFAULT_SETTINGS:
+            settings_data[key] = value
+        elif key in email_keys:
+            email_data[key] = value
+
+    # Only save settings if at least one valid settings key was provided
+    settings_ok = True
+    if settings_data:
+        settings_ok = save_settings(settings_data)
+
+    email_ok = True
+    if email_data:
+        email_ok = save_email_config(email_data)
+
+    if settings_ok and email_ok:
+        if 'updateTime' in settings_data or 'autoUpdateEnabled' in settings_data:
+            threading.Thread(target=restart_scheduler, daemon=True).start()
+        return jsonify({'success': True, 'settings': load_settings()})
+
+    errors = []
+    if not settings_ok:
+        errors.append('settings')
+    if not email_ok:
+        errors.append('email config')
+    return jsonify({'error': f'Failed to save: {", ".join(errors)}'}), 500
 
 
 @app.route('/api/email-config', methods=['GET', 'POST'])

@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from .config import DATA_DIR
+from .config import SETTINGS_FILE
+from .settings import _settings_file_lock
 
 logger = logging.getLogger(__name__)
-
-EMAIL_CONFIG_FILE = DATA_DIR / "email_config.json"
 
 # Default email configuration
 DEFAULT_EMAIL_CONFIG: Dict[str, Any] = {
@@ -26,6 +27,15 @@ DEFAULT_EMAIL_CONFIG: Dict[str, Any] = {
     "includeReports": [],  # List of report types to include as attachments
     "lastSent": None,  # ISO timestamp of last sent email
 }
+
+# Keys that belong to the email configuration
+_EMAIL_KEYS = set(DEFAULT_EMAIL_CONFIG.keys())
+
+
+def _filter_email_keys(source: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a new dict containing only keys that belong to the email config."""
+    return {key: source[key] for key in _EMAIL_KEYS if key in source}
+
 
 def get_smtp_config() -> Dict[str, Any]:
     """Load SMTP configuration from environment variables."""
@@ -52,64 +62,94 @@ def is_smtp_configured() -> bool:
 
 
 def load_email_config() -> Dict[str, Any]:
-    """Load email configuration from disk or return defaults."""
-    if EMAIL_CONFIG_FILE.exists():
+    """Load email configuration from app_settings.json."""
+    if SETTINGS_FILE.exists():
         try:
-            with EMAIL_CONFIG_FILE.open("r", encoding="utf-8") as handle:
+            with SETTINGS_FILE.open("r", encoding="utf-8") as handle:
                 stored = json.load(handle)
-                # Merge with defaults to ensure all fields exist
-                merged = DEFAULT_EMAIL_CONFIG.copy()
-                merged.update(stored)
-                return merged
         except Exception as error:
             logger.error("Error loading email config: %s", error)
-    
+        else:
+            if not isinstance(stored, dict):
+                logger.warning("app_settings.json does not contain a JSON object; using email defaults")
+                return DEFAULT_EMAIL_CONFIG.copy()
+            merged = DEFAULT_EMAIL_CONFIG.copy()
+            merged.update(_filter_email_keys(stored))
+            return merged
+
     return DEFAULT_EMAIL_CONFIG.copy()
 
 
 def save_email_config(config: Dict[str, Any]) -> bool:
-    """Save email configuration to disk."""
-    EMAIL_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
-    # Preserve lastSent from existing on-disk config when the caller
-    # (e.g. the configure page) does not supply it.
-    existing = load_email_config()
-    
-    # Merge with defaults
+    """Save email configuration into app_settings.json."""
+    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    # Restrict to known email keys only — never let caller overwrite unrelated settings
     persisted = DEFAULT_EMAIL_CONFIG.copy()
-    persisted.update(config)
-    
+    persisted.update(_filter_email_keys(config))
+
     if 'lastSent' not in config:
-        persisted['lastSent'] = existing.get('lastSent')
-    
+        # lastSent will be preserved from the existing file inside the lock below
+        persisted.pop('lastSent', None)
+
     # Validate file types
     valid_file_types = {"svg", "png", "pdf", "xlsx"}
     persisted["fileTypes"] = [
-        ft for ft in persisted.get("fileTypes", []) 
+        ft for ft in persisted.get("fileTypes", [])
         if ft in valid_file_types
     ]
-    
+
     # Validate frequency
     if persisted.get("frequency") not in ("daily", "weekly", "monthly"):
         persisted["frequency"] = "weekly"
-    
+
     # Validate day of week
     valid_days = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
     if persisted.get("dayOfWeek", "").lower() not in valid_days:
         persisted["dayOfWeek"] = "monday"
-    
+
     # Validate day of month
     if persisted.get("dayOfMonth") not in ("first", "last"):
         persisted["dayOfMonth"] = "first"
-    
-    logger.info("Saving email configuration to: %s", EMAIL_CONFIG_FILE)
+
+    logger.info("Saving email configuration to: %s", SETTINGS_FILE)
     try:
-        with EMAIL_CONFIG_FILE.open("w", encoding="utf-8") as handle:
-            json.dump(persisted, handle, indent=2)
+        with _settings_file_lock:
+            # Read the current file so we keep all other keys intact
+            existing: Dict[str, Any] = {}
+            if SETTINGS_FILE.exists():
+                try:
+                    with SETTINGS_FILE.open("r", encoding="utf-8") as handle:
+                        loaded = json.load(handle)
+                        if isinstance(loaded, dict):
+                            existing = loaded
+                except Exception:
+                    pass
+
+            # Preserve existing lastSent when caller didn't explicitly supply one
+            if 'lastSent' not in config:
+                persisted['lastSent'] = existing.get('lastSent')
+
+            # Write email keys back into the shared config file
+            existing.update(persisted)
+
+            # Atomic write: write to a temp file then replace
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                dir=SETTINGS_FILE.parent, suffix=".tmp"
+            )
+            try:
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_handle:
+                    json.dump(existing, tmp_handle, indent=2)
+                os.replace(tmp_path, SETTINGS_FILE)
+            except Exception:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
+
         logger.info("Email configuration saved successfully")
         return True
     except Exception as error:
-        logger.error("Error saving email config to %s: %s", EMAIL_CONFIG_FILE, error)
+        logger.error("Error saving email config to %s: %s", SETTINGS_FILE, error)
         return False
 
 
@@ -178,8 +218,8 @@ def should_send_email_now() -> bool:
     The check is **calendar-based**: it first verifies that today matches
     the configured schedule day, then verifies that no email has already
     been sent for the current period.  The ``lastSent`` timestamp is
-    persisted in ``email_config.json`` so the decision survives restarts
-    and container rebuilds as long as the ``data/`` directory is retained.
+    persisted in ``app_settings.json`` so the decision survives restarts
+    and container rebuilds as long as the ``config/`` directory is retained.
 
     Returns:
         True if email should be sent, False otherwise
@@ -228,7 +268,6 @@ def mark_email_sent() -> None:
 
 __all__ = [
     "DEFAULT_EMAIL_CONFIG",
-    "EMAIL_CONFIG_FILE",
     "get_smtp_config",
     "is_smtp_configured",
     "load_email_config",

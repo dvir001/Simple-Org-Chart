@@ -1328,22 +1328,7 @@ async function checkUserScannerEnabled() {
         const resp = await fetch(`${API_BASE_URL}/api/user-scanner/status`, { credentials: 'include' });
         if (resp.ok) {
             const data = await resp.json();
-            // Auto-install when enabled but not yet installed
-            if (data.enabled && !data.installed) {
-                try {
-                    const installResp = await fetch(`${API_BASE_URL}/api/user-scanner/install`, {
-                        method: 'POST',
-                        credentials: 'include',
-                    });
-                    if (installResp.ok) {
-                        const installData = await installResp.json();
-                        data.installed = installData.success;
-                        data.version = installData.version || null;
-                    }
-                } catch (installErr) {
-                    console.error('Auto-install of user-scanner failed:', installErr);
-                }
-            }
+            // Only enable when both enabled in settings AND installed on disk
             userScannerEnabled = data.enabled && data.installed;
             return data;
         }
@@ -2331,11 +2316,15 @@ async function initializeReportsPage() {
 
         const reportSelect = qs('reportTypeSelect');
         if (reportSelect) {
-            // Check if user-scanner is enabled; hide option if not
+            // Check if user-scanner is enabled and installed; hide option if not
             const scannerStatus = await checkUserScannerEnabled();
             const scannerOption = reportSelect.querySelector('option[value="user-scanner"]');
-            if (scannerOption && !scannerStatus.enabled) {
+            if (scannerOption && !(scannerStatus.enabled && scannerStatus.installed)) {
                 scannerOption.style.display = 'none';
+                // If scanner was selected but unavailable, fall back to default
+                if (currentReportKey === 'user-scanner') {
+                    currentReportKey = 'missing-manager';
+                }
             }
 
             reportSelect.value = currentReportKey;

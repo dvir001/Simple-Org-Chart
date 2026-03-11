@@ -11,10 +11,12 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
+CONFIG_DIR = BASE_DIR / "config"
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATE_DIR = BASE_DIR / "templates"
 
-SETTINGS_FILE = DATA_DIR / "app_settings.json"
+REPO_DIR = BASE_DIR / "repositories"
+SETTINGS_FILE = CONFIG_DIR / "app_settings.json"
 DATA_FILE = DATA_DIR / "employee_data.json"
 MISSING_MANAGER_FILE = DATA_DIR / "missing_manager_records.json"
 EMPLOYEE_LIST_FILE = DATA_DIR / "employee_list.json"
@@ -28,8 +30,8 @@ RECENTLY_HIRED_FILE = DATA_DIR / "recently_hired_employees.json"
 
 
 def ensure_directories() -> None:
-    """Ensure that the application's data and static directories exist."""
-    for target in (DATA_DIR, STATIC_DIR):
+    """Ensure that the application's data, config, static, and repo directories exist."""
+    for target in (DATA_DIR, CONFIG_DIR, STATIC_DIR, REPO_DIR):
         try:
             target.mkdir(parents=True, exist_ok=True)
         except OSError as error:
@@ -44,8 +46,10 @@ def as_posix_env(mapping: Dict[str, Path]) -> Dict[str, str]:
 __all__ = [
     "BASE_DIR",
     "DATA_DIR",
+    "CONFIG_DIR",
     "STATIC_DIR",
     "TEMPLATE_DIR",
+    "REPO_DIR",
     "SETTINGS_FILE",
     "DATA_FILE",
     "MISSING_MANAGER_FILE",

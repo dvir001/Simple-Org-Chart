@@ -337,7 +337,7 @@
             <div class="config-group">
                 <div class="config-item">
                     <label class="config-label" data-i18n="configure.userScanner.enable.label">User Scanner (OSINT)</label>
-                    <div class="config-description" data-i18n="configure.userScanner.enable.description">Enable the User Scanner tool to check email presence across multiple platforms. This uses an external open-source tool (user-scanner) which will be downloaded automatically from PyPI when enabled and kept up to date.</div>
+                    <div class="config-description" data-i18n="configure.userScanner.enable.description">Enable the User Scanner tool to check email presence across multiple platforms. This uses an external open-source tool (user-scanner) which must be downloaded from the config page before use.</div>
                     <div class="config-controls">
                         <label class="toggle-switch">
                             <input type="checkbox" id="userScannerEnabled">
@@ -346,6 +346,10 @@
                         <span class="toggle-label" data-i18n="configure.userScanner.enable.toggleLabel">Enable User Scanner</span>
                     </div>
                     <div id="userScannerStatus" class="config-hint" style="margin-top: 0.5rem;"></div>
+                    <div id="userScannerInstallRow" class="config-controls" style="margin-top: 0.5rem; display: none; gap: 8px; align-items: center;">
+                        <button type="button" class="btn btn-primary btn-sm" id="installUserScannerBtn" data-i18n="configure.userScanner.install.button">Download &amp; Install</button>
+                        <span id="userScannerInstallStatus" class="config-hint"></span>
+                    </div>
                     <div id="userScannerUpdateRow" class="config-controls" style="margin-top: 0.5rem; display: none; gap: 8px; align-items: center;">
                         <button type="button" class="btn btn-secondary btn-sm" id="checkUserScannerUpdateBtn">Check for Updates</button>
                         <button type="button" class="btn btn-primary btn-sm" id="applyUserScannerUpdateBtn" style="display: none;">Update Now</button>
@@ -558,9 +562,38 @@
             </div>
             </div>
 
+            <!-- Config Export / Import -->
+            <div class="config-section">
+                <h2 data-i18n="configure.configTransfer.title">📦 Configuration Transfer</h2>
+
+                <div class="config-group">
+                    <div class="config-item">
+                        <label class="config-label" data-i18n="configure.configTransfer.export.label">Export Configuration</label>
+                        <div class="config-description" data-i18n="configure.configTransfer.export.description">Download all settings as a JSON file. Employee data is not included.</div>
+                        <div class="config-controls">
+                            <button class="btn btn-secondary" type="button" data-config-action="export-config" data-i18n="configure.configTransfer.export.button">Export</button>
+                        </div>
+                    </div>
+                    <div class="config-item">
+                        <label class="config-label" data-i18n="configure.configTransfer.import.label">Import Configuration</label>
+                        <div class="config-description" data-i18n="configure.configTransfer.import.description">Upload a previously exported JSON file to restore settings.</div>
+                        <div class="config-controls">
+                            <input type="file" id="configFileInput" accept=".json" style="display:none">
+                            <button class="btn btn-secondary" type="button" data-config-action="import-config" data-i18n="configure.configTransfer.import.button">Import</button>
+                        </div>
+                    </div>
+                    <div class="config-item">
+                        <label class="config-label" data-i18n="configure.configTransfer.reset.label">Reset to Defaults</label>
+                        <div class="config-description" data-i18n="configure.configTransfer.reset.description">Restore all settings to their factory defaults. Employee data is not affected.</div>
+                        <div class="config-controls">
+                            <button class="btn btn-danger" type="button" data-config-action="reset-all" data-i18n="configure.configTransfer.reset.button">Reset</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="action-buttons">
                 <button class="btn btn-primary" type="button" data-config-action="save-all" data-i18n="configure.buttons.saveAll">Save All Settings</button>
-                <button class="btn btn-danger" type="button" data-config-action="reset-all" data-i18n="configure.buttons.resetAll">Reset Everything to Defaults</button>
                 <button class="btn btn-warning" type="button" data-config-action="logout" data-i18n="configure.buttons.logout">Logout</button>
             </div>
 

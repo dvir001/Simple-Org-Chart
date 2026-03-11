@@ -36,12 +36,14 @@ for _noisy in ('httpx', 'httpcore', 'httpcore.http11', 'httpcore.connection'):
 # rate-limits (HTTP 429) on third-party services.
 _SCAN_DELAY_SECONDS = 1.5
 
-REPO_DIR = app_config.BASE_DIR / "repositories" / "user-scanner"
+REPO_DIR = app_config.REPO_DIR / "user-scanner"
 USER_SCANNER_CACHE = app_config.DATA_DIR / "user_scanner_results.json"
 USER_SCANNER_HISTORY = app_config.DATA_DIR / "user_scanner_history.json"
 USER_SCANNER_XLSX_DIR = app_config.DATA_DIR / "user_scanner_exports"
 MAX_SCAN_HISTORY = 5
 PYPI_PACKAGE_NAME = "user-scanner"
+GITHUB_REPO_OWNER = "kaifcodec"
+GITHUB_REPO_NAME = "user-scanner"
 
 
 # ---------------------------------------------------------------------------
@@ -116,8 +118,28 @@ def _ensure_on_path() -> None:
         sys.path.insert(0, repo_str)
 
 
-def get_latest_pypi_version() -> Optional[str]:
-    """Query PyPI for the latest release version of user-scanner."""
+def get_latest_release_version() -> Optional[str]:
+    """Query GitHub releases for the latest version of user-scanner.
+
+    Falls back to PyPI if the GitHub API call fails.
+    """
+    # Primary: GitHub Releases API (matches real releases)
+    try:
+        resp = requests.get(
+            f"https://api.github.com/repos/{GITHUB_REPO_OWNER}/{GITHUB_REPO_NAME}/releases/latest",
+            headers={"Accept": "application/vnd.github+json"},
+            timeout=10,
+        )
+        if resp.ok:
+            tag = resp.json().get("tag_name", "")
+            # Strip leading 'v' or 'Version=>' prefixes
+            version = re.sub(r"^(v|Version=>)", "", tag).strip()
+            if version:
+                return version
+    except Exception as exc:
+        logger.warning("Failed to check GitHub for user-scanner updates: %s", exc)
+
+    # Fallback: PyPI
     try:
         resp = requests.get(
             f"https://pypi.org/pypi/{PYPI_PACKAGE_NAME}/json",
@@ -131,10 +153,10 @@ def get_latest_pypi_version() -> Optional[str]:
 
 
 def check_for_update() -> Dict[str, Any]:
-    """Compare installed version against PyPI and return status dict."""
+    """Compare installed version against the latest release and return status dict."""
     installed = is_installed()
     current = get_version() if installed else None
-    latest = get_latest_pypi_version()
+    latest = get_latest_release_version()
     update_available = False
     if current and latest:
         update_available = _version_tuple(latest) > _version_tuple(current)

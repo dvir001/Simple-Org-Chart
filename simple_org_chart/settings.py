@@ -2,13 +2,118 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import re
-from typing import Any, Dict, Iterable, Set
+import tempfile
+import threading
+from typing import Any, Callable, Dict, Iterable, Set, Union
 
 from .config import SETTINGS_FILE
+
+
+class _InterProcessSettingsFileLock:
+    """Combined thread + process lock for protecting SETTINGS_FILE.
+
+    Serialises concurrent access across both threads within a single worker
+    and across multiple Gunicorn worker processes by combining a
+    ``threading.Lock`` with an ``fcntl.flock`` advisory file lock.  On
+    platforms where ``fcntl`` is unavailable (e.g. Windows) the class
+    falls back gracefully to thread-only locking.
+    """
+
+    def __init__(
+        self,
+        lock_file_path: Union[str, bytes, "os.PathLike[str]", Callable[[], Union[str, bytes, "os.PathLike[str]"]]],
+    ) -> None:
+        # Accept either a static path (str/bytes/Path) or a zero-argument
+        # callable that returns the path at acquire-time.  The callable form
+        # lets callers that re-bind the module-level SETTINGS_FILE (e.g. in
+        # tests via monkeypatch) have the lock always protect the file that is
+        # actually being accessed rather than the path that was current at
+        # import time.
+        if callable(lock_file_path):
+            self._get_lock_file_path = lock_file_path
+        else:
+            _static = lock_file_path
+            self._get_lock_file_path = lambda: _static
+        self._thread_lock = threading.Lock()
+        self._fd: int | None = None
+
+    def acquire(self, blocking: bool = True) -> bool:
+        acquired = self._thread_lock.acquire(blocking)
+        if not acquired:
+            return False
+        fd = None
+        try:
+            import fcntl
+            lock_file_path = self._get_lock_file_path()
+            fd = os.open(lock_file_path, os.O_CREAT | os.O_RDWR, 0o600)
+            flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+            fcntl.flock(fd, flags)
+            self._fd = fd
+        except ImportError:
+            # fcntl not available (Windows); thread lock is sufficient.
+            if fd is not None:
+                os.close(fd)
+        except BlockingIOError:
+            if fd is not None:
+                os.close(fd)
+            self._thread_lock.release()
+            return False
+        except Exception:
+            if fd is not None:
+                os.close(fd)
+            self._thread_lock.release()
+            raise
+        return True
+
+    def release(self) -> None:
+        try:
+            if self._fd is not None:
+                try:
+                    import fcntl
+                    fcntl.flock(self._fd, fcntl.LOCK_UN)
+                except (ImportError, OSError):
+                    pass
+                finally:
+                    try:
+                        os.close(self._fd)
+                    except OSError:
+                        pass
+                    self._fd = None
+        finally:
+            self._thread_lock.release()
+
+    def __enter__(self) -> "_InterProcessSettingsFileLock":
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.release()
+
+
+# Shared inter-process lock protecting all reads/writes to SETTINGS_FILE.
+# Both settings.py and email_config.py import this lock so that concurrent
+# writes from different code paths (scheduler, HTTP handlers, workers) are
+# serialised across all Gunicorn worker processes.
+#
+# The factory callable reads SETTINGS_FILE from this module's namespace at
+# acquire-time rather than computing the path once at import time.  This
+# allows test-time monkeypatching of ``simple_org_chart.settings.SETTINGS_FILE``
+# to take effect so the lock file is always co-located with the settings file
+# actually being accessed.
+def _settings_lock_file_factory() -> str:
+    # Accessing the module-level name SETTINGS_FILE here (rather than via
+    # globals()) is sufficient: Python resolves global names at call-time via
+    # LOAD_GLOBAL, so monkeypatching ``simple_org_chart.settings.SETTINGS_FILE``
+    # in tests will be reflected when this factory is invoked.
+    return os.path.join(os.fspath(SETTINGS_FILE.parent), f"{SETTINGS_FILE.name}.lock")
+
+
+_settings_file_lock = _InterProcessSettingsFileLock(_settings_lock_file_factory)
 
 logger = logging.getLogger(__name__)
 
@@ -173,8 +278,44 @@ def save_settings(settings: Dict[str, Any]) -> bool:
 
     logger.info("Attempting to save settings to: %s", SETTINGS_FILE)
     try:
-        with SETTINGS_FILE.open("w", encoding="utf-8") as handle:
-            json.dump(persisted, handle, indent=2)
+        with _settings_file_lock:
+            # Read the current file so we keep all other keys intact
+            existing: Dict[str, Any] = {}
+            if SETTINGS_FILE.exists():
+                try:
+                    with SETTINGS_FILE.open("r", encoding="utf-8") as handle:
+                        loaded = json.load(handle)
+                        if isinstance(loaded, dict):
+                            existing = loaded
+                except Exception as error:  # noqa: BLE001 - log and continue with empty
+                    logger.warning(
+                        "Failed to load existing settings from %s; treating as empty. "
+                        "Backing up corrupt file if possible. Error: %s",
+                        SETTINGS_FILE,
+                        error,
+                    )
+                    # Best-effort backup of the unreadable/corrupt settings file
+                    with contextlib.suppress(Exception):
+                        backup_path = SETTINGS_FILE.with_suffix(
+                            SETTINGS_FILE.suffix + ".corrupt"
+                        )
+                        if not backup_path.exists():
+                            os.replace(SETTINGS_FILE, backup_path)
+
+            existing.update(persisted)
+
+            # Atomic write: write to a temp file then replace
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                dir=SETTINGS_FILE.parent, suffix=".tmp"
+            )
+            try:
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_handle:
+                    json.dump(existing, tmp_handle, indent=2)
+                os.replace(tmp_path, SETTINGS_FILE)
+            except Exception:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp_path)
+                raise
     except Exception as error:  # noqa: BLE001 - mirror legacy behaviour
         logger.error("Error saving settings to %s: %s", SETTINGS_FILE, error)
         return False
@@ -277,6 +418,7 @@ def employee_is_ignored(name: str | None, email: str | None, user_principal_name
 
 __all__ = [
     "DEFAULT_SETTINGS",
+    "_settings_file_lock",
     "department_is_ignored",
     "employee_is_ignored",
     "load_settings",
