@@ -287,8 +287,20 @@ def save_settings(settings: Dict[str, Any]) -> bool:
                         loaded = json.load(handle)
                         if isinstance(loaded, dict):
                             existing = loaded
-                except Exception:
-                    pass
+                except Exception as error:  # noqa: BLE001 - log and continue with empty
+                    logger.warning(
+                        "Failed to load existing settings from %s; treating as empty. "
+                        "Backing up corrupt file if possible. Error: %s",
+                        SETTINGS_FILE,
+                        error,
+                    )
+                    # Best-effort backup of the unreadable/corrupt settings file
+                    with contextlib.suppress(Exception):
+                        backup_path = SETTINGS_FILE.with_suffix(
+                            SETTINGS_FILE.suffix + ".corrupt"
+                        )
+                        if not backup_path.exists():
+                            os.replace(SETTINGS_FILE, backup_path)
 
             existing.update(persisted)
 
