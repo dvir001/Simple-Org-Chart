@@ -1177,7 +1177,7 @@ def import_settings():
     file_size = uploaded.tell()
     uploaded.seek(0)
     if file_size > MAX_FILE_SIZE:
-        return jsonify({'error': f'File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)}MB'}), 413
+        return jsonify({'error': f'File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)}MB'}), 400
 
     try:
         raw = uploaded.read()
