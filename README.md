@@ -385,24 +385,6 @@ Organization scans use file-based state (`data/full_scan_state.json`) and a canc
 
 If a cache is missing or stale, hit **Refresh Data** on the reports page or start the app with `RUN_INITIAL_UPDATE=true`.
 
-## Security Guidance
-
-- Store secrets in Azure Key Vault or your host’s secret manager; never commit `.env` files.
-- Restrict `/configure` and `/reports` behind reverse-proxy auth if deployed on the public internet.
-- Monitor `AuditLog.Read.All` usage—limit consent scope to required admins.
-- Rotate `AZURE_CLIENT_SECRET` regularly and update the environment accordingly.
-
-## Troubleshooting
-
-- **Graph permission errors**: Ensure admin consent is granted; check logs for 403 responses when fetching `signInActivity`.
-- **Stale data**: Run `curl -X POST http://<host>/api/update-now` (with admin auth) or remove the `data/*.json` caches and restart.
-- **Export failures**: Confirm `openpyxl` is installed (bundled via `requirements.txt`). The API returns a 500 with JSON error details if export dependencies are missing.
-- **Missing logos**: Upload custom branding via `/configure`; static assets persist in `data/`.
-
 ## Contributing
 
 Issues and pull requests are welcome. Please document new locale strings in `static/locales/en-US.json`, update report caches when introducing routes, and include manual validation steps if automated tests are not available.
-
----
-
-SimpleOrgChart keeps your organisation chart and admin insights in sync with Azure AD while staying lightweight, portable, and secure.
