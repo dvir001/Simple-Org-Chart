@@ -2363,10 +2363,10 @@ async function _initUserScannerConfigUI(isEnabled) {
                                     const latest = await statusResp.json();
                                     if (latest.installed) {
                                         if (installRow) installRow.style.display = 'none';
-                                        const ver = latest.version || 'unknown';
+                                        const ver = latest.version || resolveTranslation('configure.userScanner.status.unknownVersion', 'unknown');
                                         statusEl.innerHTML = '';
                                         const versionText = document.createElement('span');
-                                        versionText.textContent = `Installed — v${ver}`;
+                                        versionText.textContent = resolveTranslation('configure.userScanner.status.installedPrefix', 'Installed — v') + ver;
                                         statusEl.appendChild(versionText);
                                         const sep = document.createTextNode('  ·  ');
                                         statusEl.appendChild(sep);
@@ -2374,7 +2374,7 @@ async function _initUserScannerConfigUI(isEnabled) {
                                         repoLink.href = 'https://github.com/kaifcodec/user-scanner';
                                         repoLink.target = '_blank';
                                         repoLink.rel = 'noopener noreferrer';
-                                        repoLink.textContent = 'GitHub repo ↗';
+                                        repoLink.textContent = resolveTranslation('configure.userScanner.status.repoLink', 'GitHub repo ↗');
                                         repoLink.style.fontSize = 'inherit';
                                         statusEl.appendChild(repoLink);
                                         if (updateRow) updateRow.style.display = 'flex';
@@ -2395,10 +2395,10 @@ async function _initUserScannerConfigUI(isEnabled) {
             }
         } else {
             if (installRow) installRow.style.display = 'none';
-            const ver = data.version || 'unknown';
+            const ver = data.version || resolveTranslation('configure.userScanner.status.unknownVersion', 'unknown');
             statusEl.innerHTML = '';
             const versionText = document.createElement('span');
-            versionText.textContent = `Installed — v${ver}`;
+            versionText.textContent = resolveTranslation('configure.userScanner.status.installedPrefix', 'Installed — v') + ver;
             statusEl.appendChild(versionText);
             const sep = document.createTextNode('  ·  ');
             statusEl.appendChild(sep);
@@ -2406,7 +2406,7 @@ async function _initUserScannerConfigUI(isEnabled) {
             repoLink.href = 'https://github.com/kaifcodec/user-scanner';
             repoLink.target = '_blank';
             repoLink.rel = 'noopener noreferrer';
-            repoLink.textContent = 'GitHub repo ↗';
+            repoLink.textContent = resolveTranslation('configure.userScanner.status.repoLink', 'GitHub repo ↗');
             repoLink.style.fontSize = 'inherit';
             statusEl.appendChild(repoLink);
             if (updateRow) updateRow.style.display = 'flex';
@@ -2417,19 +2417,20 @@ async function _initUserScannerConfigUI(isEnabled) {
     if (checkBtn) {
         checkBtn.addEventListener('click', async () => {
             checkBtn.disabled = true;
-            if (updateStatusEl) updateStatusEl.textContent = 'Checking…';
+            if (updateStatusEl) updateStatusEl.textContent = resolveTranslation('configure.userScanner.update.checking', 'Checking…');
             if (applyBtn) applyBtn.style.display = 'none';
             try {
                 const resp = await fetch(`${window.location.origin}/api/user-scanner/check-update`, { credentials: 'include' });
                 const info = await resp.json();
                 if (info.updateAvailable) {
-                    if (updateStatusEl) updateStatusEl.textContent = `Update available: v${info.currentVersion} → v${info.latestVersion}`;
+                    if (updateStatusEl) updateStatusEl.textContent = resolveTranslation('configure.userScanner.update.availablePrefix', 'Update available: v') + info.currentVersion + resolveTranslation('configure.userScanner.update.availableArrow', ' → v') + info.latestVersion;
                     if (applyBtn) applyBtn.style.display = '';
                 } else {
-                    if (updateStatusEl) updateStatusEl.textContent = `Up to date (v${info.currentVersion || info.latestVersion || 'unknown'})`;
+                    const ver = info.currentVersion || info.latestVersion || resolveTranslation('configure.userScanner.update.unknownVersion', 'unknown');
+                    if (updateStatusEl) updateStatusEl.textContent = resolveTranslation('configure.userScanner.update.upToDatePrefix', 'Up to date (v') + ver + resolveTranslation('configure.userScanner.update.upToDateSuffix', ')');
                 }
             } catch (err) {
-                if (updateStatusEl) updateStatusEl.textContent = 'Failed to check for updates.';
+                if (updateStatusEl) updateStatusEl.textContent = resolveTranslation('configure.userScanner.update.checkFailed', 'Failed to check for updates.');
             } finally {
                 checkBtn.disabled = false;
             }
@@ -2440,7 +2441,7 @@ async function _initUserScannerConfigUI(isEnabled) {
     if (applyBtn) {
         applyBtn.addEventListener('click', async () => {
             applyBtn.disabled = true;
-            if (updateStatusEl) updateStatusEl.textContent = 'Updating…';
+            if (updateStatusEl) updateStatusEl.textContent = resolveTranslation('configure.userScanner.update.updating', 'Updating…');
             try {
                 const resp = await fetch(`${window.location.origin}/api/user-scanner/update`, {
                     method: 'POST',
@@ -2448,17 +2449,17 @@ async function _initUserScannerConfigUI(isEnabled) {
                 });
                 const result = await resp.json();
                 if (result.success) {
-                    if (updateStatusEl) updateStatusEl.textContent = `Updated to v${result.version}`;
+                    if (updateStatusEl) updateStatusEl.textContent = resolveTranslation('configure.userScanner.update.updatedPrefix', 'Updated to v') + result.version;
                     if (statusEl) {
                         const verSpan = statusEl.querySelector('span');
-                        if (verSpan) verSpan.textContent = `Installed — v${result.version}`;
+                        if (verSpan) verSpan.textContent = resolveTranslation('configure.userScanner.status.installedPrefix', 'Installed — v') + result.version;
                     }
                     applyBtn.style.display = 'none';
                 } else {
-                    if (updateStatusEl) updateStatusEl.textContent = result.error || 'Update failed.';
+                    if (updateStatusEl) updateStatusEl.textContent = result.error || resolveTranslation('configure.userScanner.update.failed', 'Update failed.');
                 }
             } catch (err) {
-                if (updateStatusEl) updateStatusEl.textContent = 'Update failed: ' + err.message;
+                if (updateStatusEl) updateStatusEl.textContent = resolveTranslation('configure.userScanner.update.failedPrefix', 'Update failed: ') + err.message;
             } finally {
                 applyBtn.disabled = false;
             }

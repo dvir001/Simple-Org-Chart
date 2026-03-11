@@ -11,7 +11,7 @@ for dir in /app/data /app/config /app/repositories; do
     if [ -d "$dir" ]; then
         current_owner=$(stat -c '%u:%g' "$dir" 2>/dev/null || echo "")
         if [ -z "$current_owner" ] || [ "$current_owner" != "$APP_UID:$APP_GID" ]; then
-            chown -R app:app "$dir" 2>/dev/null || true
+            chown -R --no-dereference app:app "$dir" 2>/dev/null || true
         fi
     fi
 done

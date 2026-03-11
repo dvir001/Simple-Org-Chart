@@ -214,6 +214,24 @@
         "failed": "Installation failed.",
         "notInstalled": "Not installed — download to enable the scanner.",
         "downloadFailed": "Download failed: "
+      },
+      "status": {
+        "installedPrefix": "Installed — v",
+        "repoLink": "GitHub repo ↗",
+        "unknownVersion": "unknown"
+      },
+      "update": {
+        "checking": "Checking…",
+        "availablePrefix": "Update available: v",
+        "availableArrow": " → v",
+        "upToDatePrefix": "Up to date (v",
+        "upToDateSuffix": ")",
+        "unknownVersion": "unknown",
+        "checkFailed": "Failed to check for updates.",
+        "updating": "Updating…",
+        "updatedPrefix": "Updated to v",
+        "failed": "Update failed.",
+        "failedPrefix": "Update failed: "
       }
     },
     "presence": {

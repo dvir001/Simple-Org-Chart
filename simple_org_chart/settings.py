@@ -9,7 +9,7 @@ import os
 import re
 import tempfile
 import threading
-from typing import Any, Dict, Iterable, Set
+from typing import Any, Callable, Dict, Iterable, Set, Union
 
 from .config import SETTINGS_FILE
 
@@ -24,8 +24,21 @@ class _InterProcessSettingsFileLock:
     falls back gracefully to thread-only locking.
     """
 
-    def __init__(self, lock_file_path: str) -> None:
-        self._lock_file_path = lock_file_path
+    def __init__(
+        self,
+        lock_file_path: Union[str, bytes, "os.PathLike[str]", Callable[[], Union[str, bytes, "os.PathLike[str]"]]],
+    ) -> None:
+        # Accept either a static path (str/bytes/Path) or a zero-argument
+        # callable that returns the path at acquire-time.  The callable form
+        # lets callers that re-bind the module-level SETTINGS_FILE (e.g. in
+        # tests via monkeypatch) have the lock always protect the file that is
+        # actually being accessed rather than the path that was current at
+        # import time.
+        if callable(lock_file_path):
+            self._get_lock_file_path = lock_file_path
+        else:
+            _static = lock_file_path
+            self._get_lock_file_path = lambda: _static
         self._thread_lock = threading.Lock()
         self._fd: int | None = None
 
@@ -36,7 +49,8 @@ class _InterProcessSettingsFileLock:
         fd = None
         try:
             import fcntl
-            fd = os.open(self._lock_file_path, os.O_CREAT | os.O_RDWR, 0o600)
+            lock_file_path = self._get_lock_file_path()
+            fd = os.open(lock_file_path, os.O_CREAT | os.O_RDWR, 0o600)
             flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
             fcntl.flock(fd, flags)
             self._fd = fd
@@ -85,11 +99,21 @@ class _InterProcessSettingsFileLock:
 # Both settings.py and email_config.py import this lock so that concurrent
 # writes from different code paths (scheduler, HTTP handlers, workers) are
 # serialised across all Gunicorn worker processes.
-_settings_lock_file = os.path.join(
-    os.fspath(SETTINGS_FILE.parent),
-    f"{SETTINGS_FILE.name}.lock",
-)
-_settings_file_lock = _InterProcessSettingsFileLock(_settings_lock_file)
+#
+# The factory callable reads SETTINGS_FILE from this module's namespace at
+# acquire-time rather than computing the path once at import time.  This
+# allows test-time monkeypatching of ``simple_org_chart.settings.SETTINGS_FILE``
+# to take effect so the lock file is always co-located with the settings file
+# actually being accessed.
+def _settings_lock_file_factory() -> str:
+    # Accessing the module-level name SETTINGS_FILE here (rather than via
+    # globals()) is sufficient: Python resolves global names at call-time via
+    # LOAD_GLOBAL, so monkeypatching ``simple_org_chart.settings.SETTINGS_FILE``
+    # in tests will be reflected when this factory is invoked.
+    return os.path.join(os.fspath(SETTINGS_FILE.parent), f"{SETTINGS_FILE.name}.lock")
+
+
+_settings_file_lock = _InterProcessSettingsFileLock(_settings_lock_file_factory)
 
 logger = logging.getLogger(__name__)
 
