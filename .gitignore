@@ -1,5 +1,8 @@
 .env
 
+# Cached report / employee data
+data/
+
 # External tools downloaded at runtime
 repositories/
 

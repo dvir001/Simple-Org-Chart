@@ -163,9 +163,12 @@ html.i18n-loading body {
 }
 
 .summary-value {
-    font-size: 1.75rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--primary-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .table-panel {
@@ -243,6 +246,86 @@ html.i18n-loading body {
 
 .filter-chip--active:hover {
     background: #0056a6;
+}
+
+/* ── Report tagpicker filter rows ───────────────────────────── */
+
+.filter-tagpicker-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.03);
+    border-radius: 12px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+}
+
+.filter-tagpicker-row__label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+.filter-tagpicker-toggle {
+    display: inline-flex;
+    border-radius: 999px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.filter-tagpicker-toggle__btn {
+    border: none;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: rgba(15, 23, 42, 0.05);
+    color: #1f2937;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.filter-tagpicker-toggle__btn:hover {
+    background: rgba(15, 23, 42, 0.12);
+    transform: translateY(-1px);
+}
+
+.filter-tagpicker-toggle__btn--active.filter-tagpicker-toggle__btn--include {
+    background: var(--success-color);
+    color: #fff;
+    box-shadow: 0 6px 14px rgba(46, 125, 50, 0.22);
+}
+
+.filter-tagpicker-toggle__btn--active.filter-tagpicker-toggle__btn--exclude {
+    background: var(--danger-color);
+    color: #fff;
+    box-shadow: 0 6px 14px rgba(198, 40, 40, 0.22);
+}
+
+.filter-tagpicker-picker {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
+.filter-tagpicker-picker .tag-picker__control {
+    min-height: 34px;
+    padding: 4px 8px;
+    gap: 6px;
+}
+
+.filter-tagpicker-picker .tag-picker__input {
+    flex: 1 0 120px;
+    min-width: 100px;
+    font-size: 0.88rem;
+    padding: 4px 4px;
+}
+
+.filter-tagpicker-reset {
+    flex-shrink: 0;
 }
 
 .table-header {
@@ -421,23 +504,17 @@ tbody tr:hover {
 .scanner-tab-content {
     display: none;
     flex-direction: column;
-    gap: 24px;
+    gap: 8px;
 }
 
 .scanner-tab-content.is-active {
     display: flex;
 }
 
-/* Full-scan user-filter area — reuses .filter-toolbar / .filter-group / .filter-chip */
-.scanner-user-filters {
-    display: grid;
-    gap: 8px;
-}
-
 .user-scanner-full {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 8px;
 }
 
 .user-scanner-full > h3 {
@@ -445,7 +522,7 @@ tbody tr:hover {
 }
 
 .user-scanner-full > p {
-    margin: -14px 0 0;
+    margin: 0 0 8px;
     color: var(--text-muted);
     font-size: 0.92rem;
 }
@@ -458,6 +535,10 @@ tbody tr:hover {
 }
 
 /* Search row */
+.user-scanner-search {
+    margin-bottom: 4px;
+}
+
 .user-scanner-search__row {
     display: flex;
     gap: 10px;
@@ -510,28 +591,32 @@ tbody tr:hover {
 }
 
 /* Site filter – tag-picker component (mirrors configure.css) */
-.user-scanner-site-filter {
-    align-items: flex-start;
-}
 
 .tag-picker-row {
     display: flex;
-    gap: 12px;
-    align-items: flex-end;
+    gap: 8px;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.03);
+    border-radius: 12px;
+    padding: 8px 12px;
 }
 
 .user-scanner-site-filter .tag-picker-field {
-    flex: 1 1 100%;
+    flex: 1 1 0%;
+    min-width: 0;
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: 8px;
-    min-width: 260px;
 }
 
 .user-scanner-site-filter .label-prefix {
-    font-size: 0.92rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: #374151;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .tag-picker {
@@ -652,7 +737,7 @@ tbody tr:hover {
 }
 
 .tag-picker-row .btn {
-    align-self: center;
+    flex-shrink: 0;
 }
 
 .btn-ghost {
@@ -678,6 +763,7 @@ tbody tr:hover {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    margin-top: 8px;
 }
 
 .user-scanner-options__item {
@@ -739,7 +825,7 @@ tbody tr:hover {
 .user-scanner-divider {
     border: none;
     border-top: 1px solid #e5e7eb;
-    margin: 0;
+    margin: 8px 0;
 }
 
 /* Full scan section */

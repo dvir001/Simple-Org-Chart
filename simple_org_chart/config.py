@@ -27,6 +27,7 @@ DISABLED_USERS_FILE = DATA_DIR / "disabled_user_records.json"
 LAST_LOGIN_FILE = DATA_DIR / "last_login_records.json"
 RECENTLY_DISABLED_FILE = DATA_DIR / "recently_disabled_employees.json"
 RECENTLY_HIRED_FILE = DATA_DIR / "recently_hired_employees.json"
+MISSING_PHOTO_FILE = DATA_DIR / "missing_photo_records.json"
 
 
 def ensure_directories() -> None:
@@ -61,6 +62,7 @@ __all__ = [
     "LAST_LOGIN_FILE",
     "RECENTLY_DISABLED_FILE",
     "RECENTLY_HIRED_FILE",
+    "MISSING_PHOTO_FILE",
     "ensure_directories",
     "as_posix_env",
 ]

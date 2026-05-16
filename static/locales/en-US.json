@@ -480,11 +480,12 @@
     "selector": {
       "label": "Report type",
       "options": {
-        "missingManager": "Employees without managers",
+        "missingManager": "Users without managers",
+        "missingPhoto": "Users without profile picture",
         "lastLogins": "Users by last sign-in activity",
-        "hiredThisYear": "Employees hired in the last 365 days",
+        "hiredThisYear": "Users hired in the last 365 days",
         "filteredUsers": "Users hidden by filters",
-        "userScanner": "User Scanner (OSINT)"
+        "userScanner": "Users scanner (OSINT)"
       }
     },
     "userScanner": {
@@ -526,6 +527,13 @@
       "exportPdfTooltip": "Download this report as a PDF document"
     },
     "filters": {
+      "scope": {
+        "label": "Data Scope",
+        "options": {
+          "orgChart": "Org Chart",
+          "all": "All"
+        }
+      },
       "title": "Filters",
       "groups": {
         "mailboxTypes": "Mailbox type",
@@ -584,18 +592,42 @@
       },
       "includeMembers": {
         "label": "Member"
-      }
+      },
+      "titleFilter": {
+        "label": "Title",
+        "placeholder": "Type a job title...",
+        "reset": "Reset",
+        "modeInclude": "Include",
+        "modeExclude": "Exclude"
+      },
+      "departmentFilter": {
+        "label": "Department",
+        "placeholder": "Type a department...",
+        "reset": "Reset",
+        "modeInclude": "Include",
+        "modeExclude": "Exclude"
+      },
+      "countryFilter": {
+        "label": "Country",
+        "placeholder": "Type a country...",
+        "reset": "Reset",
+        "modeInclude": "Include",
+        "modeExclude": "Exclude"
+      },
+      "tagpickerRemoveLabel": "Remove {value}",
+      "tagpickerNoMatches": "No matches found",
+      "tagpickerNoOptions": "No options available"
     },
     "summary": {
-      "totalLabel": "Employees without managers",
+      "totalLabel": "Users without managers",
       "generatedLabel": "Last Generated",
       "generatedPending": "Pending",
       "licensesLabel": "Total Licenses"
     },
     "table": {
-      "title": "Employees without managers",
+      "title": "Users without managers",
       "loading": "Loading report...",
-      "countSummary": "Showing {count} employees without managers",
+      "countSummary": "Showing {count} users without managers",
       "empty": "No users are currently missing manager information. Great job!",
       "columns": {
         "name": "Name",
@@ -618,7 +650,8 @@
         "daysSinceInteractiveSignIn": "Days since interactive sign-in",
         "lastNonInteractiveSignIn": "Last non-interactive sign-in",
         "daysSinceNonInteractiveSignIn": "Days since non-interactive sign-in",
-        "neverSignedIn": "Never signed in"
+        "neverSignedIn": "Never signed in",
+        "country": "Country"
       },
       "reasonLabels": {
         "no_manager": "No manager",
@@ -637,10 +670,16 @@
         "countSummary": "Showing {count} users matching the report criteria"
       },
       "hiredThisYear": {
-        "summaryLabel": "Employees hired in the last 365 days",
-        "tableTitle": "Employees hired in the last 365 days",
-        "empty": "No employees have been hired in the last 365 days.",
-        "countSummary": "Showing {count} employees hired in the last 365 days"
+        "summaryLabel": "Users hired in the last 365 days",
+        "tableTitle": "Users hired in the last 365 days",
+        "empty": "No users have been hired in the last 365 days.",
+        "countSummary": "Showing {count} users hired in the last 365 days"
+      },
+      "missingPhoto": {
+        "summaryLabel": "Users without profile picture",
+        "tableTitle": "Users without profile picture",
+        "empty": "All users have a profile picture. Great job!",
+        "countSummary": "Showing {count} users without a profile picture"
       },
       "filteredLicensed": {
         "columns": {
@@ -662,10 +701,10 @@
         "countSummary": "Showing {count} users hidden by filters"
       },
       "userScanner": {
-        "summaryLabel": "User Scanner Results",
-        "tableTitle": "User Scanner OSINT Results",
+        "summaryLabel": "Users Scanner Results",
+        "tableTitle": "Users Scanner OSINT Results",
         "empty": "No scan results yet. Run a scan to see results here.",
-        "countSummary": "Showing results for {count} employees",
+        "countSummary": "Showing results for {count} users",
         "noResults": "No results found for this scan.",
         "scanning": "Scanning…",
         "singleResultTitle": "Scan Results",
@@ -695,6 +734,7 @@
     },
     "errors": {
       "loadFailed": "Unable to load the report.",
+      "loadTimeout": "The server took too long to respond. Please try again.",
       "exportFailed": "Unable to export the report.",
       "initializationFailed": "Failed to initialize the reports page.",
       "pdfLibraryMissing": "PDF export library is not available. Please refresh the page.",
