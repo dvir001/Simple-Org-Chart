@@ -561,7 +561,7 @@ def collect_last_login_records(*, token: Optional[str] = None) -> list[dict]:
 
     base_fields = (
         "id,displayName,jobTitle,department,mail,userPrincipalName,"
-        "signInActivity,accountEnabled,userType,assignedLicenses"
+        "signInActivity,accountEnabled,userType,assignedLicenses,country"
     )
 
     def build_users_url(select_fields: str) -> str:
@@ -663,6 +663,7 @@ def collect_last_login_records(*, token: Optional[str] = None) -> list[dict]:
                 "title": user.get("jobTitle") or "No Title",
                 "department": user.get("department") or "No Department",
                 "email": user.get("mail") or user.get("userPrincipalName") or "",
+                "country": user.get("country") or "",
                 "accountEnabled": user.get("accountEnabled", True),
                 "userType": (user.get("userType") or "").lower(),
                 "licenseCount": len(sku_ids),
@@ -914,7 +915,55 @@ def fetch_presence_by_user_ids(
     return result
 
 
+def batch_check_photos(user_ids: list[str], token: str) -> set[str]:
+    """Check which users have profile photos using the Graph $batch API.
+
+    Returns a set of user IDs that DO have a photo.  Uses batches of 20
+    (the Graph limit per $batch request).
+    """
+    has_photo: set[str] = set()
+    if not user_ids or not token:
+        return has_photo
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    batch_url = f"{GRAPH_API_ENDPOINT}/$batch"
+    chunk_size = 20
+
+    for start in range(0, len(user_ids), chunk_size):
+        chunk = user_ids[start : start + chunk_size]
+        batch_requests = []
+        for idx, uid in enumerate(chunk):
+            batch_requests.append({
+                "id": str(idx),
+                "method": "GET",
+                "url": f"/users/{uid}/photo",
+            })
+        try:
+            resp = requests.post(
+                batch_url,
+                headers=headers,
+                json={"requests": batch_requests},
+                timeout=30,
+            )
+            if not resp.ok:
+                logger.warning("Batch photo check failed (status %s)", resp.status_code)
+                continue
+            data = resp.json()
+            for item in data.get("responses", []):
+                idx = int(item.get("id", -1))
+                if 0 <= idx < len(chunk) and item.get("status") == 200:
+                    has_photo.add(chunk[idx])
+        except Exception as exc:
+            logger.warning("Batch photo check error: %s", exc)
+
+    return has_photo
+
+
 __all__ = [
+    "batch_check_photos",
     "calculate_days_since",
     "collect_disabled_licensed_users",
     "collect_disabled_users",

@@ -22,6 +22,7 @@ RECENTLY_HIRED_FILE = str(app_config.RECENTLY_HIRED_FILE)
 LAST_LOGIN_FILE = str(app_config.LAST_LOGIN_FILE)
 FILTERED_LICENSE_FILE = str(app_config.FILTERED_LICENSE_FILE)
 FILTERED_USERS_FILE = str(app_config.FILTERED_USERS_FILE)
+MISSING_PHOTO_FILE = str(app_config.MISSING_PHOTO_FILE)
 
 
 class ReportCacheManager:
@@ -80,6 +81,14 @@ def load_missing_manager_data(cache: ReportCacheManager, *, force_refresh: bool 
         MISSING_MANAGER_FILE,
         refresh=force_refresh,
         description="missing manager report cache",
+    )
+
+
+def load_missing_photo_data(cache: ReportCacheManager, *, force_refresh: bool = False):
+    return cache.load_json(
+        MISSING_PHOTO_FILE,
+        refresh=force_refresh,
+        description="missing photo report cache",
     )
 
 
@@ -386,12 +395,95 @@ def apply_missing_manager_filters(
     )
 
 
+def apply_missing_photo_filters(
+    records: Optional[Sequence[dict]],
+    *,
+    include_user_mailboxes: bool = True,
+    include_shared_mailboxes: bool = True,
+    include_room_equipment_mailboxes: bool = True,
+    include_enabled: bool = True,
+    include_disabled: bool = True,
+    include_licensed: bool = True,
+    include_unlicensed: bool = True,
+    include_members: bool = True,
+    include_guests: bool = True,
+):
+    return apply_filtered_user_filters(
+        records,
+        include_user_mailboxes=include_user_mailboxes,
+        include_shared_mailboxes=include_shared_mailboxes,
+        include_room_equipment_mailboxes=include_room_equipment_mailboxes,
+        include_enabled=include_enabled,
+        include_disabled=include_disabled,
+        include_licensed=include_licensed,
+        include_unlicensed=include_unlicensed,
+        include_members=include_members,
+        include_guests=include_guests,
+    )
+
+
+def apply_tagpicker_filters(
+    records: Sequence[dict],
+    *,
+    filter_titles: Optional[List[str]] = None,
+    filter_titles_mode: str = "exclude",
+    filter_departments: Optional[List[str]] = None,
+    filter_departments_mode: str = "exclude",
+    filter_countries: Optional[List[str]] = None,
+    filter_countries_mode: str = "exclude",
+) -> List[dict]:
+    """Apply optional title/department/country include/exclude filters."""
+    if not records:
+        return []
+
+    title_set = {v.strip().lower() for v in (filter_titles or []) if v and v.strip()}
+    dept_set = {v.strip().lower() for v in (filter_departments or []) if v and v.strip()}
+    country_set = {v.strip().lower() for v in (filter_countries or []) if v and v.strip()}
+
+    # Nothing to filter
+    if not title_set and not dept_set and not country_set:
+        return list(records)
+
+    filtered: List[dict] = []
+    for record in records:
+        title_val = (record.get("title") or "").strip().lower()
+        dept_val = (record.get("department") or "").strip().lower()
+        country_val = (record.get("country") or "").strip().lower()
+
+        if title_set:
+            matched = title_val in title_set
+            if filter_titles_mode == "include" and not matched:
+                continue
+            if filter_titles_mode == "exclude" and matched:
+                continue
+
+        if dept_set:
+            matched = dept_val in dept_set
+            if filter_departments_mode == "include" and not matched:
+                continue
+            if filter_departments_mode == "exclude" and matched:
+                continue
+
+        if country_set:
+            matched = country_val in country_set
+            if filter_countries_mode == "include" and not matched:
+                continue
+            if filter_countries_mode == "exclude" and matched:
+                continue
+
+        filtered.append(record)
+
+    return filtered
+
+
 __all__ = [
     "ReportCacheManager",
     "apply_disabled_filters",
     "apply_filtered_user_filters",
     "apply_last_login_filters",
     "apply_missing_manager_filters",
+    "apply_missing_photo_filters",
+    "apply_tagpicker_filters",
     "calculate_license_totals",
     "load_disabled_license_data",
     "load_disabled_users_data",
@@ -399,6 +491,7 @@ __all__ = [
     "load_filtered_user_data",
     "load_last_login_data",
     "load_missing_manager_data",
+    "load_missing_photo_data",
     "load_recently_disabled_data",
     "load_recently_hired_data",
 ]

@@ -37,24 +37,27 @@
         <section class="report-selector">
             <label for="reportTypeSelect" data-i18n="reports.selector.label">Select a report</label>
             <select id="reportTypeSelect" class="report-selector__input">
-                <option value="missing-manager" data-i18n="reports.selector.options.missingManager">Employees without managers</option>
                 <option value="last-logins" data-i18n="reports.selector.options.lastLogins">Users by last sign-in activity</option>
-                <option value="hired-this-year" data-i18n="reports.selector.options.hiredThisYear">Employees hired in the last 365 days</option>
                 <option value="filtered-users" data-i18n="reports.selector.options.filteredUsers">Users hidden by filters</option>
-                <option value="user-scanner" data-i18n="reports.selector.options.userScanner">User Scanner (OSINT)</option>
+                <option value="missing-manager" data-i18n="reports.selector.options.missingManager">Users without managers</option>
+                <option value="missing-photo" data-i18n="reports.selector.options.missingPhoto">Users without profile picture</option>
+                <option value="hired-this-year" data-i18n="reports.selector.options.hiredThisYear">Users hired in the last 365 days</option>
+                <option value="user-scanner" data-i18n="reports.selector.options.userScanner">Users scanner (OSINT)</option>
             </select>
         </section>
+
+        <div class="filter-toolbar is-hidden" id="reportFilters" aria-live="polite"></div>
 
         <!-- User Scanner custom panel (hidden unless report selected) -->
         <section id="userScannerPanel" class="user-scanner-panel is-hidden">
             <!-- Tab bar -->
             <div class="scanner-tabs" role="tablist">
-                <button class="scanner-tab is-active" role="tab" aria-selected="true" data-tab="single" id="scannerTabSingle" data-i18n="reports.userScanner.tabs.single">Individual</button>
-                <button class="scanner-tab" role="tab" aria-selected="false" data-tab="all" id="scannerTabAll" data-i18n="reports.userScanner.tabs.all">Organization</button>
+                <button class="scanner-tab is-active" role="tab" aria-selected="true" data-tab="all" id="scannerTabAll" data-i18n="reports.userScanner.tabs.all">Organization</button>
+                <button class="scanner-tab" role="tab" aria-selected="false" data-tab="single" id="scannerTabSingle" data-i18n="reports.userScanner.tabs.single">Individual</button>
             </div>
 
             <!-- ── Single Scan tab ─────────────────────────────── -->
-            <div class="scanner-tab-content is-active" data-tab-content="single" id="scannerPanelSingle">
+            <div class="scanner-tab-content" data-tab-content="single" id="scannerPanelSingle">
                 <div class="user-scanner-search">
                     <label for="userScannerInput" data-i18n="reports.userScanner.searchLabel">Scan a user</label>
                     <div class="user-scanner-search__row">
@@ -77,7 +80,7 @@
                         </div>
                         <input type="hidden" id="siteFilterHiddenInput">
                     </div>
-                    <button class="btn btn-secondary" type="button" id="siteFilterResetBtn" data-i18n="reports.userScanner.siteFilter.reset">Reset</button>
+                    <button class="btn btn-ghost" type="button" id="siteFilterResetBtn" data-i18n="reports.userScanner.siteFilter.reset">Reset</button>
                 </div>
 
                 <!-- Category filter (tag-picker style) -->
@@ -93,7 +96,7 @@
                         </div>
                         <input type="hidden" id="categoryFilterHiddenInput">
                     </div>
-                    <button class="btn btn-secondary" type="button" id="categoryFilterResetBtn" data-i18n="reports.userScanner.categoryFilter.reset">Reset</button>
+                    <button class="btn btn-ghost" type="button" id="categoryFilterResetBtn" data-i18n="reports.userScanner.categoryFilter.reset">Reset</button>
                 </div>
 
                 <!-- Scan options -->
@@ -117,13 +120,10 @@
             </div>
 
             <!-- ── All Scans tab ───────────────────────────────── -->
-            <div class="scanner-tab-content" data-tab-content="all" id="scannerPanelAll">
+            <div class="scanner-tab-content is-active" data-tab-content="all" id="scannerPanelAll">
                 <div class="user-scanner-full">
                     <h3 data-i18n="reports.userScanner.fullScan.title">Full Organization Scan</h3>
                     <p data-i18n="reports.userScanner.fullScan.description">Scan all employees by email. Results are downloaded automatically when complete.</p>
-
-                    <!-- User filters (rendered by JS using existing filter-chip pattern) -->
-                    <div class="scanner-user-filters" id="fullScanFilters" aria-live="polite"></div>
 
                     <!-- Site filter (tag-picker style) for full scan -->
                     <div class="user-scanner-site-filter tag-picker-row">
@@ -138,7 +138,7 @@
                             </div>
                             <input type="hidden" id="fullScanSiteFilterHiddenInput">
                         </div>
-                        <button class="btn btn-secondary" type="button" id="fullScanSiteFilterResetBtn" data-i18n="reports.userScanner.siteFilter.reset">Reset</button>
+                        <button class="btn btn-ghost" type="button" id="fullScanSiteFilterResetBtn" data-i18n="reports.userScanner.siteFilter.reset">Reset</button>
                     </div>
 
                     <!-- Category filter (tag-picker style) for full scan -->
@@ -154,7 +154,7 @@
                             </div>
                             <input type="hidden" id="fullScanCategoryFilterHiddenInput">
                         </div>
-                        <button class="btn btn-secondary" type="button" id="fullScanCategoryFilterResetBtn" data-i18n="reports.userScanner.categoryFilter.reset">Reset</button>
+                        <button class="btn btn-ghost" type="button" id="fullScanCategoryFilterResetBtn" data-i18n="reports.userScanner.categoryFilter.reset">Reset</button>
                     </div>
 
                     <!-- Scan options for full scan -->
@@ -222,11 +222,9 @@
 
         <section class="table-panel">
             <div class="table-header">
-                <h2 id="tableTitle" data-i18n="reports.table.title">Employees without Managers</h2>
+                <h2 id="tableTitle" data-i18n="reports.table.title">Users without Managers</h2>
                 <div class="table-meta" id="tableStatus" data-i18n="reports.table.loading">Loading report...</div>
             </div>
-
-            <div class="filter-toolbar is-hidden" id="reportFilters" aria-live="polite"></div>
 
             <div class="table-wrapper">
                 <table>

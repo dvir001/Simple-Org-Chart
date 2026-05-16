@@ -1,5 +1,5 @@
 const API_BASE_URL = window.location.origin;
-let currentReportKey = 'missing-manager';
+let currentReportKey = 'last-logins';
 let latestRecords = [];
 
 const FILTER_REASON_I18N_KEYS = {
@@ -21,51 +21,44 @@ let fullScanSiteFilterPicker = null;        // TagPicker-style instance (all tab
 let fullScanCategoryFilterPicker = null;    // TagPicker-style instance for categories (all tab)
 let scannerLoudSites = new Set();           // loud sites set, populated after fetch
 
-/** State for the full-scan user-level filters (mirrors last-logins filter toggles). */
-const fullScanFilterState = {
-    includeUserMailboxes: true,
-    includeSharedMailboxes: false,
-    includeRoomEquipmentMailboxes: false,
-    includeEnabled: true,
-    includeDisabled: false,
-    includeLicensed: true,
-    includeUnlicensed: false,
-    includeMembers: true,
-    includeGuests: false,
-};
+/**
+ * Build the standard 9 toggle filters used across most reports.
+ * @param {Object} [defaults] - Override default values per key.
+ */
+function _standardToggleFilters(defaults = {}) {
+    const d = (key, fallback) => key in defaults ? defaults[key] : fallback;
+    return [
+        { type: 'toggle', key: 'includeUserMailboxes', labelKey: 'reports.filters.includeUserMailboxes.label', queryParam: 'includeUserMailboxes', default: d('includeUserMailboxes', true), groupId: 'mailboxTypes', groupLabelKey: 'reports.filters.groups.mailboxTypes' },
+        { type: 'toggle', key: 'includeSharedMailboxes', labelKey: 'reports.filters.includeSharedMailboxes.label', queryParam: 'includeSharedMailboxes', default: d('includeSharedMailboxes', false), groupId: 'mailboxTypes', groupLabelKey: 'reports.filters.groups.mailboxTypes' },
+        { type: 'toggle', key: 'includeRoomEquipmentMailboxes', labelKey: 'reports.filters.includeRoomEquipmentMailboxes.label', queryParam: 'includeRoomEquipmentMailboxes', default: d('includeRoomEquipmentMailboxes', false), groupId: 'mailboxTypes', groupLabelKey: 'reports.filters.groups.mailboxTypes' },
+        { type: 'toggle', key: 'includeEnabled', labelKey: 'reports.filters.includeEnabled.label', queryParam: 'includeEnabled', default: d('includeEnabled', true), groupId: 'accountStatus', groupLabelKey: 'reports.filters.groups.accountStatus' },
+        { type: 'toggle', key: 'includeDisabled', labelKey: 'reports.filters.includeDisabled.label', queryParam: 'includeDisabled', default: d('includeDisabled', false), groupId: 'accountStatus', groupLabelKey: 'reports.filters.groups.accountStatus' },
+        { type: 'toggle', key: 'includeLicensed', labelKey: 'reports.filters.includeLicensed.label', queryParam: 'includeLicensed', default: d('includeLicensed', true), groupId: 'licenseStatus', groupLabelKey: 'reports.filters.groups.licenseStatus' },
+        { type: 'toggle', key: 'includeUnlicensed', labelKey: 'reports.filters.includeUnlicensed.label', queryParam: 'includeUnlicensed', default: d('includeUnlicensed', true), groupId: 'licenseStatus', groupLabelKey: 'reports.filters.groups.licenseStatus' },
+        { type: 'toggle', key: 'includeMembers', labelKey: 'reports.filters.includeMembers.label', queryParam: 'includeMembers', default: d('includeMembers', true), groupId: 'userScope', groupLabelKey: 'reports.filters.groups.userScope' },
+        { type: 'toggle', key: 'includeGuests', labelKey: 'reports.filters.includeGuests.label', queryParam: 'includeGuests', default: d('includeGuests', false), groupId: 'userScope', groupLabelKey: 'reports.filters.groups.userScope' },
+    ];
+}
 
-/** Filter definitions for the full-scan user filter panel. */
-const FULL_SCAN_FILTER_GROUPS = [
-    {
-        labelKey: 'reports.filters.groups.mailboxTypes',
-        filters: [
-            { key: 'includeUserMailboxes', labelKey: 'reports.filters.includeUserMailboxes.label' },
-            { key: 'includeSharedMailboxes', labelKey: 'reports.filters.includeSharedMailboxes.label' },
-            { key: 'includeRoomEquipmentMailboxes', labelKey: 'reports.filters.includeRoomEquipmentMailboxes.label' },
-        ],
-    },
-    {
-        labelKey: 'reports.filters.groups.accountStatus',
-        filters: [
-            { key: 'includeEnabled', labelKey: 'reports.filters.includeEnabled.label' },
-            { key: 'includeDisabled', labelKey: 'reports.filters.includeDisabled.label' },
-        ],
-    },
-    {
-        labelKey: 'reports.filters.groups.licenseStatus',
-        filters: [
-            { key: 'includeLicensed', labelKey: 'reports.filters.includeLicensed.label' },
-            { key: 'includeUnlicensed', labelKey: 'reports.filters.includeUnlicensed.label' },
-        ],
-    },
-    {
-        labelKey: 'reports.filters.groups.userScope',
-        filters: [
-            { key: 'includeMembers', labelKey: 'reports.filters.includeMembers.label' },
-            { key: 'includeGuests', labelKey: 'reports.filters.includeGuests.label' },
-        ],
-    },
+/** The 3 standard tagpicker filters (title, department, country). */
+const TAGPICKER_FILTERS = [
+    { type: 'tagpicker', key: 'filterTitles', labelKey: 'reports.filters.titleFilter.label', placeholderKey: 'reports.filters.titleFilter.placeholder', resetLabelKey: 'reports.filters.titleFilter.reset', modeIncludeLabelKey: 'reports.filters.titleFilter.modeInclude', modeExcludeLabelKey: 'reports.filters.titleFilter.modeExclude', queryParam: 'filterTitles', modeQueryParam: 'filterTitlesMode', optionsSourceKey: 'jobTitles', default: { values: [], mode: 'exclude' } },
+    { type: 'tagpicker', key: 'filterDepartments', labelKey: 'reports.filters.departmentFilter.label', placeholderKey: 'reports.filters.departmentFilter.placeholder', resetLabelKey: 'reports.filters.departmentFilter.reset', modeIncludeLabelKey: 'reports.filters.departmentFilter.modeInclude', modeExcludeLabelKey: 'reports.filters.departmentFilter.modeExclude', queryParam: 'filterDepartments', modeQueryParam: 'filterDepartmentsMode', optionsSourceKey: 'departments', default: { values: [], mode: 'exclude' } },
+    { type: 'tagpicker', key: 'filterCountries', labelKey: 'reports.filters.countryFilter.label', placeholderKey: 'reports.filters.countryFilter.placeholder', resetLabelKey: 'reports.filters.countryFilter.reset', modeIncludeLabelKey: 'reports.filters.countryFilter.modeInclude', modeExcludeLabelKey: 'reports.filters.countryFilter.modeExclude', queryParam: 'filterCountries', modeQueryParam: 'filterCountriesMode', optionsSourceKey: 'countries', default: { values: [], mode: 'exclude' } },
 ];
+
+/** Scope filter — first filter on every report. */
+const SCOPE_FILTER = {
+    type: 'segmented',
+    key: 'scope',
+    labelKey: 'reports.filters.scope.label',
+    queryParam: 'scope',
+    default: 'orgChart',
+    options: [
+        { value: 'orgChart', labelKey: 'reports.filters.scope.options.orgChart' },
+        { value: 'all', labelKey: 'reports.filters.scope.options.all' },
+    ],
+};
 
 const REPORT_CONFIGS = {
     'missing-manager': {
@@ -77,87 +70,9 @@ const REPORT_CONFIGS = {
         countSummaryKey: 'reports.table.countSummary',
         buildStatusParams: (records) => ({ count: records.length }),
         filters: [
-            {
-                type: 'toggle',
-                key: 'includeUserMailboxes',
-                labelKey: 'reports.filters.includeUserMailboxes.label',
-                queryParam: 'includeUserMailboxes',
-                default: true,
-                groupId: 'mailboxTypes',
-                groupLabelKey: 'reports.filters.groups.mailboxTypes',
-            },
-            {
-                type: 'toggle',
-                key: 'includeSharedMailboxes',
-                labelKey: 'reports.filters.includeSharedMailboxes.label',
-                queryParam: 'includeSharedMailboxes',
-                default: false,
-                groupId: 'mailboxTypes',
-                groupLabelKey: 'reports.filters.groups.mailboxTypes',
-            },
-            {
-                type: 'toggle',
-                key: 'includeRoomEquipmentMailboxes',
-                labelKey: 'reports.filters.includeRoomEquipmentMailboxes.label',
-                queryParam: 'includeRoomEquipmentMailboxes',
-                default: false,
-                groupId: 'mailboxTypes',
-                groupLabelKey: 'reports.filters.groups.mailboxTypes',
-            },
-            {
-                type: 'toggle',
-                key: 'includeEnabled',
-                labelKey: 'reports.filters.includeEnabled.label',
-                queryParam: 'includeEnabled',
-                default: true,
-                groupId: 'accountStatus',
-                groupLabelKey: 'reports.filters.groups.accountStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeDisabled',
-                labelKey: 'reports.filters.includeDisabled.label',
-                queryParam: 'includeDisabled',
-                default: false,
-                groupId: 'accountStatus',
-                groupLabelKey: 'reports.filters.groups.accountStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeLicensed',
-                labelKey: 'reports.filters.includeLicensed.label',
-                queryParam: 'includeLicensed',
-                default: true,
-                groupId: 'licenseStatus',
-                groupLabelKey: 'reports.filters.groups.licenseStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeUnlicensed',
-                labelKey: 'reports.filters.includeUnlicensed.label',
-                queryParam: 'includeUnlicensed',
-                default: true,
-                groupId: 'licenseStatus',
-                groupLabelKey: 'reports.filters.groups.licenseStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeMembers',
-                labelKey: 'reports.filters.includeMembers.label',
-                queryParam: 'includeMembers',
-                default: true,
-                groupId: 'userScope',
-                groupLabelKey: 'reports.filters.groups.userScope',
-            },
-            {
-                type: 'toggle',
-                key: 'includeGuests',
-                labelKey: 'reports.filters.includeGuests.label',
-                queryParam: 'includeGuests',
-                default: false,
-                groupId: 'userScope',
-                groupLabelKey: 'reports.filters.groups.userScope',
-            },
+            SCOPE_FILTER,
+            ..._standardToggleFilters(),
+            ...TAGPICKER_FILTERS,
         ],
         columns: [
             { key: 'name', labelKey: 'reports.table.columns.name' },
@@ -172,6 +87,28 @@ const REPORT_CONFIGS = {
             },
         ],
     },
+    'missing-photo': {
+        dataPath: '/api/reports/missing-photo',
+        exportPath: '/api/reports/missing-photo/export',
+        summaryLabelKey: 'reports.types.missingPhoto.summaryLabel',
+        tableTitleKey: 'reports.types.missingPhoto.tableTitle',
+        emptyKey: 'reports.types.missingPhoto.empty',
+        countSummaryKey: 'reports.types.missingPhoto.countSummary',
+        buildStatusParams: (records) => ({ count: records.length }),
+        filters: [
+            SCOPE_FILTER,
+            ..._standardToggleFilters(),
+            ...TAGPICKER_FILTERS,
+        ],
+        columns: [
+            { key: 'name', labelKey: 'reports.table.columns.name' },
+            { key: 'title', labelKey: 'reports.table.columns.title' },
+            { key: 'department', labelKey: 'reports.table.columns.department' },
+            { key: 'email', labelKey: 'reports.table.columns.email' },
+            { key: 'managerName', labelKey: 'reports.table.columns.manager' },
+            { key: 'country', labelKey: 'reports.table.columns.country' },
+        ],
+    },
     'last-logins': {
         dataPath: '/api/reports/last-logins',
         exportPath: '/api/reports/last-logins/export',
@@ -182,93 +119,15 @@ const REPORT_CONFIGS = {
         showLicenseSummary: true,
         licenseSummaryLabelKey: 'reports.summary.licensesLabel',
         filters: [
-            {
-                type: 'toggle',
-                key: 'includeUserMailboxes',
-                labelKey: 'reports.filters.includeUserMailboxes.label',
-                queryParam: 'includeUserMailboxes',
-                default: true,
-                groupId: 'mailboxTypes',
-                groupLabelKey: 'reports.filters.groups.mailboxTypes',
-            },
-            {
-                type: 'toggle',
-                key: 'includeSharedMailboxes',
-                labelKey: 'reports.filters.includeSharedMailboxes.label',
-                queryParam: 'includeSharedMailboxes',
-                default: true,
-                groupId: 'mailboxTypes',
-                groupLabelKey: 'reports.filters.groups.mailboxTypes',
-            },
-            {
-                type: 'toggle',
-                key: 'includeRoomEquipmentMailboxes',
-                labelKey: 'reports.filters.includeRoomEquipmentMailboxes.label',
-                queryParam: 'includeRoomEquipmentMailboxes',
-                default: true,
-                groupId: 'mailboxTypes',
-                groupLabelKey: 'reports.filters.groups.mailboxTypes',
-            },
-            {
-                type: 'toggle',
-                key: 'includeEnabled',
-                labelKey: 'reports.filters.includeEnabled.label',
-                queryParam: 'includeEnabled',
-                default: true,
-                groupId: 'accountStatus',
-                groupLabelKey: 'reports.filters.groups.accountStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeDisabled',
-                labelKey: 'reports.filters.includeDisabled.label',
-                queryParam: 'includeDisabled',
-                default: true,
-                groupId: 'accountStatus',
-                groupLabelKey: 'reports.filters.groups.accountStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeLicensed',
-                labelKey: 'reports.filters.includeLicensed.label',
-                queryParam: 'includeLicensed',
-                default: true,
-                groupId: 'licenseStatus',
-                groupLabelKey: 'reports.filters.groups.licenseStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeUnlicensed',
-                labelKey: 'reports.filters.includeUnlicensed.label',
-                queryParam: 'includeUnlicensed',
-                default: true,
-                groupId: 'licenseStatus',
-                groupLabelKey: 'reports.filters.groups.licenseStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeMembers',
-                labelKey: 'reports.filters.includeMembers.label',
-                queryParam: 'includeMembers',
-                default: true,
-                groupId: 'userScope',
-                groupLabelKey: 'reports.filters.groups.userScope',
-            },
-            {
-                type: 'toggle',
-                key: 'includeGuests',
-                labelKey: 'reports.filters.includeGuests.label',
-                queryParam: 'includeGuests',
-                default: true,
-                groupId: 'userScope',
-                groupLabelKey: 'reports.filters.groups.userScope',
-            },
+            SCOPE_FILTER,
+            ..._standardToggleFilters({ includeSharedMailboxes: true, includeRoomEquipmentMailboxes: true, includeDisabled: true, includeGuests: true }),
             {
                 type: 'segmented',
                 key: 'inactiveDays',
                 labelKey: 'reports.filters.inactiveDays.label',
                 queryParam: 'inactiveDays',
                 default: null,
+                renderAfter: 'tagpickers',
                 options: [
                     { value: null, labelKey: 'reports.filters.inactiveDays.options.all' },
                     { value: 30, labelKey: 'reports.filters.inactiveDays.options.thirty' },
@@ -285,6 +144,7 @@ const REPORT_CONFIGS = {
                 labelKey: 'reports.filters.inactiveDaysMax.label',
                 queryParam: 'inactiveDaysMax',
                 default: null,
+                renderAfter: 'tagpickers',
                 options: [
                     { value: null, labelKey: 'reports.filters.inactiveDaysMax.options.noLimit' },
                     { value: 30, labelKey: 'reports.filters.inactiveDaysMax.options.thirty' },
@@ -296,6 +156,7 @@ const REPORT_CONFIGS = {
                     { value: 1095, labelKey: 'reports.filters.inactiveDaysMax.options.threeYears' },
                 ],
             },
+            ...TAGPICKER_FILTERS,
         ],
         buildStatusParams: (records) => ({
             count: records.length,
@@ -354,6 +215,7 @@ const REPORT_CONFIGS = {
         emptyKey: 'reports.types.hiredThisYear.empty',
         countSummaryKey: 'reports.types.hiredThisYear.countSummary',
         buildStatusParams: (records) => ({ count: records.length }),
+        filters: [SCOPE_FILTER, ...TAGPICKER_FILTERS],
         columns: [
             { key: 'name', labelKey: 'reports.table.columns.name' },
             { key: 'title', labelKey: 'reports.table.columns.title' },
@@ -375,106 +237,18 @@ const REPORT_CONFIGS = {
         tableTitleKey: 'reports.types.filteredUsers.tableTitle',
         emptyKey: 'reports.types.filteredUsers.empty',
         countSummaryKey: 'reports.types.filteredUsers.countSummary',
-        showLicenseSummary: true,
-        licenseSummaryLabelKey: 'reports.summary.licensesLabel',
         filters: [
-            {
-                type: 'toggle',
-                key: 'includeUserMailboxes',
-                labelKey: 'reports.filters.includeUserMailboxes.label',
-                queryParam: 'includeUserMailboxes',
-                default: true,
-                groupId: 'mailboxTypes',
-                groupLabelKey: 'reports.filters.groups.mailboxTypes',
-            },
-            {
-                type: 'toggle',
-                key: 'includeSharedMailboxes',
-                labelKey: 'reports.filters.includeSharedMailboxes.label',
-                queryParam: 'includeSharedMailboxes',
-                default: true,
-                groupId: 'mailboxTypes',
-                groupLabelKey: 'reports.filters.groups.mailboxTypes',
-            },
-            {
-                type: 'toggle',
-                key: 'includeRoomEquipmentMailboxes',
-                labelKey: 'reports.filters.includeRoomEquipmentMailboxes.label',
-                queryParam: 'includeRoomEquipmentMailboxes',
-                default: true,
-                groupId: 'mailboxTypes',
-                groupLabelKey: 'reports.filters.groups.mailboxTypes',
-            },
-            {
-                type: 'toggle',
-                key: 'includeEnabled',
-                labelKey: 'reports.filters.includeEnabled.label',
-                queryParam: 'includeEnabled',
-                default: true,
-                groupId: 'accountStatus',
-                groupLabelKey: 'reports.filters.groups.accountStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeDisabled',
-                labelKey: 'reports.filters.includeDisabled.label',
-                queryParam: 'includeDisabled',
-                default: true,
-                groupId: 'accountStatus',
-                groupLabelKey: 'reports.filters.groups.accountStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeLicensed',
-                labelKey: 'reports.filters.includeLicensed.label',
-                queryParam: 'includeLicensed',
-                default: true,
-                groupId: 'licenseStatus',
-                groupLabelKey: 'reports.filters.groups.licenseStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeUnlicensed',
-                labelKey: 'reports.filters.includeUnlicensed.label',
-                queryParam: 'includeUnlicensed',
-                default: true,
-                groupId: 'licenseStatus',
-                groupLabelKey: 'reports.filters.groups.licenseStatus',
-            },
-            {
-                type: 'toggle',
-                key: 'includeMembers',
-                labelKey: 'reports.filters.includeMembers.label',
-                queryParam: 'includeMembers',
-                default: true,
-                groupId: 'userScope',
-                groupLabelKey: 'reports.filters.groups.userScope',
-            },
-            {
-                type: 'toggle',
-                key: 'includeGuests',
-                labelKey: 'reports.filters.includeGuests.label',
-                queryParam: 'includeGuests',
-                default: true,
-                groupId: 'userScope',
-                groupLabelKey: 'reports.filters.groups.userScope',
-            },
+            { ...SCOPE_FILTER, default: 'all' },
+            ..._standardToggleFilters({ includeSharedMailboxes: true, includeRoomEquipmentMailboxes: true, includeDisabled: true, includeGuests: true }),
+            ...TAGPICKER_FILTERS,
         ],
-        buildStatusParams: (records) => ({
-            count: records.length,
-            licenses: records.reduce((total, item) => total + (item.licenseCount || 0), 0),
-        }),
+        buildStatusParams: (records) => ({ count: records.length }),
         columns: [
             { key: 'name', labelKey: 'reports.table.columns.name' },
             { key: 'title', labelKey: 'reports.table.columns.title' },
             { key: 'department', labelKey: 'reports.table.columns.department' },
             { key: 'email', labelKey: 'reports.table.columns.email' },
-            { key: 'licenseCount', labelKey: 'reports.table.columns.licenseCount' },
-            {
-                key: 'licenseSkus',
-                labelKey: 'reports.table.columns.licenses',
-                render: (record) => (record.licenseSkus || []).join(', '),
-            },
+            { key: 'managerName', labelKey: 'reports.table.columns.manager' },
             {
                 key: 'filterReasons',
                 labelKey: 'reports.types.filteredLicensed.columns.filterReasons',
@@ -490,6 +264,11 @@ const REPORT_CONFIGS = {
         emptyKey: 'reports.types.userScanner.empty',
         countSummaryKey: 'reports.types.userScanner.countSummary',
         isCustom: true,
+        filters: [
+            { ...SCOPE_FILTER, default: 'all' },
+            ..._standardToggleFilters(),
+            ...TAGPICKER_FILTERS,
+        ],
         buildStatusParams: (records) => ({ count: records.length }),
         columns: [
             { key: 'name', labelKey: 'reports.table.columns.name' },
@@ -502,12 +281,46 @@ const REPORT_CONFIGS = {
 
 const reportFiltersState = {};
 
+/** Shared tagpicker filter options cache (fetched once from /api/metadata/options). */
+let _tagpickerOptionsCache = null;
+let _tagpickerOptionsFetching = false;
+const _tagpickerOptionsCallbacks = [];
+
+/** Per-report-key tagpicker picker instances keyed by filter.key. */
+const _reportTagpickers = {};
+
+function _fetchTagpickerOptions() {
+    if (_tagpickerOptionsCache) return Promise.resolve(_tagpickerOptionsCache);
+    if (_tagpickerOptionsFetching) {
+        return new Promise((resolve) => _tagpickerOptionsCallbacks.push(resolve));
+    }
+    _tagpickerOptionsFetching = true;
+    return fetch(`${API_BASE_URL}/api/metadata/options`, { credentials: 'include' })
+        .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+        .then((data) => {
+            _tagpickerOptionsCache = data;
+            _tagpickerOptionsFetching = false;
+            _tagpickerOptionsCallbacks.forEach((cb) => cb(data));
+            _tagpickerOptionsCallbacks.length = 0;
+            return data;
+        })
+        .catch((err) => {
+            _tagpickerOptionsFetching = false;
+            console.error('Failed to fetch tagpicker options:', err);
+            return null;
+        });
+}
+
 function resolveFilterDefault(filter) {
     if (filter.type === 'toggle') {
         return Boolean(filter.default);
     }
     if (filter.type === 'segmented') {
         return filter.default ?? null;
+    }
+    if (filter.type === 'tagpicker') {
+        const def = filter.default || {};
+        return { values: Array.isArray(def.values) ? def.values.slice() : [], mode: def.mode || 'exclude' };
     }
     return filter.default;
 }
@@ -563,6 +376,12 @@ function normalizeFilterValue(filter, value) {
         const parsed = Number(value);
         return Number.isNaN(parsed) ? value : parsed;
     }
+    if (filter.type === 'tagpicker') {
+        if (value && typeof value === 'object') {
+            return { values: Array.isArray(value.values) ? value.values : [], mode: value.mode || 'exclude' };
+        }
+        return { values: [], mode: 'exclude' };
+    }
     return value;
 }
 
@@ -598,12 +417,15 @@ function updateFilterValue(reportKey, filter, value) {
             return;
         }
     }
+    // tagpicker: always accept the value (complex object)
 
     state[filter.key] = normalizedValue;
 
     if (reportKey === currentReportKey) {
         const config = REPORT_CONFIGS[reportKey];
-        renderFilters(config, reportKey);
+        if (filter.type !== 'tagpicker') {
+            renderFilters(config, reportKey);
+        }
         loadReport().catch((error) => {
             console.error('Failed to load report with updated filters:', error);
         });
@@ -617,6 +439,8 @@ function renderFilters(config, reportKey) {
     }
 
     const filters = config.filters || [];
+    const tagpickerFilters = filters.filter((f) => f.type === 'tagpicker');
+
     if (!filters.length) {
         container.classList.add('is-hidden');
         container.innerHTML = '';
@@ -624,6 +448,8 @@ function renderFilters(config, reportKey) {
     }
 
     const t = getTranslator();
+    const state = ensureFilterState(reportKey);
+
     container.classList.remove('is-hidden');
     container.innerHTML = '';
 
@@ -632,26 +458,27 @@ function renderFilters(config, reportKey) {
     title.textContent = t('reports.filters.title');
     container.appendChild(title);
 
-    const state = ensureFilterState(reportKey);
-
     const groups = [];
+    const deferredGroups = [];
     filters.forEach((filter) => {
+        if (filter.type === 'tagpicker') return; // rendered separately below
+        const targetList = filter.renderAfter === 'tagpickers' ? deferredGroups : groups;
         const groupId = filter.groupId || filter.key;
-        let group = groups.find((entry) => entry.id === groupId);
+        let group = targetList.find((entry) => entry.id === groupId);
         if (!group) {
             group = {
                 id: groupId,
                 labelKey: filter.groupLabelKey || null,
                 filters: [],
             };
-            groups.push(group);
+            targetList.push(group);
         } else if (!group.labelKey && filter.groupLabelKey) {
             group.labelKey = filter.groupLabelKey;
         }
         group.filters.push(filter);
     });
 
-    groups.forEach((group) => {
+    const _renderGroup = (group) => {
         if (group.filters.length === 1 && group.filters[0].type === 'segmented') {
             const filter = group.filters[0];
             const groupElement = document.createElement('div');
@@ -714,6 +541,283 @@ function renderFilters(config, reportKey) {
         });
 
         container.appendChild(groupElement);
+    };
+
+    groups.forEach(_renderGroup);
+
+    // Render tagpicker filters
+    if (tagpickerFilters.length) {
+        _renderTagpickerFilters(container, tagpickerFilters, state, reportKey, t);
+    }
+
+    // Render groups that should appear after tagpickers
+    deferredGroups.forEach(_renderGroup);
+}
+
+/**
+ * Lightweight tag-picker for report filters.
+ * Reuses the tag-picker CSS classes from the scanner section.
+ */
+class ReportTagPicker {
+    constructor({ container, options = [], placeholder = '', noMatchText = '', noOptionsText = '', onChange }) {
+        this.onChange = typeof onChange === 'function' ? onChange : () => {};
+        this.options = (Array.isArray(options) ? options.slice() : []).filter(Boolean);
+        this.options.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        this.selected = [];
+        this.selectedSet = new Set();
+        this.filteredOptions = [];
+        this.noMatchText = noMatchText || 'No matches found';
+        this.noOptionsText = noOptionsText || 'No options available';
+
+        // Build DOM
+        this.root = document.createElement('div');
+        this.root.className = 'tag-picker';
+
+        const control = document.createElement('div');
+        control.className = 'tag-picker__control';
+
+        this.tagContainer = document.createElement('div');
+        this.tagContainer.className = 'tag-picker__tags';
+        this.tagContainer.setAttribute('data-role', 'tag-container');
+        control.appendChild(this.tagContainer);
+
+        this.input = document.createElement('input');
+        this.input.type = 'text';
+        this.input.className = 'tag-picker__input';
+        this.input.autocomplete = 'off';
+        this.input.placeholder = placeholder;
+        control.appendChild(this.input);
+        this.root.appendChild(control);
+
+        this.dropdown = document.createElement('div');
+        this.dropdown.className = 'tag-picker__dropdown';
+        this.dropdown.setAttribute('data-role', 'dropdown');
+        this.dropdown.hidden = true;
+        this.root.appendChild(this.dropdown);
+
+        container.appendChild(this.root);
+
+        // Event listeners
+        this._onDocClick = (e) => { if (!this.root.contains(e.target)) this.dropdown.hidden = true; };
+        this.tagContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('.tag-picker__remove');
+            if (btn) this._removeValue(btn.getAttribute('data-value') || '');
+        });
+        this.dropdown.addEventListener('click', (e) => {
+            const opt = e.target.closest('[data-value]');
+            if (opt) { e.preventDefault(); e.stopPropagation(); this._addValue(opt.getAttribute('data-value') || ''); }
+        });
+        this.input.addEventListener('input', () => { this._refreshDropdown(); this.dropdown.hidden = false; });
+        this.input.addEventListener('focus', () => { this._refreshDropdown(); this.dropdown.hidden = false; });
+        this.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !this.input.value && this.selected.length) {
+                this._removeValue(this.selected[this.selected.length - 1]); e.preventDefault();
+            } else if ((e.key === 'Enter' || e.key === 'Tab') && this.input.value.trim()) {
+                this._addValue(this.filteredOptions.length ? this.filteredOptions[0] : this.input.value.trim());
+                e.preventDefault();
+            }
+        });
+        document.addEventListener('click', this._onDocClick);
+        this._renderTags();
+    }
+
+    setOptions(opts) {
+        this.options = (Array.isArray(opts) ? opts.slice() : []).filter(Boolean);
+        this.options.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    }
+
+    setValue(values) {
+        this.selected = []; this.selectedSet = new Set();
+        (values || []).forEach((v) => {
+            const n = (v || '').trim(); if (!n) return;
+            const k = n.toLowerCase();
+            if (!this.selectedSet.has(k)) { this.selected.push(n); this.selectedSet.add(k); }
+        });
+        this._renderTags();
+        this.input.value = '';
+        this.dropdown.hidden = true;
+    }
+
+    getValue() { return this.selected.slice(); }
+
+    clear() { this.setValue([]); this.onChange(); }
+
+    destroy() { document.removeEventListener('click', this._onDocClick); }
+
+    _addValue(raw) {
+        const n = (raw || '').trim(); if (!n) return;
+        const k = n.toLowerCase();
+        if (this.selectedSet.has(k)) { this.input.value = ''; this.dropdown.hidden = true; return; }
+        this.selected.push(n); this.selectedSet.add(k);
+        this._renderTags();
+        this.input.value = '';
+        this._refreshDropdown(); this.dropdown.hidden = false;
+        requestAnimationFrame(() => this.input.focus());
+        this.onChange();
+    }
+
+    _removeValue(raw) {
+        const n = (raw || '').trim(); if (!n) return;
+        const k = n.toLowerCase();
+        if (!this.selectedSet.has(k)) return;
+        this.selected = this.selected.filter((i) => i.toLowerCase() !== k);
+        this.selectedSet.delete(k);
+        this._renderTags();
+        this._refreshDropdown(); this.dropdown.hidden = false;
+        requestAnimationFrame(() => this.input.focus());
+        this.onChange();
+    }
+
+    _renderTags() {
+        this.tagContainer.innerHTML = '';
+        this.selected.forEach((value) => {
+            const tag = document.createElement('span');
+            tag.className = 'tag-picker__tag';
+            const label = document.createElement('span');
+            label.textContent = value;
+            tag.appendChild(label);
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'tag-picker__remove';
+            btn.setAttribute('aria-label', `Remove ${value}`);
+            btn.dataset.value = value; btn.innerHTML = '&times;';
+            tag.appendChild(btn);
+            this.tagContainer.appendChild(tag);
+        });
+    }
+
+    _refreshDropdown() {
+        const q = this.input.value.trim().toLowerCase();
+        const avail = this.options.filter((o) => !this.selectedSet.has(o.toLowerCase()));
+        let filtered = avail;
+        if (q) filtered = avail.filter((o) => o.toLowerCase().includes(q));
+        this.filteredOptions = filtered.slice(0, 60);
+        this.dropdown.innerHTML = '';
+        if (!this.filteredOptions.length) {
+            const empty = document.createElement('div');
+            empty.className = 'tag-picker__option tag-picker__option--empty';
+            empty.textContent = q ? this.noMatchText : this.noOptionsText;
+            this.dropdown.appendChild(empty);
+            return;
+        }
+        this.filteredOptions.forEach((opt) => {
+            const el = document.createElement('div');
+            el.className = 'tag-picker__option'; el.dataset.value = opt;
+            const titleEl = document.createElement('span');
+            titleEl.className = 'tag-picker__option-title'; titleEl.textContent = opt;
+            el.appendChild(titleEl);
+            this.dropdown.appendChild(el);
+        });
+    }
+}
+
+function _renderTagpickerFilters(container, tagpickerFilters, state, reportKey, t) {
+    // Ensure we have a pickers map for this report
+    if (!_reportTagpickers[reportKey]) {
+        _reportTagpickers[reportKey] = {};
+    }
+
+    // Destroy previous pickers for this report if they exist in the DOM
+    Object.values(_reportTagpickers[reportKey]).forEach((p) => {
+        if (p && p.destroy) p.destroy();
+    });
+    _reportTagpickers[reportKey] = {};
+
+    tagpickerFilters.forEach((filter) => {
+        const currentState = Object.prototype.hasOwnProperty.call(state, filter.key)
+            ? state[filter.key]
+            : resolveFilterDefault(filter);
+        const values = (currentState && currentState.values) || [];
+        const mode = (currentState && currentState.mode) || 'exclude';
+
+        const row = document.createElement('div');
+        row.className = 'filter-tagpicker-row';
+
+        // Label
+        const label = document.createElement('span');
+        label.className = 'filter-tagpicker-row__label';
+        label.textContent = t(filter.labelKey);
+        row.appendChild(label);
+
+        // Include/Exclude toggle
+        const toggleWrap = document.createElement('div');
+        toggleWrap.className = 'filter-tagpicker-toggle';
+
+        const includeBtn = document.createElement('button');
+        includeBtn.type = 'button';
+        includeBtn.className = `filter-tagpicker-toggle__btn${mode === 'include' ? ' filter-tagpicker-toggle__btn--active filter-tagpicker-toggle__btn--include' : ''}`;
+        includeBtn.textContent = t(filter.modeIncludeLabelKey);
+        includeBtn.setAttribute('aria-pressed', String(mode === 'include'));
+
+        const excludeBtn = document.createElement('button');
+        excludeBtn.type = 'button';
+        excludeBtn.className = `filter-tagpicker-toggle__btn${mode === 'exclude' ? ' filter-tagpicker-toggle__btn--active filter-tagpicker-toggle__btn--exclude' : ''}`;
+        excludeBtn.textContent = t(filter.modeExcludeLabelKey);
+        excludeBtn.setAttribute('aria-pressed', String(mode === 'exclude'));
+
+        const setMode = (newMode) => {
+            const curState = state[filter.key] || resolveFilterDefault(filter);
+            updateFilterValue(reportKey, filter, { values: curState.values || [], mode: newMode });
+            // Update toggle button styles without full re-render
+            if (newMode === 'include') {
+                includeBtn.classList.add('filter-tagpicker-toggle__btn--active', 'filter-tagpicker-toggle__btn--include');
+                excludeBtn.classList.remove('filter-tagpicker-toggle__btn--active', 'filter-tagpicker-toggle__btn--exclude');
+            } else {
+                excludeBtn.classList.add('filter-tagpicker-toggle__btn--active', 'filter-tagpicker-toggle__btn--exclude');
+                includeBtn.classList.remove('filter-tagpicker-toggle__btn--active', 'filter-tagpicker-toggle__btn--include');
+            }
+            includeBtn.setAttribute('aria-pressed', String(newMode === 'include'));
+            excludeBtn.setAttribute('aria-pressed', String(newMode === 'exclude'));
+        };
+
+        includeBtn.addEventListener('click', () => setMode('include'));
+        excludeBtn.addEventListener('click', () => setMode('exclude'));
+
+        toggleWrap.appendChild(includeBtn);
+        toggleWrap.appendChild(excludeBtn);
+        row.appendChild(toggleWrap);
+
+        // Tag picker container
+        const pickerWrap = document.createElement('div');
+        pickerWrap.className = 'filter-tagpicker-picker';
+
+        const picker = new ReportTagPicker({
+            container: pickerWrap,
+            options: [],
+            placeholder: t(filter.placeholderKey),
+            noMatchText: t('reports.filters.tagpickerNoMatches'),
+            noOptionsText: t('reports.filters.tagpickerNoOptions'),
+            onChange: () => {
+                const curState = state[filter.key] || resolveFilterDefault(filter);
+                updateFilterValue(reportKey, filter, { values: picker.getValue(), mode: curState.mode || 'exclude' });
+            },
+        });
+        picker.setValue(values);
+        _reportTagpickers[reportKey][filter.key] = picker;
+
+        row.appendChild(pickerWrap);
+
+        // Reset button
+        const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.className = 'btn btn-ghost filter-tagpicker-reset';
+        resetBtn.textContent = t(filter.resetLabelKey);
+        resetBtn.addEventListener('click', () => {
+            picker.clear();
+        });
+        row.appendChild(resetBtn);
+
+        container.appendChild(row);
+    });
+
+    // Fetch options and populate pickers
+    _fetchTagpickerOptions().then((data) => {
+        if (!data) return;
+        tagpickerFilters.forEach((filter) => {
+            const picker = _reportTagpickers[reportKey] && _reportTagpickers[reportKey][filter.key];
+            if (picker && data[filter.optionsSourceKey]) {
+                picker.setOptions(data[filter.optionsSourceKey]);
+            }
+        });
     });
 }
 
@@ -742,6 +846,17 @@ function applyFiltersToUrl(url, config, reportKey) {
                 url.searchParams.delete(paramName);
             } else {
                 url.searchParams.set(paramName, value);
+            }
+        } else if (filter.type === 'tagpicker') {
+            const tagVal = value || {};
+            const vals = tagVal.values || [];
+            const mode = tagVal.mode || 'exclude';
+            if (vals.length) {
+                url.searchParams.set(paramName, vals.join(','));
+                url.searchParams.set(filter.modeQueryParam, mode);
+            } else {
+                url.searchParams.delete(paramName);
+                url.searchParams.delete(filter.modeQueryParam);
             }
         } else if (value !== undefined && value !== null && value !== '') {
             url.searchParams.set(paramName, value);
@@ -1036,9 +1151,18 @@ function renderTable(records, config) {
 
 async function loadReport({ refresh = false } = {}) {
     const config = REPORT_CONFIGS[currentReportKey] || REPORT_CONFIGS['missing-manager'];
-    renderFilters(config, currentReportKey);
+    // Only re-render non-tagpicker filter groups before fetch;
+    // tagpicker pickers are preserved to avoid destroying picker state.
+    const hasTagpickers = (config.filters || []).some((f) => f.type === 'tagpicker');
+    if (!hasTagpickers) {
+        renderFilters(config, currentReportKey);
+    }
     toggleLoading(true, config);
     clearError();
+
+    const TRANSIENT_CODES = [502, 503, 504];
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY_MS = 2000;
 
     try {
         const url = new URL(config.dataPath, API_BASE_URL);
@@ -1046,9 +1170,28 @@ async function loadReport({ refresh = false } = {}) {
             url.searchParams.set('refresh', 'true');
         }
         applyFiltersToUrl(url, config, currentReportKey);
-        const response = await fetch(url, { credentials: 'include' });
+
+        let response;
+        let lastStatus;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+                await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+            }
+            response = await fetch(url, { credentials: 'include' });
+            lastStatus = response.status;
+
+            if (lastStatus === 401) {
+                window.location.href = '/login?next=reports';
+                return;
+            }
+            if (!TRANSIENT_CODES.includes(lastStatus)) break;
+        }
+
         if (!response.ok) {
-            throw new Error(`${response.status}`);
+            const errorKey = TRANSIENT_CODES.includes(lastStatus)
+                ? 'reports.errors.loadTimeout'
+                : 'reports.errors.loadFailed';
+            throw { messageKey: errorKey, detail: `${lastStatus}` };
         }
         const payload = await response.json();
         latestRecords = Array.isArray(payload.records) ? payload.records : [];
@@ -1061,7 +1204,11 @@ async function loadReport({ refresh = false } = {}) {
         toggleLoading(false, config, latestRecords);
     } catch (error) {
         toggleLoading(false, config, []);
-        showError('reports.errors.loadFailed', error.message);
+        if (error && error.messageKey) {
+            showError(error.messageKey, error.detail);
+        } else {
+            showError('reports.errors.loadFailed', error.message);
+        }
         renderSummary([], null, config);
         renderTable([], config);
     }
@@ -1071,12 +1218,32 @@ async function exportReport() {
     const config = REPORT_CONFIGS[currentReportKey] || REPORT_CONFIGS['missing-manager'];
     clearError();
 
+    const TRANSIENT_CODES = [502, 503, 504];
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY_MS = 2000;
+
     try {
         const url = new URL(config.exportPath, API_BASE_URL);
         applyFiltersToUrl(url, config, currentReportKey);
-        const response = await fetch(url, { credentials: 'include' });
+
+        let response;
+        let lastStatus;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+                await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+            }
+            response = await fetch(url, { credentials: 'include' });
+            lastStatus = response.status;
+
+            if (lastStatus === 401) {
+                window.location.href = '/login?next=reports';
+                return;
+            }
+            if (!TRANSIENT_CODES.includes(lastStatus)) break;
+        }
+
         if (!response.ok) {
-            throw new Error(`${response.status}`);
+            throw new Error(`${lastStatus}`);
         }
 
         const blob = await response.blob();
@@ -1312,15 +1479,10 @@ function toggleUserScannerPanel(show) {
     const tablePanel = document.querySelector('.table-panel');
     const summaryPanel = document.querySelector('.summary-panel');
     const headerActions = document.querySelector('.header-actions');
-    const filterPanel = document.querySelector('.filter-panel');
-    const reportFilters = qs('reportFilters');
     if (panel) panel.classList.toggle('is-hidden', !show);
     if (tablePanel) tablePanel.classList.toggle('is-hidden', show);
     if (summaryPanel) summaryPanel.classList.toggle('is-hidden', show);
     if (headerActions) headerActions.classList.toggle('is-hidden', show);
-    if (filterPanel) filterPanel.classList.toggle('is-hidden', show);
-    // Hide report-level filter chips (Mailbox Type, Account Status, etc.)
-    if (reportFilters) { reportFilters.classList.add('is-hidden'); reportFilters.innerHTML = ''; }
 }
 
 async function checkUserScannerEnabled() {
@@ -1574,8 +1736,17 @@ class SiteFilterPicker {
         if (this.dropdown) this.dropdown.addEventListener('click', this._onDropClick);
         if (this.input) {
             this.input.addEventListener('input', this._onInput);
-            this.input.addEventListener('focus', () => this._openDropdown());
+            this.input.addEventListener('focus', () => { this._refreshDropdown(); this._openDropdown(); });
             this.input.addEventListener('keydown', this._onKeyDown);
+        }
+        // Allow clicking anywhere on the control area to focus the input
+        const control = this.root.querySelector('.tag-picker__control');
+        if (control) {
+            control.addEventListener('click', (e) => {
+                if (e.target.closest('.tag-picker__remove')) return;
+                if (this.input) this.input.focus();
+            });
+            control.style.cursor = 'text';
         }
         document.addEventListener('click', this._onDocClick);
         this._renderTags();
@@ -1762,50 +1933,35 @@ function _getFullScanOptions() {
 
 /** Read the user-level filter state for the All tab. */
 function _getFullScanUserFilters() {
-    return { ...fullScanFilterState };
-}
+    const base = {};
 
-/**
- * Render the full-scan user filters using the same filter-group / filter-chip
- * pattern as the report filter toolbar.
- */
-function renderFullScanFilters() {
-    const container = document.getElementById('fullScanFilters');
-    if (!container) return;
+    // Read all filter values (scope, toggles, tagpickers) from the report state
+    const state = ensureFilterState('user-scanner');
+    const config = REPORT_CONFIGS['user-scanner'];
+    if (config && config.filters) {
+        config.filters.forEach((filter) => {
+            const paramName = filter.queryParam || filter.key;
+            const val = Object.prototype.hasOwnProperty.call(state, filter.key)
+                ? state[filter.key]
+                : resolveFilterDefault(filter);
 
-    const t = getTranslator();
-    container.innerHTML = '';
-
-    const title = document.createElement('span');
-    title.className = 'filter-toolbar__title';
-    title.textContent = t('reports.userScanner.fullScan.filtersTitle');
-    container.appendChild(title);
-
-    FULL_SCAN_FILTER_GROUPS.forEach(group => {
-        const groupEl = document.createElement('div');
-        groupEl.className = 'filter-group';
-
-        const label = document.createElement('span');
-        label.className = 'filter-group__label';
-        label.textContent = t(group.labelKey);
-        groupEl.appendChild(label);
-
-        group.filters.forEach(filter => {
-            const isActive = !!fullScanFilterState[filter.key];
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = `filter-chip${isActive ? ' filter-chip--active' : ''}`;
-            btn.textContent = t(filter.labelKey);
-            btn.setAttribute('aria-pressed', String(isActive));
-            btn.addEventListener('click', () => {
-                fullScanFilterState[filter.key] = !fullScanFilterState[filter.key];
-                renderFullScanFilters();
-            });
-            groupEl.appendChild(btn);
+            if (filter.type === 'toggle') {
+                base[paramName] = !!val;
+            } else if (filter.type === 'segmented') {
+                if (val !== null && val !== undefined && val !== '') {
+                    base[paramName] = val;
+                }
+            } else if (filter.type === 'tagpicker') {
+                const tagVal = val || { values: [], mode: 'exclude' };
+                if (tagVal.values && tagVal.values.length) {
+                    base[paramName] = tagVal.values.join(',');
+                    base[filter.modeQueryParam] = tagVal.mode || 'exclude';
+                }
+            }
         });
+    }
 
-        container.appendChild(groupEl);
-    });
+    return base;
 }
 
 function _syncSiteFilterFromPicker() {
@@ -2181,9 +2337,15 @@ function initUserScannerPanel() {
                 // Organization tab: hide results table, only show terminal + downloads
                 if (tablePanel) tablePanel.classList.add('is-hidden');
                 loadFullScanHistory();
+                // Show scope filter for Organization tab
+                const reportFilters = qs('reportFilters');
+                if (reportFilters) reportFilters.classList.remove('is-hidden');
             } else {
                 // Individual tab: show the results table for single-user scans
                 if (tablePanel) tablePanel.classList.remove('is-hidden');
+                // Hide scope filter for Individual tab (not applicable)
+                const reportFilters = qs('reportFilters');
+                if (reportFilters) reportFilters.classList.add('is-hidden');
             }
         });
     });
@@ -2298,7 +2460,6 @@ function initUserScannerPanel() {
     });
 
     initSiteFilter();
-    renderFullScanFilters();
 }
 
 async function initializeReportsPage() {
@@ -2323,7 +2484,7 @@ async function initializeReportsPage() {
                 scannerOption.style.display = 'none';
                 // If scanner was selected but unavailable, fall back to default
                 if (currentReportKey === 'user-scanner') {
-                    currentReportKey = 'missing-manager';
+                    currentReportKey = 'last-logins';
                 }
             }
 
@@ -2331,12 +2492,22 @@ async function initializeReportsPage() {
             // Show scanner panel if it's the initial selection
             if (currentReportKey === 'user-scanner' && scannerStatus.enabled) {
                 toggleUserScannerPanel(true);
+                const config = REPORT_CONFIGS[currentReportKey];
+                ensureFilterState(currentReportKey);
+                renderFilters(config, currentReportKey);
+                loadFullScanHistory();
             }
             reportSelect.addEventListener('change', () => {
                 currentReportKey = reportSelect.value;
                 const isScanner = currentReportKey === 'user-scanner';
                 toggleUserScannerPanel(isScanner);
-                if (isScanner) return;
+                if (isScanner) {
+                    const config = REPORT_CONFIGS[currentReportKey];
+                    ensureFilterState(currentReportKey);
+                    renderFilters(config, currentReportKey);
+                    loadFullScanHistory();
+                    return;
+                }
                 const config = REPORT_CONFIGS[currentReportKey] || REPORT_CONFIGS['missing-manager'];
                 ensureFilterState(currentReportKey);
                 renderSummary([], null, config);

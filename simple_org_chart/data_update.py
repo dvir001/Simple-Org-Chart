@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import simple_org_chart.config as app_config
 from simple_org_chart.msgraph import (
+    batch_check_photos,
     calculate_days_since,
     collect_disabled_users,
     collect_last_login_records,
@@ -45,6 +46,7 @@ RECENTLY_HIRED_FILE = str(app_config.RECENTLY_HIRED_FILE)
 LAST_LOGIN_FILE = str(app_config.LAST_LOGIN_FILE)
 FILTERED_LICENSE_FILE = str(app_config.FILTERED_LICENSE_FILE)
 FILTERED_USERS_FILE = str(app_config.FILTERED_USERS_FILE)
+MISSING_PHOTO_FILE = str(app_config.MISSING_PHOTO_FILE)
 DATA_UPDATE_STATUS_FILE = os.path.join(DATA_DIR, 'data_update_status.json')
 
 _DATA_UPDATE_STATUS_LOCK = threading.Lock()
@@ -231,6 +233,7 @@ def collect_recently_hired_employees(
             'phone': employee.get('phone') or '',
             'businessPhone': employee.get('businessPhone') or '',
             'location': employee.get('location') or employee.get('officeLocation') or '',
+            'country': employee.get('country') or '',
             'hireDate': datetime_to_iso(hire_date),
             'daysSinceHire': calculate_days_since(hire_date),
             'managerName': '',
@@ -323,8 +326,54 @@ def update_employee_data(source: str = 'unknown') -> None:
         )
 
         if employees:
+            # Check photos on ALL users (employees + filtered_users) so the
+            # "All" scope can show every user without a photo, regardless of
+            # org-chart visibility filters applied by fetch_all_employees.
+            try:
+                all_users = list(employees) + (filtered_users or [])
+                all_ids = [emp.get('id') for emp in all_users if emp.get('id')]
+                has_photo_ids = batch_check_photos(all_ids, token)
+                missing_photo_records = []
+                for emp in all_users:
+                    uid = emp.get('id')
+                    if uid and uid not in has_photo_ids:
+                        missing_photo_records.append({
+                            'id': uid,
+                            'name': emp.get('name') or '',
+                            'title': emp.get('title') or '',
+                            'department': emp.get('department') or '',
+                            'email': emp.get('email') or '',
+                            'country': emp.get('country') or '',
+                            'accountEnabled': emp.get('accountEnabled', True),
+                            'userType': emp.get('userType') or '',
+                            'licenseCount': emp.get('licenseCount', 0),
+                            'licenseSkus': emp.get('licenseSkus', []),
+                            'licenseSkuIds': emp.get('licenseSkuIds', []),
+                            'mailboxType': emp.get('mailboxType'),
+                            'isSharedMailbox': emp.get('isSharedMailbox'),
+                        })
+                with open(MISSING_PHOTO_FILE, 'w') as report_file:
+                    json.dump(missing_photo_records, report_file, indent=2)
+                logger.info(
+                    f"Updated missing photo report cache with {len(missing_photo_records)} records"
+                )
+            except Exception as report_error:
+                logger.error(f"Failed to write missing photo report cache: {report_error}")
+
             ignored_employee_set = parse_ignored_employees(settings)
             ignored_department_set = parse_ignored_departments(settings)
+
+            # Collect recently hired from ALL users (before ignore filtering)
+            try:
+                all_users_for_hired = list(employees) + (filtered_users or [])
+                recently_hired_records = collect_recently_hired_employees(all_users_for_hired, days=365)
+                with open(RECENTLY_HIRED_FILE, 'w') as report_file:
+                    json.dump(recently_hired_records, report_file, indent=2)
+                logger.info(
+                    f"Updated recently hired employees report cache with {len(recently_hired_records)} records"
+                )
+            except Exception as report_error:
+                logger.error(f"Failed to write recently hired employees report cache: {report_error}")
 
             if ignored_employee_set:
                 before = len(employees)
@@ -421,15 +470,6 @@ def update_employee_data(source: str = 'unknown') -> None:
             else:
                 logger.error("Could not build hierarchy from employee data")
 
-            try:
-                recently_hired_records = collect_recently_hired_employees(employees, days=365)
-                with open(RECENTLY_HIRED_FILE, 'w') as report_file:
-                    json.dump(recently_hired_records, report_file, indent=2)
-                logger.info(
-                    f"Updated recently hired employees report cache with {len(recently_hired_records)} records"
-                )
-            except Exception as report_error:
-                logger.error(f"Failed to write recently hired employees report cache: {report_error}")
         else:
             logger.error("No employees fetched from Graph API")
 

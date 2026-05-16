@@ -96,11 +96,14 @@ from simple_org_chart.reports import (
     apply_filtered_user_filters,
     apply_last_login_filters,
     apply_missing_manager_filters,
+    apply_missing_photo_filters,
+    apply_tagpicker_filters,
     load_disabled_users_data,
     load_filtered_license_data,
     load_filtered_user_data,
     load_last_login_data,
     load_missing_manager_data,
+    load_missing_photo_data,
     load_recently_hired_data,
 )
 from simple_org_chart.scheduler import (
@@ -288,6 +291,7 @@ DISABLED_USERS_FILE = str(app_config.DISABLED_USERS_FILE)
 LAST_LOGIN_FILE = str(app_config.LAST_LOGIN_FILE)
 RECENTLY_DISABLED_FILE = str(app_config.RECENTLY_DISABLED_FILE)
 RECENTLY_HIRED_FILE = str(app_config.RECENTLY_HIRED_FILE)
+MISSING_PHOTO_FILE = str(app_config.MISSING_PHOTO_FILE)
 DATA_UPDATE_STATUS_FILE = os.path.join(DATA_DIR, 'data_update_status.json')
 
 logger.info(f"DATA_DIR set to: {DATA_DIR}")
@@ -833,11 +837,13 @@ def get_metadata_options():
     employees = get_employee_list_for_metadata()
     job_titles = collect_unique_field_values(employees, 'title')
     departments = collect_unique_field_values(employees, 'department')
+    countries = collect_unique_field_values(employees, 'country')
     employee_options = collect_employee_option_labels(employees)
 
     return jsonify({
         'jobTitles': job_titles,
         'departments': departments,
+        'countries': countries,
         'employees': employee_options
     })
 
@@ -1520,29 +1526,14 @@ def _get_disabled_records_from_request(*, force_refresh=False, apply_filters=Tru
 def get_missing_manager_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
-        include_user_mailboxes = _parse_bool_arg(request.args.get('includeUserMailboxes'), default=True)
-        include_shared_mailboxes = _parse_bool_arg(request.args.get('includeSharedMailboxes'), default=False)
-        include_room_equipment_mailboxes = _parse_bool_arg(request.args.get('includeRoomEquipmentMailboxes'), default=False)
-        include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
-        include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=False)
-        include_licensed = _parse_bool_arg(request.args.get('includeLicensed'), default=True)
-        include_unlicensed = _parse_bool_arg(request.args.get('includeUnlicensed'), default=True)
-        include_members = _parse_bool_arg(request.args.get('includeMembers'), default=True)
-        include_guests = _parse_bool_arg(request.args.get('includeGuests'), default=False)
+        scope = request.args.get('scope', 'orgChart')
+        toggles = _parse_standard_toggle_args(request.args)
+        tp = _parse_tagpicker_args(request.args)
 
         records = load_missing_manager_data(report_cache, force_refresh=refresh)
-        filtered_records = apply_missing_manager_filters(
-            records,
-            include_user_mailboxes=include_user_mailboxes,
-            include_shared_mailboxes=include_shared_mailboxes,
-            include_room_equipment_mailboxes=include_room_equipment_mailboxes,
-            include_enabled=include_enabled,
-            include_disabled=include_disabled,
-            include_licensed=include_licensed,
-            include_unlicensed=include_unlicensed,
-            include_members=include_members,
-            include_guests=include_guests,
-        )
+        records = _apply_scope_filter(records, scope)
+        filtered_records = apply_missing_manager_filters(records, **toggles)
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
         generated_at = None
         if os.path.exists(MISSING_MANAGER_FILE):
             generated_at = datetime.fromtimestamp(os.path.getmtime(MISSING_MANAGER_FILE)).isoformat()
@@ -1551,17 +1542,7 @@ def get_missing_manager_report():
             'records': filtered_records,
             'count': len(filtered_records),
             'generatedAt': generated_at,
-            'appliedFilters': {
-                'includeUserMailboxes': include_user_mailboxes,
-                'includeSharedMailboxes': include_shared_mailboxes,
-                'includeRoomEquipmentMailboxes': include_room_equipment_mailboxes,
-                'includeEnabled': include_enabled,
-                'includeDisabled': include_disabled,
-                'includeLicensed': include_licensed,
-                'includeUnlicensed': include_unlicensed,
-                'includeMembers': include_members,
-                'includeGuests': include_guests,
-            }
+            'appliedFilters': toggles,
         })
     except Exception as e:
         logger.error(f"Error loading missing manager report: {e}")
@@ -1576,29 +1557,14 @@ def export_missing_manager_report():
 
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
-        include_user_mailboxes = _parse_bool_arg(request.args.get('includeUserMailboxes'), default=True)
-        include_shared_mailboxes = _parse_bool_arg(request.args.get('includeSharedMailboxes'), default=False)
-        include_room_equipment_mailboxes = _parse_bool_arg(request.args.get('includeRoomEquipmentMailboxes'), default=False)
-        include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
-        include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=False)
-        include_licensed = _parse_bool_arg(request.args.get('includeLicensed'), default=True)
-        include_unlicensed = _parse_bool_arg(request.args.get('includeUnlicensed'), default=True)
-        include_members = _parse_bool_arg(request.args.get('includeMembers'), default=True)
-        include_guests = _parse_bool_arg(request.args.get('includeGuests'), default=False)
+        scope = request.args.get('scope', 'orgChart')
+        toggles = _parse_standard_toggle_args(request.args)
+        tp = _parse_tagpicker_args(request.args)
 
         records = load_missing_manager_data(report_cache, force_refresh=refresh)
-        filtered_records = apply_missing_manager_filters(
-            records,
-            include_user_mailboxes=include_user_mailboxes,
-            include_shared_mailboxes=include_shared_mailboxes,
-            include_room_equipment_mailboxes=include_room_equipment_mailboxes,
-            include_enabled=include_enabled,
-            include_disabled=include_disabled,
-            include_licensed=include_licensed,
-            include_unlicensed=include_unlicensed,
-            include_members=include_members,
-            include_guests=include_guests,
-        )
+        records = _apply_scope_filter(records, scope)
+        filtered_records = apply_missing_manager_filters(records, **toggles)
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
 
         wb = Workbook()
         ws = wb.active
@@ -1653,6 +1619,94 @@ def export_missing_manager_report():
         )
     except Exception as e:
         logger.error(f"Error exporting missing manager report: {e}")
+        return jsonify({'error': 'Failed to export report'}), 500
+
+
+@app.route('/api/reports/missing-photo')
+@require_auth
+def get_missing_photo_report():
+    try:
+        refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
+        toggles = _parse_standard_toggle_args(request.args)
+        tp = _parse_tagpicker_args(request.args)
+
+        records = load_missing_photo_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
+        filtered_records = apply_missing_photo_filters(records, **toggles)
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
+        generated_at = None
+        if os.path.exists(MISSING_PHOTO_FILE):
+            generated_at = datetime.fromtimestamp(os.path.getmtime(MISSING_PHOTO_FILE)).isoformat()
+
+        return jsonify({
+            'records': filtered_records,
+            'count': len(filtered_records),
+            'generatedAt': generated_at,
+            'appliedFilters': toggles,
+        })
+    except Exception as e:
+        logger.error(f"Error loading missing photo report: {e}")
+        return jsonify({'error': 'Failed to load report data'}), 500
+
+
+@app.route('/api/reports/missing-photo/export')
+@require_auth
+def export_missing_photo_report():
+    if not Workbook:
+        return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
+
+    try:
+        refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
+        toggles = _parse_standard_toggle_args(request.args)
+        tp = _parse_tagpicker_args(request.args)
+
+        records = load_missing_photo_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
+        filtered_records = apply_missing_photo_filters(records, **toggles)
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Missing Photos"
+
+        headers = [
+            ('name', 'Name'),
+            ('title', 'Title'),
+            ('department', 'Department'),
+            ('email', 'Email'),
+            ('country', 'Country'),
+        ]
+
+        for column_index, (_, header_text) in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=column_index, value=header_text)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+
+        for row_index, record in enumerate(filtered_records, start=2):
+            for column_index, (key, _) in enumerate(headers, 1):
+                ws.cell(row=row_index, column=column_index, value=record.get(key))
+
+        for col in range(1, len(headers) + 1):
+            column_letter = get_column_letter(col)
+            ws.column_dimensions[column_letter].width = 22
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"missing-photos-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except Exception as e:
+        logger.error(f"Error exporting missing photo report: {e}")
         return jsonify({'error': 'Failed to export report'}), 500
 
 
@@ -1884,7 +1938,11 @@ def export_recently_disabled_report():
 def get_recently_hired_report():
     try:
         refresh = request.args.get('refresh', 'false').lower() == 'true'
+        scope = request.args.get('scope', 'orgChart')
+        tp = _parse_tagpicker_args(request.args)
         records = load_recently_hired_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
+        records = apply_tagpicker_filters(records, **tp)
         generated_at = None
         if os.path.exists(RECENTLY_HIRED_FILE):
             generated_at = datetime.fromtimestamp(os.path.getmtime(RECENTLY_HIRED_FILE)).isoformat()
@@ -1907,7 +1965,11 @@ def export_recently_hired_report():
 
     try:
         refresh = request.args.get('refresh', 'false').lower() == 'true'
+        scope = request.args.get('scope', 'orgChart')
+        tp = _parse_tagpicker_args(request.args)
         records = load_recently_hired_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
+        records = apply_tagpicker_filters(records, **tp)
 
         wb = Workbook()
         ws = wb.active
@@ -1971,11 +2033,83 @@ def _parse_bool_arg(value, default=True):
     return default
 
 
+def _parse_tagpicker_args(args):
+    """Parse the three tagpicker filter query params (title, department, country)."""
+    def _split_list(raw):
+        if not raw:
+            return None
+        return [v.strip() for v in raw.split(',') if v.strip()]
+
+    filter_titles = _split_list(args.get('filterTitles'))
+    filter_titles_mode = (args.get('filterTitlesMode') or 'exclude').strip().lower()
+    if filter_titles_mode not in ('include', 'exclude'):
+        filter_titles_mode = 'exclude'
+
+    filter_departments = _split_list(args.get('filterDepartments'))
+    filter_departments_mode = (args.get('filterDepartmentsMode') or 'exclude').strip().lower()
+    if filter_departments_mode not in ('include', 'exclude'):
+        filter_departments_mode = 'exclude'
+
+    filter_countries = _split_list(args.get('filterCountries'))
+    filter_countries_mode = (args.get('filterCountriesMode') or 'exclude').strip().lower()
+    if filter_countries_mode not in ('include', 'exclude'):
+        filter_countries_mode = 'exclude'
+
+    return {
+        'filter_titles': filter_titles,
+        'filter_titles_mode': filter_titles_mode,
+        'filter_departments': filter_departments,
+        'filter_departments_mode': filter_departments_mode,
+        'filter_countries': filter_countries,
+        'filter_countries_mode': filter_countries_mode,
+    }
+
+
+def _parse_standard_toggle_args(args, defaults=None):
+    """Parse the standard 9 toggle filter params from request args.
+
+    Returns a dict suitable for passing as **kwargs to apply_filtered_user_filters
+    and similar functions.  `defaults` can override the fallback for any key.
+    """
+    d = defaults or {}
+    return {
+        'include_user_mailboxes': _parse_bool_arg(args.get('includeUserMailboxes'), default=d.get('include_user_mailboxes', True)),
+        'include_shared_mailboxes': _parse_bool_arg(args.get('includeSharedMailboxes'), default=d.get('include_shared_mailboxes', False)),
+        'include_room_equipment_mailboxes': _parse_bool_arg(args.get('includeRoomEquipmentMailboxes'), default=d.get('include_room_equipment_mailboxes', False)),
+        'include_enabled': _parse_bool_arg(args.get('includeEnabled'), default=d.get('include_enabled', True)),
+        'include_disabled': _parse_bool_arg(args.get('includeDisabled'), default=d.get('include_disabled', False)),
+        'include_licensed': _parse_bool_arg(args.get('includeLicensed'), default=d.get('include_licensed', True)),
+        'include_unlicensed': _parse_bool_arg(args.get('includeUnlicensed'), default=d.get('include_unlicensed', True)),
+        'include_members': _parse_bool_arg(args.get('includeMembers'), default=d.get('include_members', True)),
+        'include_guests': _parse_bool_arg(args.get('includeGuests'), default=d.get('include_guests', False)),
+    }
+
+
+def _apply_scope_filter(records, scope):
+    """Filter records by scope.
+
+    scope='orgChart' keeps only users present in the org-chart employee list.
+    scope='all' returns records unmodified.
+    """
+    if not records or scope != 'orgChart':
+        return records
+    try:
+        if os.path.exists(EMPLOYEE_LIST_FILE):
+            with open(EMPLOYEE_LIST_FILE, 'r') as f:
+                org_employees = json.load(f)
+            org_ids = {str(emp.get('id')) for emp in org_employees if emp.get('id')}
+            return [r for r in records if str(r.get('id', '')) in org_ids]
+    except Exception as e:
+        logger.warning(f"Could not apply org chart scope filter: {e}")
+    return records
+
+
 @app.route('/api/reports/last-logins')
 @require_auth
 def get_last_logins_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
 
         include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
         include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=True)
@@ -1987,6 +2121,7 @@ def get_last_logins_report():
         include_user_mailboxes = _parse_bool_arg(request.args.get('includeUserMailboxes'), default=True)
         include_shared_mailboxes = _parse_bool_arg(request.args.get('includeSharedMailboxes'), default=True)
         include_room_equipment_mailboxes = _parse_bool_arg(request.args.get('includeRoomEquipmentMailboxes'), default=True)
+        tp = _parse_tagpicker_args(request.args)
 
         inactive_days_raw = request.args.get('inactiveDays')
         inactive_days = None
@@ -1999,6 +2134,7 @@ def get_last_logins_report():
             inactive_days_max = inactive_days_max_raw
 
         records = load_last_login_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
         filtered_records = apply_last_login_filters(
             records,
             include_enabled=include_enabled,
@@ -2014,6 +2150,7 @@ def get_last_logins_report():
             inactive_days=inactive_days,
             inactive_days_max=inactive_days_max
         )
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
 
         generated_at = None
         if os.path.exists(LAST_LOGIN_FILE):
@@ -2052,6 +2189,7 @@ def export_last_logins_report():
 
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
 
         include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
         include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=True)
@@ -2073,7 +2211,10 @@ def export_last_logins_report():
         if inactive_days_max_raw not in (None, '', 'null', 'None'):
             inactive_days_max = inactive_days_max_raw
 
+        tp = _parse_tagpicker_args(request.args)
+
         records = load_last_login_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
         filtered_records = apply_last_login_filters(
             records,
             include_enabled=include_enabled,
@@ -2089,6 +2230,7 @@ def export_last_logins_report():
             inactive_days=inactive_days,
             inactive_days_max=inactive_days_max
         )
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
 
         wb = Workbook()
         ws = wb.active
@@ -2263,6 +2405,7 @@ def export_disabled_licensed_report():
 def get_filtered_users_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
 
         include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
         include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=True)
@@ -2273,6 +2416,7 @@ def get_filtered_users_report():
         include_user_mailboxes = _parse_bool_arg(request.args.get('includeUserMailboxes'), default=True)
         include_shared_mailboxes = _parse_bool_arg(request.args.get('includeSharedMailboxes'), default=True)
         include_room_equipment_mailboxes = _parse_bool_arg(request.args.get('includeRoomEquipmentMailboxes'), default=True)
+        tp = _parse_tagpicker_args(request.args)
 
         if 'licensedOnly' in request.args:
             legacy_licensed_only = _parse_bool_arg(request.args.get('licensedOnly'), default=True)
@@ -2282,6 +2426,7 @@ def get_filtered_users_report():
                 include_unlicensed = not legacy_licensed_only
 
         records = load_filtered_user_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
         filtered_records = apply_filtered_user_filters(
             records,
             include_user_mailboxes=include_user_mailboxes,
@@ -2294,6 +2439,7 @@ def get_filtered_users_report():
             include_members=include_members,
             include_guests=include_guests
         )
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
 
         generated_at = None
         if os.path.exists(FILTERED_USERS_FILE):
@@ -2328,6 +2474,7 @@ def export_filtered_users_report():
 
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
 
         include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
         include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=True)
@@ -2338,6 +2485,7 @@ def export_filtered_users_report():
         include_user_mailboxes = _parse_bool_arg(request.args.get('includeUserMailboxes'), default=True)
         include_shared_mailboxes = _parse_bool_arg(request.args.get('includeSharedMailboxes'), default=True)
         include_room_equipment_mailboxes = _parse_bool_arg(request.args.get('includeRoomEquipmentMailboxes'), default=True)
+        tp = _parse_tagpicker_args(request.args)
 
         if 'licensedOnly' in request.args:
             legacy_licensed_only = _parse_bool_arg(request.args.get('licensedOnly'), default=True)
@@ -2347,6 +2495,7 @@ def export_filtered_users_report():
                 include_unlicensed = not legacy_licensed_only
 
         records = load_filtered_user_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
         filtered_records = apply_filtered_user_filters(
             records,
             include_user_mailboxes=include_user_mailboxes,
@@ -2359,6 +2508,7 @@ def export_filtered_users_report():
             include_members=include_members,
             include_guests=include_guests
         )
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
 
         wb = Workbook()
         ws = wb.active
@@ -2530,10 +2680,10 @@ def auth_check():
 
 
 def _load_all_scannable_users():
-    """Load all non-guest users from the last-login cache (includes disabled,
+    """Load all users from the last-login cache (includes disabled, guests,
     filtered, etc.).  Falls back to the org-chart tree if the login cache is
     unavailable.  Returns the full record from last_login_records.json so
-    callers can apply filters (mailbox type, account status, etc.)."""
+    callers can apply filters (mailbox type, account status, user type, etc.)."""
     users = []
 
     # Primary source: last_login_records.json — has every user from Graph
@@ -2542,8 +2692,6 @@ def _load_all_scannable_users():
             with open(LAST_LOGIN_FILE, 'r') as f:
                 records = json.load(f)
             for r in records:
-                if (r.get('userType') or '').lower() == 'guest':
-                    continue
                 email = r.get('email') or ''
                 if not email:
                     continue
@@ -2867,11 +3015,23 @@ def user_scanner_full_scan():
     include_members = body.get('includeMembers', True)
     include_guests = body.get('includeGuests', False)
 
+    # Tagpicker filters (Title / Department / Country)
+    filter_titles = [v.strip() for v in (body.get('filterTitles') or '').split(',') if v.strip()]
+    filter_titles_mode = body.get('filterTitlesMode', 'exclude')
+    filter_departments = [v.strip() for v in (body.get('filterDepartments') or '').split(',') if v.strip()]
+    filter_departments_mode = body.get('filterDepartmentsMode', 'exclude')
+    filter_countries = [v.strip() for v in (body.get('filterCountries') or '').split(',') if v.strip()]
+    filter_countries_mode = body.get('filterCountriesMode', 'exclude')
+
     # Load all non-guest users (includes disabled, filtered, etc.)
     employees = _load_all_scannable_users()
 
     if not employees:
         return jsonify({'error': 'No employee data available. Run a data sync first.'}), 400
+
+    # Apply scope filter (orgChart / all)
+    scope = body.get('scope', 'all')
+    employees = _apply_scope_filter(employees, scope)
 
     # Apply user-level filters to narrow the scan population
     employees = apply_last_login_filters(
@@ -2885,6 +3045,17 @@ def user_scanner_full_scan():
         include_unlicensed=include_unlicensed,
         include_members=include_members,
         include_guests=include_guests,
+    )
+
+    # Apply tagpicker filters (Title / Department / Country)
+    employees = apply_tagpicker_filters(
+        employees,
+        filter_titles=filter_titles,
+        filter_titles_mode=filter_titles_mode,
+        filter_departments=filter_departments,
+        filter_departments_mode=filter_departments_mode,
+        filter_countries=filter_countries,
+        filter_countries_mode=filter_countries_mode,
     )
 
     if not employees:
@@ -3050,6 +3221,9 @@ def user_scanner_full_scan_results():
     """Return cached full-scan results."""
     cached = user_scanner_service.load_cached_full_scan()
     if cached:
+        scope = request.args.get('scope', 'orgChart')
+        records = _apply_scope_filter(cached.get('records', []), scope)
+        cached['records'] = records
         return jsonify(cached)
     return jsonify({'records': [], 'scannedAt': None, 'totalEmployees': 0})
 
