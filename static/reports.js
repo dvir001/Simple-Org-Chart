@@ -853,13 +853,15 @@ function applyFiltersToUrl(url, config, reportKey) {
             const tagVal = value || {};
             const vals = tagVal.values || [];
             const mode = tagVal.mode || 'exclude';
-            url.searchParams.delete(paramName);
-            url.searchParams.delete(filter.modeQueryParam);
             if (vals.length) {
+                url.searchParams.delete(paramName);
                 vals.forEach((tag) => {
                     url.searchParams.append(paramName, tag);
                 });
                 url.searchParams.set(filter.modeQueryParam, mode);
+            } else {
+                url.searchParams.delete(paramName);
+                url.searchParams.delete(filter.modeQueryParam);
             }
         } else if (value !== undefined && value !== null && value !== '') {
             url.searchParams.set(paramName, value);

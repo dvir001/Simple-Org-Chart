@@ -2045,7 +2045,11 @@ def _parse_tagpicker_args(args):
             return [v.strip() for v in values[0].split(',') if v.strip()]
 
         # Repeated query params preserve commas inside individual values.
-        cleaned = [v.strip() for v in values if v and v.strip()]
+        cleaned = []
+        for value in values:
+            stripped = (value or '').strip()
+            if stripped:
+                cleaned.append(stripped)
         return cleaned or None
 
     filter_titles = _extract_list('filterTitles')
@@ -3026,7 +3030,12 @@ def user_scanner_full_scan():
     # Tagpicker filters (Title / Department / Country)
     def _parse_filter_values(value):
         if isinstance(value, list):
-            return [str(v).strip() for v in value if str(v).strip()]
+            parsed = []
+            for item in value:
+                stripped = str(item).strip()
+                if stripped:
+                    parsed.append(stripped)
+            return parsed
         return [v.strip() for v in (value or '').split(',') if v.strip()]
 
     filter_titles = _parse_filter_values(body.get('filterTitles'))

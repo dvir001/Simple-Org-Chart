@@ -941,33 +941,35 @@ def batch_check_photos(user_ids: list[str], token: str) -> set[str]:
                 "method": "GET",
                 "url": f"/users/{uid}/photo",
             })
-        try:
-            resp = requests.post(
-                batch_url,
-                headers=headers,
-                json={"requests": batch_requests},
-                timeout=30,
+        resp = requests.post(
+            batch_url,
+            headers=headers,
+            json={"requests": batch_requests},
+            timeout=30,
+        )
+        if not resp.ok:
+            raise RuntimeError(
+                f"Batch photo check failed with status {resp.status_code}"
             )
-            if not resp.ok:
+        data = resp.json()
+        for item in data.get("responses", []):
+            raw_id = item.get("id")
+            try:
+                idx = int(raw_id)
+            except (TypeError, ValueError):
+                logger.warning("Batch photo check returned non-numeric response id: %s", raw_id)
+                continue
+            if not (0 <= idx < len(chunk)):
+                logger.warning("Batch photo check returned invalid response id: %s", raw_id)
+                continue
+            status = item.get("status")
+            if status == 200:
+                has_photo.add(chunk[idx])
+            elif status != 404:
                 raise RuntimeError(
-                    f"Batch photo check failed with status {resp.status_code}"
+                    f"Batch photo check returned unexpected status {status} "
+                    f"for user {chunk[idx]}"
                 )
-            data = resp.json()
-            for item in data.get("responses", []):
-                idx = int(item.get("id", -1))
-                if not (0 <= idx < len(chunk)):
-                    continue
-                status = item.get("status")
-                if status == 200:
-                    has_photo.add(chunk[idx])
-                elif status != 404:
-                    raise RuntimeError(
-                        f"Batch photo check returned unexpected status {status} "
-                        f"for user {chunk[idx]}"
-                    )
-        except Exception as exc:
-            logger.warning("Batch photo check error: %s", exc)
-            raise
 
     return has_photo
 
