@@ -614,6 +614,7 @@
         "modeInclude": "Include",
         "modeExclude": "Exclude"
       },
+      "tagpickerRemoveLabel": "Remove {value}",
       "tagpickerNoMatches": "No matches found",
       "tagpickerNoOptions": "No options available"
     },

@@ -559,7 +559,7 @@ function renderFilters(config, reportKey) {
  * Reuses the tag-picker CSS classes from the scanner section.
  */
 class ReportTagPicker {
-    constructor({ container, options = [], placeholder = '', noMatchText = '', noOptionsText = '', onChange }) {
+    constructor({ container, options = [], placeholder = '', noMatchText = '', noOptionsText = '', removeLabel, onChange }) {
         this.onChange = typeof onChange === 'function' ? onChange : () => {};
         this.options = (Array.isArray(options) ? options.slice() : []).filter(Boolean);
         this.options.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
@@ -568,6 +568,7 @@ class ReportTagPicker {
         this.filteredOptions = [];
         this.noMatchText = noMatchText || 'No matches found';
         this.noOptionsText = noOptionsText || 'No options available';
+        this.removeLabel = typeof removeLabel === 'function' ? removeLabel : (value) => `Remove ${value}`;
 
         // Build DOM
         this.root = document.createElement('div');
@@ -678,7 +679,7 @@ class ReportTagPicker {
             tag.appendChild(label);
             const btn = document.createElement('button');
             btn.type = 'button'; btn.className = 'tag-picker__remove';
-            btn.setAttribute('aria-label', `Remove ${value}`);
+            btn.setAttribute('aria-label', this.removeLabel(value));
             btn.dataset.value = value; btn.innerHTML = '&times;';
             tag.appendChild(btn);
             this.tagContainer.appendChild(tag);
@@ -786,6 +787,7 @@ function _renderTagpickerFilters(container, tagpickerFilters, state, reportKey, 
             placeholder: t(filter.placeholderKey),
             noMatchText: t('reports.filters.tagpickerNoMatches'),
             noOptionsText: t('reports.filters.tagpickerNoOptions'),
+            removeLabel: (value) => t('reports.filters.tagpickerRemoveLabel', { value }),
             onChange: () => {
                 const curState = state[filter.key] || resolveFilterDefault(filter);
                 updateFilterValue(reportKey, filter, { values: picker.getValue(), mode: curState.mode || 'exclude' });
@@ -851,12 +853,13 @@ function applyFiltersToUrl(url, config, reportKey) {
             const tagVal = value || {};
             const vals = tagVal.values || [];
             const mode = tagVal.mode || 'exclude';
+            url.searchParams.delete(paramName);
+            url.searchParams.delete(filter.modeQueryParam);
             if (vals.length) {
-                url.searchParams.set(paramName, vals.join(','));
+                vals.forEach((tag) => {
+                    url.searchParams.append(paramName, tag);
+                });
                 url.searchParams.set(filter.modeQueryParam, mode);
-            } else {
-                url.searchParams.delete(paramName);
-                url.searchParams.delete(filter.modeQueryParam);
             }
         } else if (value !== undefined && value !== null && value !== '') {
             url.searchParams.set(paramName, value);
@@ -1954,7 +1957,7 @@ function _getFullScanUserFilters() {
             } else if (filter.type === 'tagpicker') {
                 const tagVal = val || { values: [], mode: 'exclude' };
                 if (tagVal.values && tagVal.values.length) {
-                    base[paramName] = tagVal.values.join(',');
+                    base[paramName] = tagVal.values;
                     base[filter.modeQueryParam] = tagVal.mode || 'exclude';
                 }
             }

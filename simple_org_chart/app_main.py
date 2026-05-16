@@ -2035,22 +2035,30 @@ def _parse_bool_arg(value, default=True):
 
 def _parse_tagpicker_args(args):
     """Parse the three tagpicker filter query params (title, department, country)."""
-    def _split_list(raw):
-        if not raw:
+    def _extract_list(key):
+        values = args.getlist(key)
+        if not values:
             return None
-        return [v.strip() for v in raw.split(',') if v.strip()]
 
-    filter_titles = _split_list(args.get('filterTitles'))
+        # Backward compatibility for legacy single-param comma-separated values.
+        if len(values) == 1:
+            return [v.strip() for v in values[0].split(',') if v.strip()]
+
+        # Repeated query params preserve commas inside individual values.
+        cleaned = [v.strip() for v in values if v and v.strip()]
+        return cleaned or None
+
+    filter_titles = _extract_list('filterTitles')
     filter_titles_mode = (args.get('filterTitlesMode') or 'exclude').strip().lower()
     if filter_titles_mode not in ('include', 'exclude'):
         filter_titles_mode = 'exclude'
 
-    filter_departments = _split_list(args.get('filterDepartments'))
+    filter_departments = _extract_list('filterDepartments')
     filter_departments_mode = (args.get('filterDepartmentsMode') or 'exclude').strip().lower()
     if filter_departments_mode not in ('include', 'exclude'):
         filter_departments_mode = 'exclude'
 
-    filter_countries = _split_list(args.get('filterCountries'))
+    filter_countries = _extract_list('filterCountries')
     filter_countries_mode = (args.get('filterCountriesMode') or 'exclude').strip().lower()
     if filter_countries_mode not in ('include', 'exclude'):
         filter_countries_mode = 'exclude'
@@ -2405,7 +2413,7 @@ def export_disabled_licensed_report():
 def get_filtered_users_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
-        scope = request.args.get('scope', 'orgChart')
+        scope = request.args.get('scope', 'all')
 
         include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
         include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=True)
@@ -2474,7 +2482,7 @@ def export_filtered_users_report():
 
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
-        scope = request.args.get('scope', 'orgChart')
+        scope = request.args.get('scope', 'all')
 
         include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
         include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=True)
@@ -3016,11 +3024,16 @@ def user_scanner_full_scan():
     include_guests = body.get('includeGuests', False)
 
     # Tagpicker filters (Title / Department / Country)
-    filter_titles = [v.strip() for v in (body.get('filterTitles') or '').split(',') if v.strip()]
+    def _parse_filter_values(value):
+        if isinstance(value, list):
+            return [str(v).strip() for v in value if str(v).strip()]
+        return [v.strip() for v in (value or '').split(',') if v.strip()]
+
+    filter_titles = _parse_filter_values(body.get('filterTitles'))
     filter_titles_mode = body.get('filterTitlesMode', 'exclude')
-    filter_departments = [v.strip() for v in (body.get('filterDepartments') or '').split(',') if v.strip()]
+    filter_departments = _parse_filter_values(body.get('filterDepartments'))
     filter_departments_mode = body.get('filterDepartmentsMode', 'exclude')
-    filter_countries = [v.strip() for v in (body.get('filterCountries') or '').split(',') if v.strip()]
+    filter_countries = _parse_filter_values(body.get('filterCountries'))
     filter_countries_mode = body.get('filterCountriesMode', 'exclude')
 
     # Load all non-guest users (includes disabled, filtered, etc.)

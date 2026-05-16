@@ -949,15 +949,25 @@ def batch_check_photos(user_ids: list[str], token: str) -> set[str]:
                 timeout=30,
             )
             if not resp.ok:
-                logger.warning("Batch photo check failed (status %s)", resp.status_code)
-                continue
+                raise RuntimeError(
+                    f"Batch photo check failed with status {resp.status_code}"
+                )
             data = resp.json()
             for item in data.get("responses", []):
                 idx = int(item.get("id", -1))
-                if 0 <= idx < len(chunk) and item.get("status") == 200:
+                if not (0 <= idx < len(chunk)):
+                    continue
+                status = item.get("status")
+                if status == 200:
                     has_photo.add(chunk[idx])
+                elif status != 404:
+                    raise RuntimeError(
+                        f"Batch photo check returned unexpected status {status} "
+                        f"for user {chunk[idx]}"
+                    )
         except Exception as exc:
             logger.warning("Batch photo check error: %s", exc)
+            raise
 
     return has_photo
 
