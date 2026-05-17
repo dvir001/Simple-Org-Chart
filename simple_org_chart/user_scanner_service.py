@@ -655,6 +655,16 @@ def generate_xlsx(scan_result: Dict[str, Any]) -> Path:
     ts = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
     filename = f'user_scanner_{ts}_{scan_id}.xlsx'
     filepath = USER_SCANNER_XLSX_DIR / filename
+
+    from simple_org_chart.exports import add_metadata_sheet
+    add_metadata_sheet(
+        wb,
+        filename=filename,
+        sheet_title='Summary',
+        item_count=len(scan_result.get('records', [])),
+        data_export_option='fullScan',
+    )
+
     wb.save(str(filepath))
     logger.info("Full scan XLSX saved: %s", filepath)
     return filepath
