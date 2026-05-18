@@ -134,7 +134,7 @@ from simple_org_chart.data_update import (
     update_employee_data,
     _load_fetch_all_employees_fallback,
 )
-from simple_org_chart.exports import format_hire_date
+from simple_org_chart.exports import format_hire_date, add_metadata_sheet, format_export_filters
 from simple_org_chart import user_scanner_service
 
 load_dotenv()
@@ -1462,20 +1462,38 @@ def export_xlsx():
             return row_num
         
         # Flatten the data starting from root
-        flatten_org_data(data)
+        last_row = flatten_org_data(data)
         
         # Auto-adjust column widths
         for col in range(1, len(visible_columns) + 1):
             column = get_column_letter(col)
             ws.column_dimensions[column].width = 20
         
+        # Generate filename
+        filename = f"org-chart-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        filters = []
+        if hide_disabled_users:
+            filters.append('hideDisabled')
+        if hide_guest_users:
+            filters.append('hideGuests')
+        if hide_no_title:
+            filters.append('hideNoTitle')
+        if ignored_departments:
+            filters.append('ignoreDepartments')
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=last_row - 2,
+            data_export_option=', '.join(filters) if filters else 'allData',
+        )
+
         # Save to BytesIO
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-        
-        # Generate filename
-        filename = f"org-chart-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
         
         return send_file(
             output,
@@ -1605,11 +1623,19 @@ def export_missing_manager_report():
             column_letter = get_column_letter(col)
             ws.column_dimensions[column_letter].width = 22
 
+        filename = f"missing-managers-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(filtered_records),
+            data_export_option=format_export_filters(scope, toggles, tp),
+        )
+
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-
-        filename = f"missing-managers-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         return send_file(
             output,
@@ -1693,11 +1719,19 @@ def export_missing_photo_report():
             column_letter = get_column_letter(col)
             ws.column_dimensions[column_letter].width = 22
 
+        filename = f"missing-photos-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(filtered_records),
+            data_export_option=format_export_filters(scope, toggles, tp),
+        )
+
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-
-        filename = f"missing-photos-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         return send_file(
             output,
@@ -1743,7 +1777,7 @@ def export_disabled_users_report():
 
     try:
         refresh = request.args.get('refresh', 'false').lower() == 'true'
-        records, _ = _get_disabled_records_from_request(
+        records, applied_filters = _get_disabled_records_from_request(
             force_refresh=refresh,
             apply_filters=True
         )
@@ -1783,11 +1817,23 @@ def export_disabled_users_report():
             column_letter = get_column_letter(col)
             ws.column_dimensions[column_letter].width = 24
 
+        filename = f"disabled-users-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        filter_parts = []
+        for k, v in applied_filters.items():
+            filter_parts.append(f"{k}={v}")
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(records),
+            data_export_option=', '.join(filter_parts) if filter_parts else 'allData',
+        )
+
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-
-        filename = f"disabled-users-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         return send_file(
             output,
@@ -1916,11 +1962,19 @@ def export_recently_disabled_report():
             column_letter = get_column_letter(col)
             ws.column_dimensions[column_letter].width = 24
 
+        filename = f"disabled-last-365-days-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(records),
+            data_export_option=f"recentDays={recent_days}, licensedOnly={licensed_only}, includeGuests={include_guests}",
+        )
+
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-
-        filename = f"disabled-last-365-days-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         return send_file(
             output,
@@ -2005,11 +2059,19 @@ def export_recently_hired_report():
             column_letter = get_column_letter(col)
             ws.column_dimensions[column_letter].width = 24
 
+        filename = f"hired-last-365-days-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(records),
+            data_export_option=format_export_filters(scope, tp=tp),
+        )
+
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-
-        filename = f"hired-last-365-days-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         return send_file(
             output,
@@ -2290,11 +2352,29 @@ def export_last_logins_report():
             column_letter = get_column_letter(col)
             ws.column_dimensions[column_letter].width = 26
 
+        filename = f"last-logins-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(filtered_records),
+            data_export_option=format_export_filters(scope, {
+                'include_user_mailboxes': include_user_mailboxes,
+                'include_shared_mailboxes': include_shared_mailboxes,
+                'include_room_equipment_mailboxes': include_room_equipment_mailboxes,
+                'include_enabled': include_enabled,
+                'include_disabled': include_disabled,
+                'include_licensed': include_licensed,
+                'include_unlicensed': include_unlicensed,
+                'include_members': include_members,
+                'include_guests': include_guests,
+            }, tp),
+        )
+
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-
-        filename = f"last-logins-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         return send_file(
             output,
@@ -2395,11 +2475,19 @@ def export_disabled_licensed_report():
             column_letter = get_column_letter(col)
             ws.column_dimensions[column_letter].width = 24
 
+        filename = f"disabled-licensed-users-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(records),
+            data_export_option=f"licensedOnly=True, includeGuests={include_guests}",
+        )
+
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-
-        filename = f"disabled-licensed-users-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         return send_file(
             output,
@@ -2572,11 +2660,29 @@ def export_filtered_users_report():
             column_letter = get_column_letter(col)
             ws.column_dimensions[column_letter].width = 26
 
+        filename = f"filtered-users-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(filtered_records),
+            data_export_option=format_export_filters(scope, {
+                'include_user_mailboxes': include_user_mailboxes,
+                'include_shared_mailboxes': include_shared_mailboxes,
+                'include_room_equipment_mailboxes': include_room_equipment_mailboxes,
+                'include_enabled': include_enabled,
+                'include_disabled': include_disabled,
+                'include_licensed': include_licensed,
+                'include_unlicensed': include_unlicensed,
+                'include_members': include_members,
+                'include_guests': include_guests,
+            }, tp),
+        )
+
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-
-        filename = f"filtered-users-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         return send_file(
             output,
@@ -2662,11 +2768,19 @@ def export_filtered_licensed_report():
             column_letter = get_column_letter(col)
             ws.column_dimensions[column_letter].width = 24
 
+        filename = f"filtered-licensed-users-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(records),
+            data_export_option='allData',
+        )
+
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-
-        filename = f"filtered-licensed-users-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
 
         return send_file(
             output,

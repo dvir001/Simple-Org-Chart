@@ -1333,6 +1333,14 @@ async function exportReportToPDF() {
                         if (selectedOption) {
                             activeFilters.push(filterLabel + ': ' + t(selectedOption.labelKey));
                         }
+                    } else if (filter.type === 'tagpicker') {
+                        const tagVal = value || {};
+                        const vals = tagVal.values || [];
+                        if (vals.length > 0) {
+                            const mode = tagVal.mode || 'exclude';
+                            const modeLabel = mode === 'include' ? t(filter.modeIncludeLabelKey) : t(filter.modeExcludeLabelKey);
+                            activeFilters.push(filterLabel + ' (' + modeLabel + '): ' + vals.join(', '));
+                        }
                     }
                 }
             });

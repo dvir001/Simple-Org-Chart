@@ -692,6 +692,17 @@ def _generate_xlsx_bytes() -> bytes:
     for col in range(1, len(headers) + 1):
         ws.column_dimensions[get_column_letter(col)].width = 20
     
+    filename = f"org-chart-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+    from simple_org_chart.exports import add_metadata_sheet
+    add_metadata_sheet(
+        wb,
+        filename=filename,
+        sheet_title=ws.title,
+        item_count=len(employees),
+        data_export_option='allData',
+    )
+
     # Save to BytesIO
     output = BytesIO()
     wb.save(output)
