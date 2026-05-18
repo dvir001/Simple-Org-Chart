@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from simple_org_chart.exports import format_export_filters
+from openpyxl import Workbook
+from simple_org_chart.exports import add_metadata_sheet, format_export_filters
 
 
 class TestFormatExportFilters:
@@ -98,3 +99,34 @@ class TestFormatExportFilters:
     def test_none_toggles_and_tp(self):
         result = format_export_filters('orgChart', toggles=None, tp=None)
         assert result == 'scope=orgChart'
+
+
+class TestAddMetadataSheet:
+    def test_excludes_exported_by_when_empty(self):
+        wb = Workbook()
+        add_metadata_sheet(
+            wb,
+            filename='report.xlsx',
+            sheet_title='Data',
+            item_count=3,
+            data_export_option='scope=all',
+        )
+        labels = [cell.value for cell in wb['Metadata']['A'] if cell.value]
+        assert 'Exported by' not in labels
+
+    def test_includes_exported_by_when_provided(self):
+        wb = Workbook()
+        add_metadata_sheet(
+            wb,
+            filename='report.xlsx',
+            sheet_title='Data',
+            item_count=3,
+            data_export_option='scope=all',
+            exported_by='alice@example.com',
+        )
+        metadata_ws = wb['Metadata']
+        rows = {
+            metadata_ws.cell(row=row, column=1).value: metadata_ws.cell(row=row, column=2).value
+            for row in range(4, metadata_ws.max_row + 1)
+        }
+        assert rows.get('Exported by') == 'alice@example.com'

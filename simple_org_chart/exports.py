@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -97,8 +96,9 @@ def add_metadata_sheet(
         ('Data sheet', sheet_title),
         ('Data export option', data_export_option),
         ('Items exported', item_count),
-        ('Exported by', exported_by),
     ]
+    if exported_by:
+        rows.append(('Exported by', exported_by))
 
     for idx, (label, value) in enumerate(rows, start=4):
         label_cell = ws.cell(row=idx, column=1, value=label)
