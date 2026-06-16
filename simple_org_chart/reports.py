@@ -661,7 +661,8 @@ def _check_email(value: object) -> list:
     """Return a list of issue strings for email-specific problems."""
     if not isinstance(value, str) or not value:
         return []
-    if value.lower().endswith("@onmicrosoft.com") or ".onmicrosoft.com" in value.lower():
+    domain = value.lower().rsplit("@", 1)[-1]
+    if domain == "onmicrosoft.com" or domain.endswith(".onmicrosoft.com"):
         return []
     problems = []
     ws = _check_field_whitespace(value)

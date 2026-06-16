@@ -180,6 +180,7 @@ const REPORT_CONFIGS = {
             {
                 key: 'issues',
                 labelKey: 'reports.types.dirtyData.columns.issueDetail',
+                renderAsHtml: true,
                 render: (record) => {
                     const issues = record.issues || [];
                     const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -393,6 +394,8 @@ function _fetchGraphCapabilities() {
             _graphCapabilitiesFetching = false;
             console.warn('Failed to fetch graph capabilities:', err);
             _graphCapabilities = {};
+            _graphCapabilitiesCallbacks.forEach((cb) => cb(_graphCapabilities));
+            _graphCapabilitiesCallbacks.length = 0;
             return _graphCapabilities;
         });
 }
@@ -624,7 +627,7 @@ function renderFilters(config, reportKey) {
                 button.type = 'button';
                 if (!isCapable) {
                     button.className = `filter-chip filter-chip--unavailable`;
-                    button.disabled = true;
+                    button.setAttribute('aria-disabled', 'true');
                     button.title = t('reports.filters.missingCapability');
                 } else {
                     button.className = `filter-chip${isSelected ? ' filter-chip--active' : ''}`;
@@ -667,7 +670,7 @@ function renderFilters(config, reportKey) {
             button.type = 'button';
             if (!isCapable) {
                 button.className = 'filter-chip filter-chip--unavailable';
-                button.disabled = true;
+                button.setAttribute('aria-disabled', 'true');
                 button.title = t('reports.filters.missingCapability');
             } else {
                 button.className = `filter-chip${isActive ? ' filter-chip--active' : ''}`;
@@ -718,7 +721,7 @@ function renderFilters(config, reportKey) {
                 button.type = 'button';
                 if (!isCapable) {
                     button.className = 'filter-chip filter-chip--unavailable';
-                    button.disabled = true;
+                    button.setAttribute('aria-disabled', 'true');
                     button.title = t('reports.filters.missingCapability');
                 } else {
                     button.className = `filter-chip${isActive ? ' filter-chip--active' : ''}`;
@@ -1338,7 +1341,7 @@ function renderTable(records, config) {
 
             if (value instanceof HTMLElement) {
                 cell.appendChild(value);
-            } else if (column.render) {
+            } else if (column.render && column.renderAsHtml) {
                 cell.innerHTML = value || '—';
             } else {
                 cell.textContent = value || '—';

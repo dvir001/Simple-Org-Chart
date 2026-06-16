@@ -96,10 +96,10 @@ Filters that depend on Graph permissions beyond the base `User.Read.All` must be
 | Inactivity day-range | `AuditLog.Read.All` + Entra P1/P2 | `audit_log_read_all` |
 
 **How it works:**
-- `msgraph.probe_graph_capabilities(token)` runs 4 targeted API calls at the start of every sync and writes `data/graph_capabilities.json`.
+- `msgraph.probe_graph_capabilities(token)` decodes the JWT access token's `roles` claim (no extra API calls) at the start of every sync and writes `data/graph_capabilities.json`.
 - `GET /api/graph-capabilities` serves that file to the front end.
 - `reports.js` fetches capabilities before first render; `_isFilterCapable(filter)` checks `filter.requiredCapability` against the loaded flags.
-- Incapable filter buttons get `disabled` + class `filter-chip--unavailable` (greyed out, tooltip explains missing permission).
+- Incapable filter buttons get `aria-disabled` + class `filter-chip--unavailable` (greyed out, tooltip explains missing permission).
 
 When adding a new filter that needs a Graph permission:
 1. Add a probe call in `probe_graph_capabilities()` if the capability isn't already detected.

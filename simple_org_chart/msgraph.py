@@ -55,8 +55,8 @@ def _decode_jwt_roles(token: str) -> frozenset:
         if len(parts) < 2:
             return frozenset()
         payload = parts[1]
-        # Restore base64 padding
-        payload += '=' * (4 - len(payload) % 4)
+        # Restore base64 padding (no padding added when already aligned)
+        payload += '=' * (-len(payload) % 4)
         decoded = base64.urlsafe_b64decode(payload.encode())
         claims = _json.loads(decoded)
         roles = claims.get('roles', [])
@@ -104,7 +104,7 @@ def probe_graph_capabilities(token: str) -> dict:
         }
     """
     roles = _decode_jwt_roles(token)
-    logger.info("JWT roles decoded: %s", sorted(roles))
+    logger.info("Decoded %d JWT role(s) from access token", len(roles))
 
     result: dict = {
         "user_read_all": "User.Read.All" in roles,
