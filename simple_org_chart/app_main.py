@@ -92,16 +92,21 @@ from simple_org_chart.msgraph import (
 )
 from simple_org_chart.reports import (
     ReportCacheManager,
+    apply_dirty_data_filters,
     apply_disabled_filters,
     apply_filtered_user_filters,
     apply_last_login_filters,
+    apply_missing_hire_date_filters,
     apply_missing_manager_filters,
     apply_missing_photo_filters,
     apply_tagpicker_filters,
+    calculate_license_totals,
+    load_dirty_data,
     load_disabled_users_data,
     load_filtered_license_data,
     load_filtered_user_data,
     load_last_login_data,
+    load_missing_hire_date_data,
     load_missing_manager_data,
     load_missing_photo_data,
     load_recently_hired_data,
@@ -292,7 +297,20 @@ LAST_LOGIN_FILE = str(app_config.LAST_LOGIN_FILE)
 RECENTLY_DISABLED_FILE = str(app_config.RECENTLY_DISABLED_FILE)
 RECENTLY_HIRED_FILE = str(app_config.RECENTLY_HIRED_FILE)
 MISSING_PHOTO_FILE = str(app_config.MISSING_PHOTO_FILE)
+GRAPH_CAPABILITIES_FILE = str(app_config.GRAPH_CAPABILITIES_FILE)
+DIRTY_DATA_FILE = str(app_config.DIRTY_DATA_FILE)
+MISSING_HIRE_DATE_FILE = str(app_config.MISSING_HIRE_DATE_FILE)
 DATA_UPDATE_STATUS_FILE = os.path.join(DATA_DIR, 'data_update_status.json')
+
+# Always delete the capabilities file on startup — it is regenerated on the
+# next sync via JWT-decode.  This ensures no stale data from previous probe
+# implementations (API-call based) persists across restarts.
+try:
+    if os.path.exists(GRAPH_CAPABILITIES_FILE):
+        os.remove(GRAPH_CAPABILITIES_FILE)
+        logger.info("Removed graph_capabilities.json on startup; will regenerate on next sync.")
+except Exception as _cap_startup_err:
+    logger.warning("Could not remove graph_capabilities.json on startup: %s", _cap_startup_err)
 
 logger.info(f"DATA_DIR set to: {DATA_DIR}")
 
@@ -838,14 +856,38 @@ def get_metadata_options():
     job_titles = collect_unique_field_values(employees, 'title')
     departments = collect_unique_field_values(employees, 'department')
     countries = collect_unique_field_values(employees, 'country')
+    states = collect_unique_field_values(employees, 'state')
     employee_options = collect_employee_option_labels(employees)
 
     return jsonify({
         'jobTitles': job_titles,
         'departments': departments,
         'countries': countries,
+        'states': states,
         'employees': employee_options
     })
+
+
+@app.route('/api/graph-capabilities')
+@require_auth
+def get_graph_capabilities():
+    """Return the Graph API capability flags detected during the last sync."""
+    if not os.path.exists(GRAPH_CAPABILITIES_FILE):
+        resp = jsonify({'available': False, 'reason': 'No sync has run yet'})
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return resp
+    try:
+        with open(GRAPH_CAPABILITIES_FILE, 'r') as cap_file:
+            caps = json.load(cap_file)
+        caps['available'] = True
+        resp = jsonify(caps)
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return resp
+    except Exception as exc:
+        logger.warning('Failed to read graph capabilities file: %s', exc)
+        resp = jsonify({'available': False, 'reason': 'Failed to read capabilities file'})
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return resp
 
 @app.route('/api/set-top-user', methods=['POST'])
 @limiter.limit(RATE_LIMIT_SETTINGS)
@@ -1744,6 +1786,223 @@ def export_missing_photo_report():
         return jsonify({'error': 'Failed to export report'}), 500
 
 
+@app.route('/api/reports/missing-hire-date')
+@require_auth
+def get_missing_hire_date_report():
+    try:
+        refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
+        toggles = _parse_standard_toggle_args(request.args)
+        tp = _parse_tagpicker_args(request.args)
+
+        records = load_missing_hire_date_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
+        filtered_records = apply_missing_hire_date_filters(records, **toggles)
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
+        generated_at = None
+        if os.path.exists(MISSING_HIRE_DATE_FILE):
+            generated_at = datetime.fromtimestamp(os.path.getmtime(MISSING_HIRE_DATE_FILE)).isoformat()
+
+        return jsonify({
+            'records': filtered_records,
+            'count': len(filtered_records),
+            'generatedAt': generated_at,
+            'appliedFilters': toggles,
+        })
+    except Exception as e:
+        logger.error(f"Error loading missing hire date report: {e}")
+        return jsonify({'error': 'Failed to load report data'}), 500
+
+
+@app.route('/api/reports/missing-hire-date/export')
+@require_auth
+def export_missing_hire_date_report():
+    if not Workbook:
+        return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
+
+    try:
+        refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
+        toggles = _parse_standard_toggle_args(request.args)
+        tp = _parse_tagpicker_args(request.args)
+
+        records = load_missing_hire_date_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
+        filtered_records = apply_missing_hire_date_filters(records, **toggles)
+        filtered_records = apply_tagpicker_filters(filtered_records, **tp)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Missing Hire Date"
+
+        headers = [
+            ('name', 'Name'),
+            ('title', 'Title'),
+            ('department', 'Department'),
+            ('email', 'Email'),
+            ('country', 'Country'),
+        ]
+
+        for column_index, (_, header_text) in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=column_index, value=header_text)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+
+        for row_index, record in enumerate(filtered_records, start=2):
+            for column_index, (key, _) in enumerate(headers, 1):
+                ws.cell(row=row_index, column=column_index, value=record.get(key))
+
+        for col in range(1, len(headers) + 1):
+            column_letter = get_column_letter(col)
+            ws.column_dimensions[column_letter].width = 22
+
+        filename = f"missing-hire-date-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(filtered_records),
+            data_export_option=format_export_filters(scope, toggles, tp),
+        )
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except Exception as e:
+        logger.error(f"Error exporting missing hire date report: {e}")
+        return jsonify({'error': 'Failed to export report'}), 500
+
+
+@app.route('/api/reports/dirty-data')
+@require_auth
+def get_dirty_data_report():
+    try:
+        refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
+
+        include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
+        include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=False)
+        include_licensed = _parse_bool_arg(request.args.get('includeLicensed'), default=True)
+        include_unlicensed = _parse_bool_arg(request.args.get('includeUnlicensed'), default=True)
+        include_members = _parse_bool_arg(request.args.get('includeMembers'), default=True)
+        include_guests = _parse_bool_arg(request.args.get('includeGuests'), default=False)
+
+        records = load_dirty_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
+        filtered_records = apply_dirty_data_filters(
+            records,
+            include_enabled=include_enabled,
+            include_disabled=include_disabled,
+            include_licensed=include_licensed,
+            include_unlicensed=include_unlicensed,
+            include_members=include_members,
+            include_guests=include_guests,
+        )
+
+        generated_at = None
+        if os.path.exists(DIRTY_DATA_FILE):
+            generated_at = datetime.fromtimestamp(os.path.getmtime(DIRTY_DATA_FILE)).isoformat()
+
+        return jsonify({
+            'records': filtered_records,
+            'count': len(filtered_records),
+            'generatedAt': generated_at,
+        })
+    except Exception as e:
+        logger.error(f"Error loading dirty data report: {e}")
+        return jsonify({'error': 'Failed to load report data'}), 500
+
+
+@app.route('/api/reports/dirty-data/export')
+@require_auth
+def export_dirty_data_report():
+    if not Workbook:
+        return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
+
+    try:
+        refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
+        scope = request.args.get('scope', 'orgChart')
+
+        include_enabled = _parse_bool_arg(request.args.get('includeEnabled'), default=True)
+        include_disabled = _parse_bool_arg(request.args.get('includeDisabled'), default=False)
+        include_licensed = _parse_bool_arg(request.args.get('includeLicensed'), default=True)
+        include_unlicensed = _parse_bool_arg(request.args.get('includeUnlicensed'), default=True)
+        include_members = _parse_bool_arg(request.args.get('includeMembers'), default=True)
+        include_guests = _parse_bool_arg(request.args.get('includeGuests'), default=False)
+
+        records = load_dirty_data(report_cache, force_refresh=refresh)
+        records = _apply_scope_filter(records, scope)
+        filtered_records = apply_dirty_data_filters(
+            records,
+            include_enabled=include_enabled,
+            include_disabled=include_disabled,
+            include_licensed=include_licensed,
+            include_unlicensed=include_unlicensed,
+            include_members=include_members,
+            include_guests=include_guests,
+        )
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Data Quality Issues"
+
+        headers = [
+            ('name', 'Name'),
+            ('title', 'Title'),
+            ('department', 'Department'),
+            ('email', 'Email'),
+            ('issueCount', 'Issue Count'),
+            ('issueFields', 'Affected Fields'),
+        ]
+
+        for column_index, (_, header_text) in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=column_index, value=header_text)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+
+        for row_index, record in enumerate(filtered_records, start=2):
+            for column_index, (key, _) in enumerate(headers, 1):
+                ws.cell(row=row_index, column=column_index, value=record.get(key))
+
+        for col in range(1, len(headers) + 1):
+            column_letter = get_column_letter(col)
+            ws.column_dimensions[column_letter].width = 22
+
+        filename = f"data-quality-issues-{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+
+        add_metadata_sheet(
+            wb,
+            filename=filename,
+            sheet_title=ws.title,
+            item_count=len(filtered_records),
+            data_export_option=format_export_filters(scope, {}, {}),
+        )
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except Exception as e:
+        logger.error(f"Error exporting dirty data report: {e}")
+        return jsonify({'error': 'Failed to export report'}), 500
+
+
 @app.route('/api/reports/disabled-users')
 @require_auth
 def get_disabled_users_report():
@@ -2129,6 +2388,11 @@ def _parse_tagpicker_args(args):
     if filter_countries_mode not in ('include', 'exclude'):
         filter_countries_mode = 'exclude'
 
+    filter_states = _extract_list('filterStates')
+    filter_states_mode = (args.get('filterStatesMode') or 'exclude').strip().lower()
+    if filter_states_mode not in ('include', 'exclude'):
+        filter_states_mode = 'exclude'
+
     return {
         'filter_titles': filter_titles,
         'filter_titles_mode': filter_titles_mode,
@@ -2136,6 +2400,8 @@ def _parse_tagpicker_args(args):
         'filter_departments_mode': filter_departments_mode,
         'filter_countries': filter_countries,
         'filter_countries_mode': filter_countries_mode,
+        'filter_states': filter_states,
+        'filter_states_mode': filter_states_mode,
     }
 
 
@@ -2156,6 +2422,12 @@ def _parse_standard_toggle_args(args, defaults=None):
         'include_unlicensed': _parse_bool_arg(args.get('includeUnlicensed'), default=d.get('include_unlicensed', True)),
         'include_members': _parse_bool_arg(args.get('includeMembers'), default=d.get('include_members', True)),
         'include_guests': _parse_bool_arg(args.get('includeGuests'), default=d.get('include_guests', False)),
+        'include_hidden_from_address_list': _parse_bool_arg(args.get('includeHiddenFromAddressList'), default=d.get('include_hidden_from_address_list', True)),
+        'include_visible_in_address_list': _parse_bool_arg(args.get('includeVisibleInAddressList'), default=d.get('include_visible_in_address_list', True)),
+        'include_with_mailbox': _parse_bool_arg(args.get('includeWithMailbox'), default=d.get('include_with_mailbox', True)),
+        'include_without_mailbox': _parse_bool_arg(args.get('includeWithoutMailbox'), default=d.get('include_without_mailbox', True)),
+        'include_with_manager': _parse_bool_arg(args.get('includeWithManager'), default=d.get('include_with_manager', True)),
+        'include_without_manager': _parse_bool_arg(args.get('includeWithoutManager'), default=d.get('include_without_manager', True)),
     }
 
 
@@ -2195,6 +2467,12 @@ def get_last_logins_report():
         include_user_mailboxes = _parse_bool_arg(request.args.get('includeUserMailboxes'), default=True)
         include_shared_mailboxes = _parse_bool_arg(request.args.get('includeSharedMailboxes'), default=True)
         include_room_equipment_mailboxes = _parse_bool_arg(request.args.get('includeRoomEquipmentMailboxes'), default=True)
+        include_hidden_from_address_list = _parse_bool_arg(request.args.get('includeHiddenFromAddressList'), default=True)
+        include_visible_in_address_list = _parse_bool_arg(request.args.get('includeVisibleInAddressList'), default=True)
+        include_with_mailbox = _parse_bool_arg(request.args.get('includeWithMailbox'), default=True)
+        include_without_mailbox = _parse_bool_arg(request.args.get('includeWithoutMailbox'), default=True)
+        include_with_manager = _parse_bool_arg(request.args.get('includeWithManager'), default=True)
+        include_without_manager = _parse_bool_arg(request.args.get('includeWithoutManager'), default=True)
         tp = _parse_tagpicker_args(request.args)
 
         inactive_days_raw = request.args.get('inactiveDays')
@@ -2222,7 +2500,13 @@ def get_last_logins_report():
             include_shared_mailboxes=include_shared_mailboxes,
             include_room_equipment_mailboxes=include_room_equipment_mailboxes,
             inactive_days=inactive_days,
-            inactive_days_max=inactive_days_max
+            inactive_days_max=inactive_days_max,
+            include_hidden_from_address_list=include_hidden_from_address_list,
+            include_visible_in_address_list=include_visible_in_address_list,
+            include_with_mailbox=include_with_mailbox,
+            include_without_mailbox=include_without_mailbox,
+            include_with_manager=include_with_manager,
+            include_without_manager=include_without_manager,
         )
         filtered_records = apply_tagpicker_filters(filtered_records, **tp)
 
@@ -2246,6 +2530,12 @@ def get_last_logins_report():
                 'includeUserMailboxes': include_user_mailboxes,
                 'includeSharedMailboxes': include_shared_mailboxes,
                 'includeRoomEquipmentMailboxes': include_room_equipment_mailboxes,
+                'includeHiddenFromAddressList': include_hidden_from_address_list,
+                'includeVisibleInAddressList': include_visible_in_address_list,
+                'includeWithMailbox': include_with_mailbox,
+                'includeWithoutMailbox': include_without_mailbox,
+                'includeWithManager': include_with_manager,
+                'includeWithoutManager': include_without_manager,
                 'inactiveDays': inactive_days,
                 'inactiveDaysMax': inactive_days_max
             }
@@ -2275,6 +2565,12 @@ def export_last_logins_report():
         include_user_mailboxes = _parse_bool_arg(request.args.get('includeUserMailboxes'), default=True)
         include_shared_mailboxes = _parse_bool_arg(request.args.get('includeSharedMailboxes'), default=True)
         include_room_equipment_mailboxes = _parse_bool_arg(request.args.get('includeRoomEquipmentMailboxes'), default=True)
+        include_hidden_from_address_list = _parse_bool_arg(request.args.get('includeHiddenFromAddressList'), default=True)
+        include_visible_in_address_list = _parse_bool_arg(request.args.get('includeVisibleInAddressList'), default=True)
+        include_with_mailbox = _parse_bool_arg(request.args.get('includeWithMailbox'), default=True)
+        include_without_mailbox = _parse_bool_arg(request.args.get('includeWithoutMailbox'), default=True)
+        include_with_manager = _parse_bool_arg(request.args.get('includeWithManager'), default=True)
+        include_without_manager = _parse_bool_arg(request.args.get('includeWithoutManager'), default=True)
         inactive_days_raw = request.args.get('inactiveDays')
         inactive_days = None
         if inactive_days_raw not in (None, '', 'null', 'None'):
@@ -2302,7 +2598,13 @@ def export_last_logins_report():
             include_shared_mailboxes=include_shared_mailboxes,
             include_room_equipment_mailboxes=include_room_equipment_mailboxes,
             inactive_days=inactive_days,
-            inactive_days_max=inactive_days_max
+            inactive_days_max=inactive_days_max,
+            include_hidden_from_address_list=include_hidden_from_address_list,
+            include_visible_in_address_list=include_visible_in_address_list,
+            include_with_mailbox=include_with_mailbox,
+            include_without_mailbox=include_without_mailbox,
+            include_with_manager=include_with_manager,
+            include_without_manager=include_without_manager,
         )
         filtered_records = apply_tagpicker_filters(filtered_records, **tp)
 
@@ -3140,8 +3442,14 @@ def user_scanner_full_scan():
     include_unlicensed = body.get('includeUnlicensed', False)
     include_members = body.get('includeMembers', True)
     include_guests = body.get('includeGuests', False)
+    include_hidden_from_address_list = body.get('includeHiddenFromAddressList', True)
+    include_visible_in_address_list = body.get('includeVisibleInAddressList', True)
+    include_with_mailbox = body.get('includeWithMailbox', True)
+    include_without_mailbox = body.get('includeWithoutMailbox', True)
+    include_with_manager = body.get('includeWithManager', True)
+    include_without_manager = body.get('includeWithoutManager', True)
 
-    # Tagpicker filters (Title / Department / Country)
+    # Tagpicker filters (Title / Department / Country / State)
     def _parse_filter_values(value):
         if isinstance(value, list):
             parsed = []
@@ -3158,6 +3466,8 @@ def user_scanner_full_scan():
     filter_departments_mode = body.get('filterDepartmentsMode', 'exclude')
     filter_countries = _parse_filter_values(body.get('filterCountries'))
     filter_countries_mode = body.get('filterCountriesMode', 'exclude')
+    filter_states = _parse_filter_values(body.get('filterStates'))
+    filter_states_mode = body.get('filterStatesMode', 'exclude')
 
     # Load all non-guest users (includes disabled, filtered, etc.)
     employees = _load_all_scannable_users()
@@ -3181,9 +3491,15 @@ def user_scanner_full_scan():
         include_unlicensed=include_unlicensed,
         include_members=include_members,
         include_guests=include_guests,
+        include_hidden_from_address_list=include_hidden_from_address_list,
+        include_visible_in_address_list=include_visible_in_address_list,
+        include_with_mailbox=include_with_mailbox,
+        include_without_mailbox=include_without_mailbox,
+        include_with_manager=include_with_manager,
+        include_without_manager=include_without_manager,
     )
 
-    # Apply tagpicker filters (Title / Department / Country)
+    # Apply tagpicker filters (Title / Department / Country / State)
     employees = apply_tagpicker_filters(
         employees,
         filter_titles=filter_titles,
@@ -3192,6 +3508,8 @@ def user_scanner_full_scan():
         filter_departments_mode=filter_departments_mode,
         filter_countries=filter_countries,
         filter_countries_mode=filter_countries_mode,
+        filter_states=filter_states,
+        filter_states_mode=filter_states_mode,
     )
 
     if not employees:
@@ -3542,6 +3860,60 @@ def trigger_update():
         logger.error(f"Error triggering update: {e}")
         mark_data_update_finished(success=False, error=str(e), source='manual')
         return jsonify({'error': 'Update failed'}), 500
+
+@app.route('/api/clear-data', methods=['POST'])
+@require_auth
+@limiter.limit(RATE_LIMIT_REFRESH)
+def clear_cached_data():
+    """Delete all cached dataset files (keeping settings/config) and trigger a fresh sync."""
+    current_status = load_data_update_status()
+    if current_status.get('state') == 'running':
+        return jsonify({'error': 'Update already in progress'}), 409
+
+    cache_files = [
+        DATA_FILE,
+        MISSING_MANAGER_FILE,
+        EMPLOYEE_LIST_FILE,
+        DISABLED_LICENSE_FILE,
+        FILTERED_LICENSE_FILE,
+        FILTERED_USERS_FILE,
+        DISABLED_USERS_FILE,
+        LAST_LOGIN_FILE,
+        RECENTLY_DISABLED_FILE,
+        RECENTLY_HIRED_FILE,
+        MISSING_PHOTO_FILE,
+        GRAPH_CAPABILITIES_FILE,
+        DIRTY_DATA_FILE,
+        MISSING_HIRE_DATE_FILE,
+    ]
+
+    removed = []
+    for path in cache_files:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+                removed.append(os.path.basename(path))
+        except OSError as remove_error:
+            logger.warning(f"Failed to delete cached file {path}: {remove_error}")
+
+    logger.info(
+        "Cleared %s cached data file(s) by user %s: %s",
+        len(removed), session.get('username'), removed,
+    )
+
+    try:
+        worker = threading.Thread(
+            target=update_employee_data,
+            kwargs={'source': 'manual'},
+            daemon=True,
+        )
+        worker.start()
+    except Exception as e:
+        logger.error(f"Error triggering update after clearing data: {e}")
+        mark_data_update_finished(success=False, error=str(e), source='manual')
+        return jsonify({'cleared': removed, 'error': 'Sync failed to start'}), 500
+
+    return jsonify({'cleared': removed, 'message': 'Data cleared; fresh sync started'}), 200
 
 @app.route('/search-test')
 def search_test():

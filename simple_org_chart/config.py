@@ -15,7 +15,7 @@ CONFIG_DIR = BASE_DIR / "config"
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATE_DIR = BASE_DIR / "templates"
 
-REPO_DIR = BASE_DIR / "repositories"
+REPO_DIR = DATA_DIR / "repositories"
 SETTINGS_FILE = CONFIG_DIR / "app_settings.json"
 DATA_FILE = DATA_DIR / "employee_data.json"
 MISSING_MANAGER_FILE = DATA_DIR / "missing_manager_records.json"
@@ -28,6 +28,9 @@ LAST_LOGIN_FILE = DATA_DIR / "last_login_records.json"
 RECENTLY_DISABLED_FILE = DATA_DIR / "recently_disabled_employees.json"
 RECENTLY_HIRED_FILE = DATA_DIR / "recently_hired_employees.json"
 MISSING_PHOTO_FILE = DATA_DIR / "missing_photo_records.json"
+GRAPH_CAPABILITIES_FILE = DATA_DIR / "graph_capabilities.json"
+DIRTY_DATA_FILE = DATA_DIR / "dirty_data_records.json"
+MISSING_HIRE_DATE_FILE = DATA_DIR / "missing_hire_date_records.json"
 
 
 def ensure_directories() -> None:
@@ -63,6 +66,9 @@ __all__ = [
     "RECENTLY_DISABLED_FILE",
     "RECENTLY_HIRED_FILE",
     "MISSING_PHOTO_FILE",
+    "GRAPH_CAPABILITIES_FILE",
+    "DIRTY_DATA_FILE",
+    "MISSING_HIRE_DATE_FILE",
     "ensure_directories",
     "as_posix_env",
 ]

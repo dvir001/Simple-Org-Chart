@@ -19,6 +19,7 @@ from simple_org_chart.msgraph import (
     fetch_all_employees,
     get_access_token,
     parse_graph_datetime,
+    probe_graph_capabilities,
     _enrich_mailbox_metadata,
 )
 from simple_org_chart.settings import (
@@ -47,6 +48,9 @@ LAST_LOGIN_FILE = str(app_config.LAST_LOGIN_FILE)
 FILTERED_LICENSE_FILE = str(app_config.FILTERED_LICENSE_FILE)
 FILTERED_USERS_FILE = str(app_config.FILTERED_USERS_FILE)
 MISSING_PHOTO_FILE = str(app_config.MISSING_PHOTO_FILE)
+GRAPH_CAPABILITIES_FILE = str(app_config.GRAPH_CAPABILITIES_FILE)
+DIRTY_DATA_FILE = str(app_config.DIRTY_DATA_FILE)
+MISSING_HIRE_DATE_FILE = str(app_config.MISSING_HIRE_DATE_FILE)
 DATA_UPDATE_STATUS_FILE = os.path.join(DATA_DIR, 'data_update_status.json')
 
 _DATA_UPDATE_STATUS_LOCK = threading.Lock()
@@ -316,6 +320,15 @@ def update_employee_data(source: str = 'unknown') -> None:
             error_message = "Access token retrieval failed"
             return
 
+        # Probe Graph capabilities early so filters can be correctly gated.
+        try:
+            capabilities = probe_graph_capabilities(token)
+            with open(GRAPH_CAPABILITIES_FILE, 'w') as cap_file:
+                json.dump(capabilities, cap_file, indent=2)
+            logger.info("Graph capabilities probed and saved: %s", GRAPH_CAPABILITIES_FILE)
+        except Exception as cap_error:
+            logger.warning("Failed to probe/save Graph capabilities: %s", cap_error)
+
         settings = load_settings()
         months_threshold = settings.get('newEmployeeMonths', 3)
 
@@ -344,6 +357,7 @@ def update_employee_data(source: str = 'unknown') -> None:
                             'department': emp.get('department') or '',
                             'email': emp.get('email') or '',
                             'country': emp.get('country') or '',
+                            'state': emp.get('state') or '',
                             'accountEnabled': emp.get('accountEnabled', True),
                             'userType': emp.get('userType') or '',
                             'licenseCount': emp.get('licenseCount', 0),
@@ -359,6 +373,52 @@ def update_employee_data(source: str = 'unknown') -> None:
                 )
             except Exception as report_error:
                 logger.error(f"Failed to write missing photo report cache: {report_error}")
+
+            try:
+                missing_hire_date_records = [
+                    {
+                        'id': emp.get('id'),
+                        'name': emp.get('name') or '',
+                        'title': emp.get('title') or '',
+                        'department': emp.get('department') or '',
+                        'email': emp.get('email') or '',
+                        'country': emp.get('country') or '',
+                        'state': emp.get('state') or '',
+                        'accountEnabled': emp.get('accountEnabled', True),
+                        'userType': emp.get('userType') or '',
+                        'licenseCount': emp.get('licenseCount', 0),
+                        'licenseSkus': emp.get('licenseSkus', []),
+                        'licenseSkuIds': emp.get('licenseSkuIds', []),
+                        'mailboxType': emp.get('mailboxType'),
+                        'isSharedMailbox': emp.get('isSharedMailbox'),
+                        'managerId': emp.get('managerId'),
+                        'managerName': emp.get('managerName') or '',
+                        'hasManager': emp.get('hasManager', True),
+                        'hasMailbox': emp.get('hasMailbox', True),
+                        'hiddenFromAddressLists': emp.get('hiddenFromAddressLists', False),
+                    }
+                    for emp in (list(employees) + (filtered_users or []))
+                    if not (emp.get('hireDate') or emp.get('employeeHireDate'))
+                ]
+                with open(MISSING_HIRE_DATE_FILE, 'w') as report_file:
+                    json.dump(missing_hire_date_records, report_file, indent=2)
+                logger.info(
+                    f"Updated missing hire date report cache with {len(missing_hire_date_records)} records"
+                )
+            except Exception as report_error:
+                logger.error(f"Failed to write missing hire date report cache: {report_error}")
+
+            try:
+                from simple_org_chart.reports import detect_dirty_data_records
+                all_users_for_dirty = list(employees) + (filtered_users or [])
+                dirty_records = detect_dirty_data_records(all_users_for_dirty)
+                with open(DIRTY_DATA_FILE, 'w') as report_file:
+                    json.dump(dirty_records, report_file, indent=2)
+                logger.info(
+                    f"Updated dirty data report cache with {len(dirty_records)} records"
+                )
+            except Exception as report_error:
+                logger.error(f"Failed to write dirty data report cache: {report_error}")
 
             ignored_employee_set = parse_ignored_employees(settings)
             ignored_department_set = parse_ignored_departments(settings)
@@ -495,6 +555,17 @@ def update_employee_data(source: str = 'unknown') -> None:
 
         try:
             last_login_records = collect_last_login_records(token=token)
+            # Enrich with managerId from the employee list so the "has manager"
+            # filter works on this report.
+            _employee_id_map = {str(e.get('id')): e for e in employees if e.get('id')}
+            for _rec in last_login_records:
+                _emp = _employee_id_map.get(str(_rec.get('id') or ''))
+                if _emp is not None:
+                    _rec['managerId'] = _emp.get('managerId')
+                    _rec['hasManager'] = bool(_emp.get('managerId'))
+                else:
+                    _rec.setdefault('managerId', None)
+                    _rec.setdefault('hasManager', False)
             with open(LAST_LOGIN_FILE, 'w') as report_file:
                 json.dump(last_login_records, report_file, indent=2)
             logger.info(

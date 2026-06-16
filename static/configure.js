@@ -1845,6 +1845,39 @@ function showStatus(message, type) {
     }, 3000);
 }
 
+async function clearData() {
+    const message = getTranslation(
+        'configure.dataManagement.clear.confirm',
+        'Delete all cached employee and report data and start a fresh sync? Your settings are not affected.'
+    );
+    if (!window.confirm(message)) {
+        return;
+    }
+
+    if (!currentSettings || typeof currentSettings !== 'object') {
+        currentSettings = {};
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/clear-data`, { method: 'POST' });
+
+        if (response.ok || response.status === 409) {
+            currentSettings.dataUpdateStatus = {
+                state: 'running',
+                startedAt: new Date().toISOString(),
+            };
+            updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
+            startUpdatePolling();
+            showStatus(getTranslation('configure.dataManagement.clear.success', 'Data cleared. Fresh sync started.'), 'info');
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            showStatus(errorData.error || getTranslation('configure.dataManagement.clear.failed', 'Failed to clear data.'), 'error');
+        }
+    } catch (error) {
+        showStatus(error?.message || getTranslation('configure.dataManagement.clear.failed', 'Failed to clear data.'), 'error');
+    }
+}
+
 /* ---------- config export / import ---------- */
 
 function exportConfig() {
@@ -1914,6 +1947,7 @@ function registerConfigActions() {
         'discard-unsaved': discardUnsavedChanges,
         'save-all': saveAllSettings,
         'reset-all': resetAllSettings,
+        'clear-data': clearData,
         'logout': logout
     };
 

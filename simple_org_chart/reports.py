@@ -23,6 +23,8 @@ LAST_LOGIN_FILE = str(app_config.LAST_LOGIN_FILE)
 FILTERED_LICENSE_FILE = str(app_config.FILTERED_LICENSE_FILE)
 FILTERED_USERS_FILE = str(app_config.FILTERED_USERS_FILE)
 MISSING_PHOTO_FILE = str(app_config.MISSING_PHOTO_FILE)
+DIRTY_DATA_FILE = str(app_config.DIRTY_DATA_FILE)
+MISSING_HIRE_DATE_FILE = str(app_config.MISSING_HIRE_DATE_FILE)
 
 
 class ReportCacheManager:
@@ -89,6 +91,14 @@ def load_missing_photo_data(cache: ReportCacheManager, *, force_refresh: bool = 
         MISSING_PHOTO_FILE,
         refresh=force_refresh,
         description="missing photo report cache",
+    )
+
+
+def load_missing_hire_date_data(cache: ReportCacheManager, *, force_refresh: bool = False):
+    return cache.load_json(
+        MISSING_HIRE_DATE_FILE,
+        refresh=force_refresh,
+        description="missing hire date report cache",
     )
 
 
@@ -241,6 +251,12 @@ def apply_last_login_filters(
     include_never_signed_in: bool = True,
     inactive_days: Optional[str] = None,
     inactive_days_max: Optional[str] = None,
+    include_hidden_from_address_list: bool = True,
+    include_visible_in_address_list: bool = True,
+    include_with_mailbox: bool = True,
+    include_without_mailbox: bool = True,
+    include_with_manager: bool = True,
+    include_without_manager: bool = True,
 ):
     if not records:
         return []
@@ -311,6 +327,33 @@ def apply_last_login_filters(
             if days_since is None or days_since > inactive_max_threshold:
                 continue
 
+        # A shared/room/equipment mailbox is a mailbox by definition.
+        has_mailbox = bool(record.get("hasMailbox", True)) or is_shared_mailbox or is_room_equipment_mailbox
+
+        # GAL visibility is a mailbox concept; the two populations are filtered independently.
+        # Mailbox users: apply the hidden/visible toggles directly.
+        # Non-mailbox users: they have no GAL status; exclude them when either GAL toggle is
+        # active (narrowing to a specific group) so they don't bleed into GAL-specific results.
+        if has_mailbox:
+            hidden = bool(record.get("hiddenFromAddressLists"))
+            if hidden and not include_hidden_from_address_list:
+                continue
+            if not hidden and not include_visible_in_address_list:
+                continue
+        elif not include_hidden_from_address_list or not include_visible_in_address_list:
+            continue
+
+        if has_mailbox and not include_with_mailbox:
+            continue
+        if not has_mailbox and not include_without_mailbox:
+            continue
+
+        has_manager = bool(record.get("hasManager", True))
+        if has_manager and not include_with_manager:
+            continue
+        if not has_manager and not include_without_manager:
+            continue
+
         filtered.append(record)
 
     return filtered
@@ -328,6 +371,12 @@ def apply_filtered_user_filters(
     include_unlicensed: bool = True,
     include_members: bool = True,
     include_guests: bool = True,
+    include_hidden_from_address_list: bool = True,
+    include_visible_in_address_list: bool = True,
+    include_with_mailbox: bool = True,
+    include_without_mailbox: bool = True,
+    include_with_manager: bool = True,
+    include_without_manager: bool = True,
 ):
     if not records:
         return []
@@ -363,6 +412,33 @@ def apply_filtered_user_filters(
         if user_type == "member" and not include_members:
             continue
 
+        # A shared/room/equipment mailbox is a mailbox by definition.
+        has_mailbox = bool(record.get("hasMailbox", True)) or is_shared_mailbox or is_room_equipment_mailbox
+
+        # GAL visibility is a mailbox concept; the two populations are filtered independently.
+        # Mailbox users: apply the hidden/visible toggles directly.
+        # Non-mailbox users: they have no GAL status; exclude them when either GAL toggle is
+        # active (narrowing to a specific group) so they don't bleed into GAL-specific results.
+        if has_mailbox:
+            hidden = bool(record.get("hiddenFromAddressLists"))
+            if hidden and not include_hidden_from_address_list:
+                continue
+            if not hidden and not include_visible_in_address_list:
+                continue
+        elif not include_hidden_from_address_list or not include_visible_in_address_list:
+            continue
+
+        if has_mailbox and not include_with_mailbox:
+            continue
+        if not has_mailbox and not include_without_mailbox:
+            continue
+
+        has_manager = bool(record.get("hasManager", True))
+        if has_manager and not include_with_manager:
+            continue
+        if not has_manager and not include_without_manager:
+            continue
+
         filtered.append(record)
 
     return filtered
@@ -380,6 +456,12 @@ def apply_missing_manager_filters(
     include_unlicensed: bool = True,
     include_members: bool = True,
     include_guests: bool = True,
+    include_hidden_from_address_list: bool = True,
+    include_visible_in_address_list: bool = True,
+    include_with_mailbox: bool = True,
+    include_without_mailbox: bool = True,
+    include_with_manager: bool = True,
+    include_without_manager: bool = True,
 ):
     return apply_filtered_user_filters(
         records,
@@ -392,6 +474,51 @@ def apply_missing_manager_filters(
         include_unlicensed=include_unlicensed,
         include_members=include_members,
         include_guests=include_guests,
+        include_hidden_from_address_list=include_hidden_from_address_list,
+        include_visible_in_address_list=include_visible_in_address_list,
+        include_with_mailbox=include_with_mailbox,
+        include_without_mailbox=include_without_mailbox,
+        include_with_manager=include_with_manager,
+        include_without_manager=include_without_manager,
+    )
+
+
+def apply_missing_hire_date_filters(
+    records: Optional[Sequence[dict]],
+    *,
+    include_user_mailboxes: bool = True,
+    include_shared_mailboxes: bool = True,
+    include_room_equipment_mailboxes: bool = True,
+    include_enabled: bool = True,
+    include_disabled: bool = True,
+    include_licensed: bool = True,
+    include_unlicensed: bool = True,
+    include_members: bool = True,
+    include_guests: bool = True,
+    include_hidden_from_address_list: bool = True,
+    include_visible_in_address_list: bool = True,
+    include_with_mailbox: bool = True,
+    include_without_mailbox: bool = True,
+    include_with_manager: bool = True,
+    include_without_manager: bool = True,
+):
+    return apply_filtered_user_filters(
+        records,
+        include_user_mailboxes=include_user_mailboxes,
+        include_shared_mailboxes=include_shared_mailboxes,
+        include_room_equipment_mailboxes=include_room_equipment_mailboxes,
+        include_enabled=include_enabled,
+        include_disabled=include_disabled,
+        include_licensed=include_licensed,
+        include_unlicensed=include_unlicensed,
+        include_members=include_members,
+        include_guests=include_guests,
+        include_hidden_from_address_list=include_hidden_from_address_list,
+        include_visible_in_address_list=include_visible_in_address_list,
+        include_with_mailbox=include_with_mailbox,
+        include_without_mailbox=include_without_mailbox,
+        include_with_manager=include_with_manager,
+        include_without_manager=include_without_manager,
     )
 
 
@@ -407,6 +534,12 @@ def apply_missing_photo_filters(
     include_unlicensed: bool = True,
     include_members: bool = True,
     include_guests: bool = True,
+    include_hidden_from_address_list: bool = True,
+    include_visible_in_address_list: bool = True,
+    include_with_mailbox: bool = True,
+    include_without_mailbox: bool = True,
+    include_with_manager: bool = True,
+    include_without_manager: bool = True,
 ):
     return apply_filtered_user_filters(
         records,
@@ -419,6 +552,12 @@ def apply_missing_photo_filters(
         include_unlicensed=include_unlicensed,
         include_members=include_members,
         include_guests=include_guests,
+        include_hidden_from_address_list=include_hidden_from_address_list,
+        include_visible_in_address_list=include_visible_in_address_list,
+        include_with_mailbox=include_with_mailbox,
+        include_without_mailbox=include_without_mailbox,
+        include_with_manager=include_with_manager,
+        include_without_manager=include_without_manager,
     )
 
 
@@ -431,17 +570,20 @@ def apply_tagpicker_filters(
     filter_departments_mode: str = "exclude",
     filter_countries: Optional[List[str]] = None,
     filter_countries_mode: str = "exclude",
+    filter_states: Optional[List[str]] = None,
+    filter_states_mode: str = "exclude",
 ) -> List[dict]:
-    """Apply optional title/department/country include/exclude filters."""
+    """Apply optional title/department/country/state include/exclude filters."""
     if not records:
         return []
 
     title_set = {v.strip().lower() for v in (filter_titles or []) if v and v.strip()}
     dept_set = {v.strip().lower() for v in (filter_departments or []) if v and v.strip()}
     country_set = {v.strip().lower() for v in (filter_countries or []) if v and v.strip()}
+    state_set = {v.strip().lower() for v in (filter_states or []) if v and v.strip()}
 
     # Nothing to filter
-    if not title_set and not dept_set and not country_set:
+    if not title_set and not dept_set and not country_set and not state_set:
         return list(records)
 
     filtered: List[dict] = []
@@ -449,6 +591,7 @@ def apply_tagpicker_filters(
         title_val = (record.get("title") or "").strip().lower()
         dept_val = (record.get("department") or "").strip().lower()
         country_val = (record.get("country") or "").strip().lower()
+        state_val = (record.get("state") or "").strip().lower()
 
         if title_set:
             matched = title_val in title_set
@@ -471,6 +614,152 @@ def apply_tagpicker_filters(
             if filter_countries_mode == "exclude" and matched:
                 continue
 
+        if state_set:
+            matched = state_val in state_set
+            if filter_states_mode == "include" and not matched:
+                continue
+            if filter_states_mode == "exclude" and matched:
+                continue
+
+        filtered.append(record)
+
+    return filtered
+
+
+
+# ---------------------------------------------------------------------------
+# Dirty data detection
+# ---------------------------------------------------------------------------
+
+_DIRTY_DATA_FIELDS = [
+    ("name", "Name"),
+    ("title", "Title"),
+    ("department", "Department"),
+    ("email", "Email"),
+    ("phone", "Mobile Phone"),
+    ("businessPhone", "Business Phone"),
+    ("location", "Office Location"),
+    ("city", "City"),
+    ("state", "State / Province"),
+    ("country", "Country"),
+    ("usageLocation", "Usage Location"),
+]
+
+
+def _check_field_whitespace(value: object) -> Optional[str]:
+    """Return a human-readable issue string if *value* has whitespace problems."""
+    if not isinstance(value, str) or not value:
+        return None
+    if value != value.strip():
+        return "leading/trailing spaces"
+    if "  " in value:
+        return "consecutive spaces"
+    return None
+
+
+def _check_email(value: object) -> list:
+    """Return a list of issue strings for email-specific problems."""
+    if not isinstance(value, str) or not value:
+        return []
+    if value.lower().endswith("@onmicrosoft.com") or ".onmicrosoft.com" in value.lower():
+        return []
+    problems = []
+    ws = _check_field_whitespace(value)
+    if ws:
+        problems.append(ws)
+    if value != value.lower():
+        problems.append("uppercase letters")
+    return problems
+
+
+def detect_dirty_data_records(employees: Iterable[dict]) -> List[dict]:
+    """Scan employee records for fields with whitespace data-quality issues.
+
+    Returns records that have at least one issue, each augmented with an
+    ``issues`` list of ``{"field": <label>, "value": <raw>, "problem": <desc>}``
+    entries.
+    """
+    results: List[dict] = []
+    for emp in employees or []:
+        issues = []
+        for field_key, field_label in _DIRTY_DATA_FIELDS:
+            raw = emp.get(field_key)
+            if field_key == "email":
+                problems = _check_email(raw)
+            else:
+                problem = _check_field_whitespace(raw)
+                problems = [problem] if problem else []
+            for problem in problems:
+                issues.append({
+                    "field": field_label,
+                    "fieldKey": field_key,
+                    "value": raw,
+                    "problem": problem,
+                })
+        if issues:
+            results.append({
+                "id": emp.get("id"),
+                "name": emp.get("name") or "",
+                "title": emp.get("title") or "",
+                "department": emp.get("department") or "",
+                "email": emp.get("email") or "",
+                "country": emp.get("country") or "",
+                "accountEnabled": emp.get("accountEnabled", True),
+                "userType": emp.get("userType") or "",
+                "licenseCount": emp.get("licenseCount", 0),
+                "licenseSkus": emp.get("licenseSkus", []),
+                "licenseSkuIds": emp.get("licenseSkuIds", []),
+                "mailboxType": emp.get("mailboxType"),
+                "isSharedMailbox": emp.get("isSharedMailbox"),
+                "issues": issues,
+                "issueCount": len(issues),
+                "issueFields": ", ".join(i["field"] for i in issues),
+            })
+    return results
+
+
+def load_dirty_data(cache: ReportCacheManager, *, force_refresh: bool = False):
+    return cache.load_json(
+        DIRTY_DATA_FILE,
+        refresh=force_refresh,
+        description="dirty data report cache",
+    )
+
+
+def apply_dirty_data_filters(
+    records: Optional[Sequence[dict]],
+    *,
+    include_enabled: bool = True,
+    include_disabled: bool = True,
+    include_licensed: bool = True,
+    include_unlicensed: bool = True,
+    include_members: bool = True,
+    include_guests: bool = True,
+) -> List[dict]:
+    """Simple filter for the dirty-data report (no mailbox/GAL/manager toggles needed)."""
+    if not records:
+        return []
+
+    filtered: List[dict] = []
+    for record in records:
+        account_enabled = record.get("accountEnabled", True)
+        if account_enabled and not include_enabled:
+            continue
+        if not account_enabled and not include_disabled:
+            continue
+
+        license_count = record.get("licenseCount") or 0
+        if license_count > 0 and not include_licensed:
+            continue
+        if license_count == 0 and not include_unlicensed:
+            continue
+
+        user_type = (record.get("userType") or "").lower()
+        if user_type == "member" and not include_members:
+            continue
+        if user_type == "guest" and not include_guests:
+            continue
+
         filtered.append(record)
 
     return filtered
@@ -478,18 +767,23 @@ def apply_tagpicker_filters(
 
 __all__ = [
     "ReportCacheManager",
+    "apply_dirty_data_filters",
     "apply_disabled_filters",
     "apply_filtered_user_filters",
     "apply_last_login_filters",
+    "apply_missing_hire_date_filters",
     "apply_missing_manager_filters",
     "apply_missing_photo_filters",
     "apply_tagpicker_filters",
     "calculate_license_totals",
+    "detect_dirty_data_records",
+    "load_dirty_data",
     "load_disabled_license_data",
     "load_disabled_users_data",
     "load_filtered_license_data",
     "load_filtered_user_data",
     "load_last_login_data",
+    "load_missing_hire_date_data",
     "load_missing_manager_data",
     "load_missing_photo_data",
     "load_recently_disabled_data",

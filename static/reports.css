@@ -138,6 +138,14 @@ html.i18n-loading body {
     box-shadow: 0 6px 12px rgba(15, 23, 42, 0.14);
 }
 
+.btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none;
+    box-shadow: none;
+}
+
 .summary-panel {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -204,6 +212,19 @@ html.i18n-loading body {
     width: 100%;
 }
 
+/* Compact groups rendered side-by-side inside .filter-groups-inline */
+.filter-groups-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+}
+
+.filter-group--compact {
+    width: auto;
+    flex: 0 1 auto;
+}
+
 .filter-group__label {
     font-size: 0.8rem;
     font-weight: 600;
@@ -246,6 +267,20 @@ html.i18n-loading body {
 
 .filter-chip--active:hover {
     background: #0056a6;
+}
+
+.filter-chip--unavailable {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: var(--bg-secondary, #e2e8f0);
+    color: var(--text-muted, #64748b);
+    border-color: transparent;
+    pointer-events: auto; /* keep pointer-events so title/tooltip is still visible */
+}
+
+.filter-chip--unavailable:hover {
+    background: var(--bg-secondary, #e2e8f0);
+    color: var(--text-muted, #64748b);
 }
 
 /* ── Report tagpicker filter rows ───────────────────────────── */
