@@ -225,6 +225,7 @@ def collect_missing_manager_records(
                 'businessPhone': emp.get('businessPhone'),
                 'location': emp.get('location') or emp.get('officeLocation') or '',
                 'country': emp.get('country') or '',
+                'state': emp.get('state') or '',
                 'managerName': manager_name,
                 'reason': effective_reason,
                 'missingReason': reason,

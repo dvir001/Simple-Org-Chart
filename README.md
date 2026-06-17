@@ -11,7 +11,7 @@ SimpleOrgChart is a Flask application backed by Azure Active Directory (Entra ID
 - Hardened security defaults: strict Content Security Policy, sanitized redirects, login isolation, and placeholder-secret protection.
 - Modular front end: no inline scripts or styles; shared CSS variables power `configure`, `reports`, and org chart experiences.
 - Daily automation: background scheduler refreshes Azure AD data (20:00 local time) and persists JSON caches under `data/`.
-- Admin reporting: missing managers, filtered users, and last-login inactivity insights—each with one-click XLSX export.
+- Admin reporting: missing managers, filtered users, last-login inactivity, missing profile pictures, data quality issues, and recently hired users—each with one-click XLSX export.
 - Export tooling: SVG/PNG/PDF org chart capture and server-backed XLSX generation for the current chart tree.
 - Deployment ready: ships with Docker Compose and a Gunicorn configuration (`deploy/gunicorn.conf.py`) for containerized hosting.
 
@@ -39,8 +39,8 @@ SimpleOrgChart is a Flask application backed by Azure Active Directory (Entra ID
    - `User.Read.All`
    - `Presence.Read.All` *(enables live Teams presence status indicators on org chart cards)*
    - `LicenseAssignment.Read.All` *(required for licensing insights and admin reports)*
-   - `AuditLog.Read.All` *(required for last sign-in metrics and disabled-user audit timestamps)*
-   - `MailboxSettings.Read` *(enables mailbox-type metadata used by last sign-in filters; without it, all mailboxes are treated as standard users)*
+   - `AuditLog.Read.All` *(required for last sign-in metrics and disabled-user audit timestamps; also enables the inactivity day-range filters on the Last Logins report — without it those filters are greyed out)*
+   - `MailboxSettings.Read` *(enables mailbox-type metadata used by mailbox-type filters; without it the User/Shared/Room mailbox filters are greyed out)*
    - Grant admin consent for the tenant.
 
 3. **Create a Client Secret**
@@ -125,7 +125,7 @@ docker compose up -d
 ```
 
 - Default port: `APP_PORT` (defaults to `5000`). Override it in `.env` to change container and host bindings.
-- Persistent data resides in the `orgchart_data` volume. Remove it to rebuild caches from scratch.
+- Persistent data resides in the `./data` and `./config` bind-mounted directories. Remove their contents to rebuild caches from scratch.
 - Local execution outside Docker is not supported; use the provided container workflow for development and production.
 
 ## Key Features
@@ -139,7 +139,12 @@ docker compose up -d
   - Users by last sign-in activity
   - Employees hired in the last 365 days
   - Users hidden by filters
+  - Users without profile picture
+  - Users without a hiring date
+  - Users with data quality issues (whitespace, uppercase emails)
   - User Scanner (OSINT) — individual and organization-wide email presence scans
+- **Rich Report Filters**: Toggle groups (mailbox type, account status, license status, user type, GAL visibility, mailbox presence, manager presence) plus tagpicker filters for title, department, country, and state/province. Filters that require Graph permissions not currently granted are automatically greyed out with a tooltip explaining what is missing.
+- **Permission-Gated Filters**: On each data sync the app probes which Graph API capabilities are available and persists the result. Filters that require `AuditLog.Read.All` (inactivity ranges), `MailboxSettings.Read` (mailbox type), or Exchange-backed `showInAddressList` (GAL visibility) are disabled in the UI until the corresponding permission is granted and a sync is run.
 - **Automated Email Reports**: Schedule daily, weekly, or monthly reports sent via SMTP after data synchronization.
 - **Export Options**: SVG/PNG/PDF snapshots and XLSX exports for reports and chart data.
 - **Caching & Scheduling**: JSON caches regenerate nightly; manual refresh endpoints keep data current on demand.
@@ -291,12 +296,17 @@ Organization scans use file-based state (`data/full_scan_state.json`) and a canc
 
 - `data/employee_data.json` – Full org hierarchy.
 - `data/missing_manager_records.json` – Missing manager snapshot.
+- `data/filtered_user_records.json` – Users hidden by org chart filters.
 - `data/disabled_user_records.json` – Disabled users enriched with license and sign-in metadata.
 - `data/last_login_records.json` – Active users with last sign-in timestamps.
+- `data/recently_hired_employees.json` – Users hired in the last 365 days.
+- `data/missing_photo_records.json` – Users without a profile picture.
+- `data/missing_hire_date_records.json` – Users without a hiring date (`employeeHireDate`).
+- `data/dirty_data_records.json` – Users with data quality issues (whitespace, uppercase emails).
+- `data/graph_capabilities.json` – Graph API capability flags written on each sync; controls which report filters are enabled in the UI.
 - `data/user_scanner_results.json` – Cached results from the most recent organization-wide OSINT scan.
 - `data/user_scanner_history.json` – Last five scan run metadata entries.
 - `data/user_scanner_exports/` – Downloaded XLSX workbooks for completed scans.
-- Additional files exist for filtered/disabled-with-license/hiring reports.
 
 If a cache is missing or stale, hit **Refresh Data** on the reports page or start the app with `RUN_INITIAL_UPDATE=true`.
 

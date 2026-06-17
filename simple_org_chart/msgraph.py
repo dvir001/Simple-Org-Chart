@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json as _json
 import logging
 import os
 import time
@@ -29,6 +31,93 @@ GRAPH_API_BETA_ENDPOINT = os.environ.get('GRAPH_API_BETA_ENDPOINT', 'https://gra
 
 EmployeeTriple = Tuple[list[dict], list[dict], list[dict]]
 FallbackLoader = Callable[[], EmployeeTriple]
+
+
+# ---------------------------------------------------------------------------
+# Graph capability probing
+# ---------------------------------------------------------------------------
+
+# Map of capability key → what it means.
+# Capability keys and the Graph app permissions they require:
+#   user_read_all          - User.Read.All  (core: required for everything)
+#   audit_log_read_all     - AuditLog.Read.All  (sign-in activity / last logins)
+#   mailbox_settings_read  - MailboxSettings.Read  (mailbox type + GAL visibility)
+
+
+def _decode_jwt_roles(token: str) -> frozenset:
+    """Extract the roles claim from a JWT access token without verifying the signature.
+
+    Safe for informational use only — we are reading our own token to discover
+    which application permissions were granted, not for authentication.
+    """
+    try:
+        parts = token.split('.')
+        if len(parts) < 2:
+            return frozenset()
+        payload = parts[1]
+        # Restore base64 padding (no padding added when already aligned)
+        payload += '=' * (-len(payload) % 4)
+        decoded = base64.urlsafe_b64decode(payload.encode())
+        claims = _json.loads(decoded)
+        roles = claims.get('roles', [])
+        return frozenset(roles) if isinstance(roles, list) else frozenset()
+    except Exception as exc:
+        logger.debug("Failed to decode JWT roles: %s", exc)
+        return frozenset()
+
+
+def _has_exchange_mailbox(user: dict) -> bool:
+    """Return True when the user has a provisioned Exchange Online mailbox.
+
+    Reads the ``assignedPlans`` collection returned by Graph and looks for an
+    enabled ``exchange`` service plan. This mirrors what the Exchange admin
+    center "Manage mailboxes" view reflects, and is far more reliable than the
+    ``mail`` attribute (which is populated on many mail-enabled objects that
+    have no mailbox). Requires no extra Graph permission or API call.
+    """
+    assigned_plans = user.get("assignedPlans") or []
+    if not isinstance(assigned_plans, list):
+        return False
+    for plan in assigned_plans:
+        if not isinstance(plan, dict):
+            continue
+        if (plan.get("service") or "").lower() == "exchange" and \
+                (plan.get("capabilityStatus") or "").lower() == "enabled":
+            return True
+    return False
+
+
+def probe_graph_capabilities(token: str) -> dict:
+    """Detect which Graph API capabilities are available with the supplied token.
+
+    Reads permission grants directly from the JWT access token's ``roles``
+    claim — no extra API calls needed. For client-credentials (app-only) flow,
+    a permission appears in ``roles`` only when it has been admin-consented.
+
+    Returns a dict of capability flags, e.g.::
+
+        {
+            "user_read_all": True,
+            "audit_log_read_all": False,
+            "mailbox_settings_read": True,
+            "probed_at": "2026-06-14T10:00:00+00:00",
+        }
+    """
+    roles = _decode_jwt_roles(token)
+    logger.info("Decoded %d JWT role(s) from access token", len(roles))
+
+    result: dict = {
+        "user_read_all": "User.Read.All" in roles,
+        "audit_log_read_all": "AuditLog.Read.All" in roles,
+        "mailbox_settings_read": "MailboxSettings.Read" in roles,
+        "probed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    logger.info(
+        "Graph capability probe results: %s",
+        {k: v for k, v in result.items() if k != "probed_at"},
+    )
+    return result
 
 
 def _enrich_mailbox_metadata(
@@ -93,7 +182,38 @@ def _enrich_mailbox_metadata(
 
         payload = response.json() or {}
         mailbox_purpose_raw = (payload.get("userPurpose") or "").strip()
+
+        # Always attempt to refresh showInAddressList with a targeted per-user
+        # call.  The bulk /users query returns null for some Exchange-managed
+        # shared mailboxes even when HiddenFromAddressListsEnabled=True in
+        # Exchange.  We use the beta endpoint with strong consistency (no
+        # ConsistencyLevel: eventual) for the best chance of getting the
+        # Exchange-synced value.
+        try:
+            gal_headers = {
+                "Authorization": headers.get("Authorization", ""),
+                "Content-Type": "application/json",
+            }
+            gal_resp = requests.get(
+                f"{GRAPH_API_BETA_ENDPOINT}/users/{user_id}?$select=showInAddressList",
+                headers=gal_headers,
+                timeout=10,
+            )
+            if gal_resp.status_code == 200:
+                show_in_al = gal_resp.json().get("showInAddressList")
+                if show_in_al is not None:
+                    for record in record_group:
+                        record["hiddenFromAddressLists"] = show_in_al is False
+            else:
+                logger.debug(
+                    "showInAddressList refresh returned status %s for %s",
+                    gal_resp.status_code, user_id,
+                )
+        except Exception as exc:
+            logger.debug("Failed to refresh showInAddressList for %s: %s", user_id, exc)
+
         if not mailbox_purpose_raw:
+            lookups_performed += 1
             continue
 
         mailbox_purpose = mailbox_purpose_raw.lower()
@@ -102,6 +222,9 @@ def _enrich_mailbox_metadata(
         for record in record_group:
             record["mailboxType"] = mailbox_purpose_raw
             record["isSharedMailbox"] = is_shared_mailbox
+            # A resolved mailbox purpose (shared/room/equipment/user) means the
+            # mailbox exists, regardless of licensing/assignedPlans.
+            record["hasMailbox"] = True
 
         lookups_performed += 1
 
@@ -301,7 +424,7 @@ def fetch_all_employees(
     select_fields = (
         "id,displayName,jobTitle,department,mail,userPrincipalName,mobilePhone,"
         "businessPhones,officeLocation,city,state,country,usageLocation,streetAddress,"
-        "postalCode,employeeHireDate,accountEnabled,userType,assignedLicenses"
+        "postalCode,employeeHireDate,accountEnabled,userType,assignedLicenses,assignedPlans,showInAddressList"
     )
     users_url = (
         f"{GRAPH_API_ENDPOINT}/users?$select={select_fields}"
@@ -399,7 +522,9 @@ def fetch_all_employees(
                         "licenseSkuIds": license_sku_ids,
                         "mailboxType": None,
                         "isSharedMailbox": None,
-                        "managerId": user.get("manager", {}).get("id") if user.get("manager") else None,
+                        "hiddenFromAddressLists": user.get("showInAddressList") is False,
+                        "hasMailbox": _has_exchange_mailbox(user),
+                        "hasManager": bool(user.get("manager", {}).get("id") if user.get("manager") else None),
                         "children": [],
                     }
                     filtered_users.append(base_record)
@@ -471,6 +596,9 @@ def fetch_all_employees(
                             "licenseSkuIds": list(license_sku_ids),
                             "mailboxType": None,
                             "isSharedMailbox": None,
+                            "hiddenFromAddressLists": user.get("showInAddressList") is False,
+                            "hasMailbox": _has_exchange_mailbox(user),
+                            "hasManager": bool(user.get("manager", {}).get("id") if user.get("manager") else None),
                         }
                     )
             users_url = data.get("@odata.nextLink")
@@ -561,7 +689,7 @@ def collect_last_login_records(*, token: Optional[str] = None) -> list[dict]:
 
     base_fields = (
         "id,displayName,jobTitle,department,mail,userPrincipalName,"
-        "signInActivity,accountEnabled,userType,assignedLicenses,country"
+        "signInActivity,accountEnabled,userType,assignedLicenses,assignedPlans,country,state,showInAddressList"
     )
 
     def build_users_url(select_fields: str) -> str:
@@ -664,6 +792,7 @@ def collect_last_login_records(*, token: Optional[str] = None) -> list[dict]:
                 "department": user.get("department") or "No Department",
                 "email": user.get("mail") or user.get("userPrincipalName") or "",
                 "country": user.get("country") or "",
+                "state": user.get("state") or "",
                 "accountEnabled": user.get("accountEnabled", True),
                 "userType": (user.get("userType") or "").lower(),
                 "licenseCount": len(sku_ids),
@@ -678,6 +807,8 @@ def collect_last_login_records(*, token: Optional[str] = None) -> list[dict]:
                 "lastNonInteractiveSignIn": _format_datetime(last_non_interactive),
                 "daysSinceNonInteractiveSignIn": int((now_utc - last_non_interactive).days) if last_non_interactive else None,
                 "neverSignedIn": not observed_dates,
+                "hiddenFromAddressLists": user.get("showInAddressList") is False,
+                "hasMailbox": _has_exchange_mailbox(user),
             }
             records.append(record)
 
@@ -706,7 +837,7 @@ def _collect_disabled_users(*, token: Optional[str] = None) -> list[dict]:
     select_fields = (
         "id,displayName,jobTitle,department,mail,userPrincipalName,mobilePhone,"
         "businessPhones,officeLocation,city,state,country,usageLocation,streetAddress,"
-        "postalCode,employeeHireDate,employeeLeaveDateTime,accountEnabled,userType,assignedLicenses"
+        "postalCode,employeeHireDate,employeeLeaveDateTime,accountEnabled,userType,assignedLicenses,assignedPlans,showInAddressList"
     )
 
     users_url = f"{GRAPH_API_ENDPOINT}/users?$select={select_fields}&$filter=accountEnabled eq false"
@@ -774,6 +905,8 @@ def _collect_disabled_users(*, token: Optional[str] = None) -> list[dict]:
                         "hireDate": datetime_to_iso(hire_date) if hire_date else None,
                         "disabledDate": disabled_iso,
                         "disabledDays": calculate_days_since(disabled_at),
+                        "hiddenFromAddressLists": user.get("showInAddressList") is False,
+                        "hasMailbox": _has_exchange_mailbox(user),
                     }
                 )
             users_url = data.get("@odata.nextLink")

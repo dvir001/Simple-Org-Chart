@@ -2,7 +2,7 @@
 
 Downloads user-scanner from PyPI on demand and runs email/username
 OSINT scans via its library API.  The package is installed into
-``repositories/user-scanner`` which is git-ignored so source control
+``data/repositories/user-scanner`` which is git-ignored so source control
 stays clean.
 """
 

@@ -459,6 +459,17 @@
         "importError": "Failed to import configuration: "
       }
     },
+    "dataManagement": {
+      "title": "🗄️ Data Management",
+      "clear": {
+        "label": "Clear Cached Data",
+        "description": "Delete all cached employee and report data, then start a fresh full sync from Microsoft Graph. Your configuration and settings are not affected.",
+        "button": "Clear Data & Resync",
+        "confirm": "Delete all cached employee and report data and start a fresh sync? Your settings are not affected.",
+        "success": "Data cleared. Fresh sync started.",
+        "failed": "Failed to clear data."
+      }
+    },
     "buttons": {
       "resetDefault": "Reset to Default",
       "resetAllNodeColors": "Reset All Node Colors",
@@ -482,6 +493,8 @@
       "options": {
         "missingManager": "Users without managers",
         "missingPhoto": "Users without profile picture",
+        "missingHireDate": "Users without a hiring date",
+        "dirtyData": "Users with data quality issues",
         "lastLogins": "Users by last sign-in activity",
         "hiredThisYear": "Users hired in the last 365 days",
         "filteredUsers": "Users hidden by filters",
@@ -520,7 +533,8 @@
     },
     "buttons": {
       "refresh": "Refresh Data",
-      "refreshTooltip": "Regenerate the report with the latest directory data",
+      "refreshTooltip": "Sync the latest data from Microsoft Graph, then reload the report",
+      "refreshSyncing": "Syncing...",
       "export": "Export XLSX",
       "exportTooltip": "Download this report as an Excel workbook",
       "exportPdf": "Export PDF",
@@ -539,7 +553,10 @@
         "mailboxTypes": "Mailbox type",
         "accountStatus": "Account status",
         "licenseStatus": "License status",
-        "userScope": "User type"
+        "userScope": "User type",
+        "addressListVisibility": "Global Address List (GAL)",
+        "mailboxPresence": "Mailbox",
+        "managerPresence": "Manager"
       },
       "includeUserMailboxes": {
         "label": "User"
@@ -593,6 +610,24 @@
       "includeMembers": {
         "label": "Member"
       },
+      "includeHiddenFromAddressList": {
+        "label": "Hidden"
+      },
+      "includeVisibleInAddressList": {
+        "label": "Visible"
+      },
+      "includeWithMailbox": {
+        "label": "Has mailbox"
+      },
+      "includeWithoutMailbox": {
+        "label": "No mailbox"
+      },
+      "includeWithManager": {
+        "label": "Has manager"
+      },
+      "includeWithoutManager": {
+        "label": "No manager"
+      },
       "titleFilter": {
         "label": "Title",
         "placeholder": "Type a job title...",
@@ -614,9 +649,17 @@
         "modeInclude": "Include",
         "modeExclude": "Exclude"
       },
+      "stateFilter": {
+        "label": "State / Province",
+        "placeholder": "Type a state or province...",
+        "reset": "Reset",
+        "modeInclude": "Include",
+        "modeExclude": "Exclude"
+      },
       "tagpickerRemoveLabel": "Remove {value}",
       "tagpickerNoMatches": "No matches found",
-      "tagpickerNoOptions": "No options available"
+      "tagpickerNoOptions": "No options available",
+      "missingCapability": "This filter requires additional Microsoft Graph permissions that are not currently granted. Run a data sync after granting the required permissions."
     },
     "summary": {
       "totalLabel": "Users without managers",
@@ -681,6 +724,23 @@
         "empty": "All users have a profile picture. Great job!",
         "countSummary": "Showing {count} users without a profile picture"
       },
+      "missingHireDate": {
+        "summaryLabel": "Users without a hiring date",
+        "tableTitle": "Users without a hiring date",
+        "empty": "All users have a hiring date on record.",
+        "countSummary": "Showing {count} users without a hiring date"
+      },
+      "dirtyData": {
+        "summaryLabel": "Users with data quality issues",
+        "tableTitle": "Users with data quality issues",
+        "empty": "No data quality issues found.",
+        "countSummary": "Showing {count} users with data quality issues",
+        "columns": {
+          "issueCount": "Issues",
+          "issueFields": "Affected Fields",
+          "issueDetail": "Issue Detail"
+        }
+      },
       "filteredLicensed": {
         "columns": {
           "filterReasons": "Reason"
@@ -736,6 +796,7 @@
       "loadFailed": "Unable to load the report.",
       "loadTimeout": "The server took too long to respond. Please try again.",
       "exportFailed": "Unable to export the report.",
+      "syncFailed": "Data sync failed.",
       "initializationFailed": "Failed to initialize the reports page.",
       "pdfLibraryMissing": "PDF export library is not available. Please refresh the page.",
       "noDataToExport": "No data available to export.",

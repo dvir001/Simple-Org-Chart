@@ -3118,6 +3118,7 @@ function update(source) {
         })
         .attr('transform', d => `translate(${source.x0 || source.x}, ${source.y0 || source.y})`)
         .on('click', (event, d) => {
+            if (event.defaultPrevented) return; // ignore drag-end clicks
             event.stopPropagation();
             showEmployeeDetail(d.data);
         });
@@ -5572,6 +5573,7 @@ function setSyncButtonState(syncing, statusText = null) {
     if (!syncBtn) return;
     
     syncBtn.classList.toggle('is-syncing', syncing);
+    syncBtn.disabled = syncing;
     
     if (syncing) {
         syncBtn.innerHTML = `<span class="sync-spinner"></span>${statusText || t('buttons.syncing', { defaultValue: 'Syncing...' })}`;
@@ -5608,14 +5610,14 @@ async function pollSyncStatus() {
         if (!status || status.state !== 'running') {
             stopSyncPolling();
             
-            if (status?.state === 'completed') {
+            if (status?.success === true) {
                 setSyncButtonState(false, t('buttons.syncComplete', { defaultValue: 'Sync complete' }));
                 // Update appSettings with new last updated time and refresh header
                 appSettings.dataLastUpdatedAt = settings.dataLastUpdatedAt;
                 updateHeaderSubtitle();
                 // Reload the org chart data
                 refreshOrgChart();
-            } else if (status?.state === 'failed') {
+            } else if (status?.success === false) {
                 setSyncButtonState(false, t('buttons.syncFailed', { defaultValue: 'Sync failed' }));
                 // Restore header subtitle after failed sync
                 appSettings.dataLastUpdatedAt = settings.dataLastUpdatedAt;

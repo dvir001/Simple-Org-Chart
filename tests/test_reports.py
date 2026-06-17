@@ -178,6 +178,67 @@ class TestApplyLastLoginFilters:
         for r in result:
             assert (r.get("licenseCount") or 0) == 0
 
+    def test_exclude_with_mailbox(self):
+        records = [
+            {"name": "Has", "hasMailbox": True, "mailboxType": "user"},
+            {"name": "Without", "hasMailbox": False, "mailboxType": "user"},
+        ]
+        result = apply_last_login_filters(records, include_with_mailbox=False)
+        assert [r["name"] for r in result] == ["Without"]
+
+    def test_exclude_without_mailbox(self):
+        records = [
+            {"name": "Has", "hasMailbox": True, "mailboxType": "user"},
+            {"name": "Without", "hasMailbox": False, "mailboxType": "user"},
+        ]
+        result = apply_last_login_filters(records, include_without_mailbox=False)
+        assert [r["name"] for r in result] == ["Has"]
+
+    def test_exclude_hidden_from_address_list(self):
+        records = [
+            {"name": "Hidden", "hasMailbox": True, "hiddenFromAddressLists": True},
+            {"name": "Visible", "hasMailbox": True, "hiddenFromAddressLists": False},
+        ]
+        result = apply_last_login_filters(
+            records, include_hidden_from_address_list=False
+        )
+        assert [r["name"] for r in result] == ["Visible"]
+
+    def test_exclude_visible_in_address_list(self):
+        records = [
+            {"name": "Hidden", "hasMailbox": True, "hiddenFromAddressLists": True},
+            {"name": "Visible", "hasMailbox": True, "hiddenFromAddressLists": False},
+        ]
+        result = apply_last_login_filters(
+            records, include_visible_in_address_list=False
+        )
+        assert [r["name"] for r in result] == ["Hidden"]
+
+    def test_gal_toggle_excludes_non_mailbox(self):
+        records = [
+            {"name": "NoMailbox", "hasMailbox": False},
+        ]
+        result = apply_last_login_filters(
+            records, include_hidden_from_address_list=False
+        )
+        assert result == []
+
+    def test_exclude_with_manager(self):
+        records = [
+            {"name": "Managed", "hasManager": True},
+            {"name": "Orphan", "hasManager": False},
+        ]
+        result = apply_last_login_filters(records, include_with_manager=False)
+        assert [r["name"] for r in result] == ["Orphan"]
+
+    def test_exclude_without_manager(self):
+        records = [
+            {"name": "Managed", "hasManager": True},
+            {"name": "Orphan", "hasManager": False},
+        ]
+        result = apply_last_login_filters(records, include_without_manager=False)
+        assert [r["name"] for r in result] == ["Managed"]
+
     def test_none_records(self):
         assert apply_last_login_filters(None) == []
 
@@ -206,6 +267,48 @@ class TestApplyFilteredUserFilters:
         )
         for r in result:
             assert r["accountEnabled"] is True
+
+    def test_exclude_with_mailbox(self):
+        records = [
+            {"name": "Has", "hasMailbox": True, "mailboxType": "user"},
+            {"name": "Without", "hasMailbox": False, "mailboxType": "user"},
+        ]
+        result = apply_filtered_user_filters(records, include_with_mailbox=False)
+        assert [r["name"] for r in result] == ["Without"]
+
+    def test_exclude_without_mailbox(self):
+        records = [
+            {"name": "Has", "hasMailbox": True, "mailboxType": "user"},
+            {"name": "Without", "hasMailbox": False, "mailboxType": "user"},
+        ]
+        result = apply_filtered_user_filters(records, include_without_mailbox=False)
+        assert [r["name"] for r in result] == ["Has"]
+
+    def test_exclude_hidden_from_address_list(self):
+        records = [
+            {"name": "Hidden", "hasMailbox": True, "hiddenFromAddressLists": True},
+            {"name": "Visible", "hasMailbox": True, "hiddenFromAddressLists": False},
+        ]
+        result = apply_filtered_user_filters(
+            records, include_hidden_from_address_list=False
+        )
+        assert [r["name"] for r in result] == ["Visible"]
+
+    def test_exclude_with_manager(self):
+        records = [
+            {"name": "Managed", "hasManager": True},
+            {"name": "Orphan", "hasManager": False},
+        ]
+        result = apply_filtered_user_filters(records, include_with_manager=False)
+        assert [r["name"] for r in result] == ["Orphan"]
+
+    def test_exclude_without_manager(self):
+        records = [
+            {"name": "Managed", "hasManager": True},
+            {"name": "Orphan", "hasManager": False},
+        ]
+        result = apply_filtered_user_filters(records, include_without_manager=False)
+        assert [r["name"] for r in result] == ["Managed"]
 
     def test_none_returns_empty(self):
         assert apply_filtered_user_filters(None) == []
