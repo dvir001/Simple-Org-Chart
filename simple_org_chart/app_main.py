@@ -186,7 +186,7 @@ def has_app_permission(permission):
     if current_role() != ROLE_PRIVILEGED:
         return False
     configured = load_settings().get('oidcPrivilegedPermissions', {}) or {}
-    return bool(configured.get(permission, PRIVILEGED_PERMISSION_DEFAULTS[permission]))
+    return bool(configured.get(permission, PRIVILEGED_PERMISSION_DEFAULTS.get(permission, False)))
 
 
 def require_app_permission(permission):
@@ -499,9 +499,7 @@ def login():
         if is_authenticated():
             target = f'/{next_page}' if next_page else '/'
             parsed_target = urlparse(target.replace("\\", "/"))
-            if not parsed_target.scheme and not parsed_target.netloc:
-                return redirect(target)
-            return redirect('/')
+            return redirect(parsed_target.path or '/')
         redirect_uri = os.environ.get('OIDC_REDIRECT_URI') or url_for('oidc_callback', _external=True)
         flow = begin_login(OIDC_CONFIG, redirect_uri)
         session['oidc_flow'] = flow

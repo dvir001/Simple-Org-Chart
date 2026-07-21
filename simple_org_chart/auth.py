@@ -47,7 +47,10 @@ def current_role() -> str | None:
 
 
 def has_role(required_role: str) -> bool:
-    return _ROLE_LEVELS.get(current_role() or "", 0) >= _ROLE_LEVELS[required_role]
+    required_level = _ROLE_LEVELS.get(required_role)
+    if required_level is None:
+        return False
+    return _ROLE_LEVELS.get(current_role() or "", 0) >= required_level
 
 
 def _require_api_role(required_role: str):

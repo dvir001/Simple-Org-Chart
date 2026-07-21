@@ -82,7 +82,7 @@ In **Enterprise applications** (not App registrations), open the corresponding a
 2. Under **Users and groups**, assign the reader, privileged, and admin security groups used below.
 3. Do not rely on tenant membership alone; the application also verifies membership in one of these three groups during every new login.
 
-Microsoft Entra rejects an unassigned user before redirecting back to the org chart. Users assigned to the Enterprise Application but absent from the two access groups receive the base reader role.
+Microsoft Entra rejects an unassigned user before redirecting back to the org chart. Users assigned to the Enterprise Application but absent from all three access groups are denied by the application with a 403 error.
 
 Then configure:
 
