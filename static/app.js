@@ -11,6 +11,13 @@ let appSettings = {};
 let currentLayout = 'vertical'; // Default layout
 const hiddenNodeIds = new Set(JSON.parse(localStorage.getItem('hiddenNodeIds') || '[]'));
 let isAuthenticated = false;
+let isSignedIn = false;
+let authType = 'simple';
+let canAccessReports = false;
+let canSync = false;
+let canAccessRestrictedXlsx = false;
+let oidcUser = null;
+let findMeEmployeeId = null;
 const COMPACT_PREFERENCE_KEY = 'orgChart.compactLargeTeams';
 let userCompactPreference = null;
 const PROFILE_IMAGE_PREFERENCE_KEY = 'orgChart.showProfileImages';
@@ -1399,6 +1406,15 @@ function setupStaticEventListeners() {
         });
     }
 
+    const findMeBtn = document.getElementById('findMeBtn');
+    if (findMeBtn) {
+        findMeBtn.addEventListener('click', () => {
+            if (findMeEmployeeId) {
+                selectSearchResult(findMeEmployeeId);
+            }
+        });
+    }
+
     document.querySelectorAll('[data-layout]').forEach(button => {
         button.addEventListener('click', () => {
             if (button.dataset.layout === 'toggle') {
@@ -1760,7 +1776,7 @@ async function applySettings() {
 
     // Check if a sync is already in progress and show the syncing state
     const updateStatus = appSettings.dataUpdateStatus || {};
-    if (updateStatus.state === 'running' && isAuthenticated) {
+    if (updateStatus.state === 'running' && canSync) {
         setSyncButtonState(true);
         updateHeaderSubtitle(true); // Show syncing in header
         startSyncPolling();
@@ -1887,22 +1903,22 @@ function updateAdminActions() {
 
     const loginBtn = document.getElementById('loginBtn');
     if (loginBtn) {
-        loginBtn.classList.toggle('is-hidden', isAuthenticated);
+        loginBtn.classList.toggle('is-hidden', isSignedIn);
     }
 
     const syncBtn = document.getElementById('syncBtn');
     if (syncBtn) {
-        syncBtn.classList.toggle('is-hidden', !isAuthenticated);
+        syncBtn.classList.toggle('is-hidden', !canSync);
     }
 
     const reportsBtn = document.getElementById('reportsBtn');
     if (reportsBtn) {
-        reportsBtn.classList.toggle('is-hidden', !isAuthenticated);
+        reportsBtn.classList.toggle('is-hidden', !canAccessReports);
     }
 
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
-        logoutBtn.classList.toggle('is-hidden', !isAuthenticated);
+        logoutBtn.classList.toggle('is-hidden', !isSignedIn || authType === 'oidc');
     }
 }
 
@@ -1913,11 +1929,9 @@ async function updateAuthDependentUI() {
     const exportXlsxBtn = document.querySelector('[data-control="export-xlsx"]');
     if (exportXlsxBtn) {
         const baseLabel = t('index.toolbar.controls.exportXlsx');
-        const adminLabel = t('index.toolbar.controls.exportXlsxAdmin');
-        const label = isAuthenticated ? adminLabel : baseLabel;
-        exportXlsxBtn.textContent = label;
-        exportXlsxBtn.setAttribute('aria-label', label);
-        exportXlsxBtn.title = label;
+        exportXlsxBtn.textContent = baseLabel;
+        exportXlsxBtn.setAttribute('aria-label', baseLabel);
+        exportXlsxBtn.title = baseLabel;
     }
 
     const compactBtn = document.getElementById('compactToggleBtn');
@@ -2021,12 +2035,16 @@ async function updateAuthDependentUI() {
 async function checkAuthentication() {
     try {
         const response = await fetch(`${API_BASE_URL}/api/auth-check`, {
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            cache: 'no-store'
         });
-        return response.ok;
+        if (!response.ok) {
+            return { authenticated: false, canAccessReports: false, canSync: false, canAccessRestrictedXlsx: false, canAdminister: false, authType: 'simple' };
+        }
+        return await response.json();
     } catch (error) {
         console.error('Authentication check failed:', error);
-        return false;
+        return { authenticated: false, canAccessReports: false, canSync: false, canAccessRestrictedXlsx: false, canAdminister: false, authType: 'simple' };
     }
 }
 
@@ -2034,7 +2052,14 @@ async function init() {
     const htmlElement = document.documentElement;
 
     try {
-        isAuthenticated = await checkAuthentication();
+        const authState = await checkAuthentication();
+        isSignedIn = Boolean(authState.authenticated);
+        authType = authState.authType || 'simple';
+        canAccessReports = Boolean(authState.canAccessReports);
+        canSync = Boolean(authState.canSync);
+        canAccessRestrictedXlsx = Boolean(authState.canAccessRestrictedXlsx);
+        isAuthenticated = Boolean(authState.canAdminister);
+        oidcUser = authType === 'oidc' ? (authState.user || null) : null;
         if (isAuthenticated) {
             userCompactPreference = null;
         } else {
@@ -2064,6 +2089,7 @@ async function init() {
         if (currentData) {
             employeeById.clear();
             allEmployees = flattenTree(currentData);
+            updateFindMeAvailability();
             const validIds = allEmployees.map(emp => emp.id).filter(Boolean);
             pruneTitleOverrides(validIds);
             pruneDepartmentOverrides(validIds);
@@ -2110,6 +2136,7 @@ async function refreshOrgChart() {
         if (currentData) {
             employeeById.clear();
             allEmployees = flattenTree(currentData);
+            updateFindMeAvailability();
             const validIds = allEmployees.map(emp => emp.id).filter(Boolean);
             pruneTitleOverrides(validIds);
             pruneDepartmentOverrides(validIds);
@@ -2874,6 +2901,7 @@ async function reloadEmployeeData() {
         if (currentData) {
             employeeById.clear();
             allEmployees = flattenTree(currentData);
+            updateFindMeAvailability();
             const validIds = allEmployees.map(emp => emp.id).filter(Boolean);
             pruneTitleOverrides(validIds);
             pruneDepartmentOverrides(validIds);
@@ -5457,6 +5485,30 @@ function selectSearchResult(employeeId) {
         searchInput.value = '';
         
         expandToEmployee(employeeId);
+    }
+}
+
+function updateFindMeAvailability() {
+    const button = document.getElementById('findMeBtn');
+    findMeEmployeeId = null;
+    if (!button || authType !== 'oidc' || !oidcUser) {
+        if (button) button.classList.add('is-hidden');
+        return;
+    }
+
+    const userId = String(oidcUser.id || '').trim().toLowerCase();
+    const userEmail = String(oidcUser.email || '').trim().toLowerCase();
+    const employee = allEmployees.find(candidate => {
+        const candidateId = String(candidate.id || '').trim().toLowerCase();
+        const candidateEmail = String(candidate.email || candidate.userPrincipalName || '').trim().toLowerCase();
+        return (userId && candidateId === userId) || (userEmail && candidateEmail === userEmail);
+    });
+
+    if (employee && employee.id) {
+        findMeEmployeeId = employee.id;
+        button.classList.remove('is-hidden');
+    } else {
+        button.classList.add('is-hidden');
     }
 }
 

@@ -68,6 +68,17 @@ class TestTemplates:
     def test_template_exists(self, template):
         assert (TEMPLATES_DIR / template).exists()
 
+    def test_index_has_find_me_before_search(self):
+        template = (TEMPLATES_DIR / "index.html").read_text(encoding="utf-8")
+        assert template.index('id="findMeBtn"') < template.index('id="searchInput"')
+
+    def test_xlsx_label_is_access_neutral(self):
+        template = (TEMPLATES_DIR / "index.html").read_text(encoding="utf-8")
+        locale = (STATIC_DIR / "locales" / "en-US.json").read_text(encoding="utf-8")
+        assert "XLSX (Full)" not in template
+        assert "XLSX (Full)" not in locale
+        assert "XLSX (Admin)" not in locale
+
 
 # ---------------------------------------------------------------------------
 # reports.html ↔ reports.js DOM ID consistency

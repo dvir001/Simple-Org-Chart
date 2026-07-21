@@ -1187,6 +1187,14 @@ function applySettings(settings) {
     }
     _initUserScannerConfigUI(settings.userScannerEnabled === true);
 
+    const privilegedPermissions = settings.oidcPrivilegedPermissions || {};
+    const reportsPermission = document.getElementById('oidcPermissionReports');
+    const syncPermission = document.getElementById('oidcPermissionSync');
+    const restrictedXlsxPermission = document.getElementById('oidcPermissionRestrictedXlsx');
+    if (reportsPermission) reportsPermission.checked = privilegedPermissions.reports !== false;
+    if (syncPermission) syncPermission.checked = privilegedPermissions.sync !== false;
+    if (restrictedXlsxPermission) restrictedXlsxPermission.checked = privilegedPermissions.restrictedXlsx !== false;
+
     const updateMeta = settings.dataUpdateStatus || {};
     if (updateMeta.state === 'running') {
         updateLastUpdatedDisplay(resolveTranslation('configure.data.manualUpdate.lastUpdatedUpdating', 'Updating...'));
@@ -1680,6 +1688,11 @@ async function saveAllSettings() {
         topLevelUserEmail: document.getElementById('topLevelUserInput')?.value || '',
         topLevelUserId: document.getElementById('topLevelUserIdInput')?.value || '',
         exportXlsxColumns: getExportColumnSettings(),
+        oidcPrivilegedPermissions: {
+            reports: document.getElementById('oidcPermissionReports')?.checked ?? true,
+            sync: document.getElementById('oidcPermissionSync')?.checked ?? true,
+            restrictedXlsx: document.getElementById('oidcPermissionRestrictedXlsx')?.checked ?? true
+        },
         userScannerEnabled: document.getElementById('userScannerEnabled')?.checked || false,
         teamsPresenceEnabled: document.getElementById('teamsPresenceEnabled')?.checked || false
     };

@@ -54,10 +54,13 @@
         </div>
         
         <div class="search-bar">
-            <div class="search-wrapper">
-                <span class="search-icon">🔍</span>
-                <input type="text" class="search-input" id="searchInput" placeholder="Search for employees by name, title, or department..." data-i18n-placeholder="index.search.placeholder">
-                <div class="search-results" id="searchResults"></div>
+            <div class="primary-search-controls">
+                <button id="findMeBtn" class="find-me-btn is-hidden" type="button" data-i18n="index.search.findMe">Find Me</button>
+                <div class="search-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search for employees by name, title, or department..." data-i18n-placeholder="index.search.placeholder">
+                    <div class="search-results" id="searchResults"></div>
+                </div>
             </div>
             <div class="top-user-controls">
                 <label for="topUserSearch" class="top-user-label" data-i18n="index.topUser.label">Top-Level User:</label>
@@ -119,7 +122,7 @@
                         <button class="control-btn control-btn--violet" data-control="export-visible-svg" type="button" data-i18n="index.toolbar.controls.exportVisibleSvg">SVG</button>
                         <button class="control-btn control-btn--teal" data-control="export-visible-png" type="button" data-i18n="index.toolbar.controls.exportVisiblePng">PNG</button>
                         <button class="control-btn control-btn--crimson" data-control="export-visible-pdf" type="button" data-i18n="index.toolbar.controls.exportVisiblePdf">PDF</button>
-                        <button class="control-btn control-btn--green" data-control="export-xlsx" type="button" data-i18n="index.toolbar.controls.exportXlsx">XLSX (Full)</button>
+                        <button class="control-btn control-btn--green" data-control="export-xlsx" type="button" data-i18n="index.toolbar.controls.exportXlsx">XLSX</button>
                     </div>
                 </div>
                 <div class="loading">

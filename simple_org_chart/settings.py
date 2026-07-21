@@ -160,6 +160,11 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "office": "show",
         "manager": "show",
     },
+    "oidcPrivilegedPermissions": {
+        "reports": True,
+        "sync": True,
+        "restrictedXlsx": True,
+    },
     "topLevelUserEmail": "",
     "topLevelUserId": "",
     "newEmployeeMonths": 3,

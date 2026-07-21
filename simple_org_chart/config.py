@@ -10,7 +10,9 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = Path(
+    os.environ.get("SIMPLE_ORG_CHART_DATA_DIR", BASE_DIR / "data")
+).resolve()
 CONFIG_DIR = BASE_DIR / "config"
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATE_DIR = BASE_DIR / "templates"

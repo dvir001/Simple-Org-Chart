@@ -67,6 +67,48 @@ cp .env.template .env
 - `ADMIN_PASSWORD` – Protects `/configure` and `/reports`.
 - `SECRET_KEY` – 64+ character random string for Flask sessions.
 
+### Optional Microsoft Entra Sign-In
+
+Set `AUTH_TYPE=oidc` to require Microsoft sign-in for the entire app. The default, `AUTH_TYPE=simple`, keeps the existing public chart and password-based administrator login. OIDC uses a second App Registration, separate from the application-permission registration used to sync org data.
+
+Configure the sign-in App Registration as a **Web** application with redirect URI `https://<your-host>/auth/callback` and grant these delegated Microsoft Graph permissions with tenant admin consent:
+
+- `User.Read`
+- `GroupMember.Read.All`
+
+In **Enterprise applications** (not App registrations), open the corresponding application and configure:
+
+1. Under **Properties**, set **Assignment required?** to **Yes**.
+2. Under **Users and groups**, assign the reader, privileged, and admin security groups used below.
+3. Do not rely on tenant membership alone; the application also verifies membership in one of these three groups during every new login.
+
+Microsoft Entra rejects an unassigned user before redirecting back to the org chart. Users assigned to the Enterprise Application but absent from all three access groups are denied by the application with a 403 error.
+
+Then configure:
+
+| Variable | Description |
+| --- | --- |
+| `AUTH_TYPE` | Authentication mode: `simple` or `oidc`. Defaults to `simple`. |
+| `OIDC_TENANT_ID` | Tenant ID for the sign-in App Registration. |
+| `OIDC_CLIENT_ID` | Client ID for the sign-in App Registration. |
+| `OIDC_CLIENT_SECRET` | Client secret for the sign-in App Registration. |
+| `OIDC_READER_GROUP_ID` | Security group object ID allowed to read the org chart. |
+| `OIDC_PRIVILEGED_GROUP_ID` | Security group object ID allowed to sync, use admin XLSX columns, and access reports. |
+| `OIDC_ADMIN_GROUP_ID` | Security group object ID granted full configuration access in addition to privileged access. |
+| `OIDC_REDIRECT_URI` | Optional callback override when the externally visible URL cannot be inferred. |
+
+Users outside all three configured groups are denied by the application even if Microsoft completes authentication. Membership is resolved through Microsoft Graph's transitive membership check, so nested group membership is honored. Privileged membership takes precedence over reader membership, and admin membership takes precedence over both.
+
+The configuration page displays the three OIDC group IDs as read-only values. Full admin group members always have every application capability. From the same page, an admin can independently grant these capabilities to the privileged group:
+
+- Reports, report exports, and user-scanner tools
+- Manual data synchronization
+- XLSX columns marked `Restricted`
+
+Existing XLSX column settings stored as `admin` are retained for compatibility but are displayed as `Restricted`; visibility is determined by the restricted-XLSX capability rather than the user's role name.
+
+With `AUTH_TYPE=simple`, the existing public chart and `ADMIN_PASSWORD` administrator flow remain unchanged. `ADMIN_PASSWORD` is not required with `AUTH_TYPE=oidc`.
+
 Generate a strong secret key:
 
 ```bash

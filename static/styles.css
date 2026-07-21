@@ -519,6 +519,36 @@ body.fullscreen-mode .org-chart-container {
     flex-wrap: wrap;
 }
 
+.primary-search-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 380px;
+    min-width: 0;
+}
+
+.primary-search-controls .search-wrapper {
+    max-width: none;
+}
+
+.find-me-btn {
+    padding: 7px 12px;
+    border: 1px solid #0078d4;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #005a9e;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.find-me-btn:hover,
+.find-me-btn:focus-visible {
+    background: #e8f3fb;
+    border-color: #005a9e;
+}
+
 .search-wrapper {
     position: relative;
     flex: 1 1 320px;
@@ -982,6 +1012,11 @@ body.fullscreen-mode .org-chart-container {
         flex-direction: column;
         gap: 15px;
         align-items: stretch;
+    }
+
+    .primary-search-controls {
+        flex: 0 0 auto;
+        width: 100%;
     }
     
     .top-user-controls {
