@@ -54,7 +54,18 @@ For multi-step tasks, state a brief plan:
 3. [Step] → verify: [check]
 ```
 
-## 5. Project Architecture
+## 5. Build and Test Cleanup
+
+**Remove temporary artifacts created by your own validation runs.**
+
+After running a build or test command:
+- Identify temporary files and directories created by that run and delete them when they are no longer needed.
+- Delete only artifacts you can confirm were created by your current work or validation command.
+- Never delete pre-existing files, tracked files, test fixtures, user data, application state, or caches required by the project.
+- Preserve failure artifacts until they have been inspected; remove them afterward if they are no longer needed for diagnosis.
+- Check the working tree after cleanup to confirm that only intentional changes remain.
+
+## 6. Project Architecture
 
 **Flask + vanilla JS + D3. No ORM, no front-end framework.**
 
@@ -75,7 +86,7 @@ static/
 data/               ← JSON caches written at sync time (git-ignored)
 ```
 
-## 6. Adding a Report Filter
+## 7. Adding a Report Filter
 
 Every filter touches all of these layers — miss one and it silently does nothing:
 
@@ -85,7 +96,7 @@ Every filter touches all of these layers — miss one and it silently does nothi
 4. **`static/reports.js`** — add the filter object to `_standardToggleFilters()` or `TAGPICKER_FILTERS`; add `requiredCapability` if the filter needs a Graph permission beyond `User.Read.All`.
 5. **`static/locales/en-US.json`** — add label and (for tagpickers) placeholder/mode keys.
 
-## 7. Graph Permission & Capability Gating
+## 8. Graph Permission & Capability Gating
 
 Filters that depend on Graph permissions beyond the base `User.Read.All` must be gated:
 
@@ -105,7 +116,7 @@ When adding a new filter that needs a Graph permission:
 1. Add a probe call in `probe_graph_capabilities()` if the capability isn't already detected.
 2. Set `requiredCapability: '<key>'` on the filter object in `reports.js`.
 
-## 8. Data Flow: Sync → Cache → API → UI
+## 9. Data Flow: Sync → Cache → API → UI
 
 ```
 data_update.run_data_update()
@@ -120,7 +131,7 @@ GET /api/reports/<type>  →  load cache  →  apply_*_filters()  →  JSON resp
 GET /api/graph-capabilities  →  data/graph_capabilities.json  →  JSON response
 ```
 
-## 9. i18n Rules
+## 10. i18n Rules
 
 - Every user-visible string must have a key in `static/locales/en-US.json`.
 - The translator `t(key)` is available in `reports.js` via `getTranslator()`.

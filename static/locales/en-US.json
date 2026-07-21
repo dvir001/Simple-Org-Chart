@@ -27,7 +27,8 @@
     },
     "search": {
       "placeholder": "Search for employees by name, title, or department...",
-      "noResults": "No matches found"
+      "noResults": "No matches found",
+      "findMe": "Find Me"
     },
     "topUser": {
       "label": "Top-Level User:",
@@ -86,8 +87,7 @@
         "exportVisibleSvg": "SVG",
         "exportVisiblePng": "PNG",
         "exportVisiblePdf": "PDF",
-        "exportXlsx": "XLSX (Full)",
-        "exportXlsxAdmin": "XLSX (Admin)"
+        "exportXlsx": "XLSX"
       }
     },
     "status": {
@@ -196,6 +196,9 @@
       },
       "export": {
         "title": "📄 Export to XLSX Options"
+      },
+      "oidcAccess": {
+        "title": "OIDC Access"
       },
       "emailReports": {
         "title": "📧 Email Reports"
@@ -407,7 +410,7 @@
     "export": {
       "columnVisibility": {
         "label": "Column Visibility",
-        "description": "Choose which fields appear in XLSX exports. “Show Admin Only” keeps the column hidden for regular viewers but includes it when an administrator exports."
+        "description": "Choose which fields appear in XLSX exports. Restricted columns require the restricted XLSX permission."
       },
       "columns": {
         "name": "Name",
@@ -426,7 +429,23 @@
       "options": {
         "show": "Show",
         "hide": "Hide",
-        "admin": "Show Admin Only"
+        "admin": "Restricted"
+      }
+    },
+    "oidcAccess": {
+      "groups": {
+        "label": "Configured security groups",
+        "description": "Group object IDs are configured through environment variables and cannot be changed here.",
+        "reader": "Reader group",
+        "privileged": "Privileged group",
+        "admin": "Admin group"
+      },
+      "permissions": {
+        "label": "Privileged group permissions",
+        "description": "Choose which elevated capabilities are granted to the privileged group. Admin group members always have all capabilities.",
+        "reports": "Reports and report exports",
+        "sync": "Manual data sync",
+        "restrictedXlsx": "Restricted XLSX columns"
       }
     },
     "data": {

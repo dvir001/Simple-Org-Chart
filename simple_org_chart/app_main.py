@@ -3,6 +3,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
+from cachelib.file import FileSystemCache
 import atexit
 import contextlib
 try:
@@ -38,6 +39,8 @@ import threading
 import time
 from io import BytesIO
 import logging
+import requests
+from functools import wraps
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
@@ -58,7 +61,23 @@ except ImportError:
 
 import simple_org_chart.config as app_config
 from simple_org_chart.config import EMPLOYEE_LIST_FILE
-from simple_org_chart.auth import login_required, require_auth, sanitize_next_path
+from simple_org_chart.auth import (
+    ROLE_ADMIN,
+    ROLE_PRIVILEGED,
+    current_role,
+    has_role,
+    is_authenticated,
+    privileged_login_required,
+    require_auth,
+    sanitize_next_path,
+)
+from simple_org_chart.oidc_auth import (
+    OidcConfig,
+    begin_login,
+    complete_login,
+    fetch_user_and_groups,
+    resolve_role,
+)
 from simple_org_chart.email_config import (
     DEFAULT_EMAIL_CONFIG,
     get_smtp_config,
@@ -151,6 +170,54 @@ logging.basicConfig(
     datefmt='%Y-%m-%dT%H:%M:%S.000Z'
 )
 logger = logging.getLogger(__name__)
+
+PRIVILEGED_PERMISSION_DEFAULTS = {
+    'reports': True,
+    'sync': True,
+    'restrictedXlsx': True,
+}
+
+
+def has_app_permission(permission):
+    """Return whether the current user has an application capability."""
+    if has_role(ROLE_ADMIN):
+        return True
+    if current_role() != ROLE_PRIVILEGED:
+        return False
+    configured = load_settings().get('oidcPrivilegedPermissions', {}) or {}
+    return bool(configured.get(permission, PRIVILEGED_PERMISSION_DEFAULTS[permission]))
+
+
+def require_app_permission(permission):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not is_authenticated():
+                return jsonify({'error': 'Authentication required'}), 401
+            if not has_app_permission(permission):
+                return jsonify({'error': 'Insufficient permissions'}), 403
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def require_page_permission(permission):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if not is_authenticated():
+                desired_path = sanitize_next_path(request.path)
+                params = {'next': desired_path} if desired_path else {}
+                return redirect(url_for('login', **params))
+            if not has_app_permission(permission):
+                return 'Forbidden', 403
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 def _parse_port(raw_value, fallback):
     try:
@@ -245,6 +312,10 @@ if _allowed_origins:
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 app.config['SESSION_TYPE'] = SESSION_TYPE
 app.config['SESSION_PERMANENT'] = False
+session_file_dir = os.environ.get('SESSION_FILE_DIR')
+if SESSION_TYPE == 'filesystem' and session_file_dir:
+    app.config['SESSION_TYPE'] = 'cachelib'
+    app.config['SESSION_CACHELIB'] = FileSystemCache(cache_dir=session_file_dir)
 
 # Initialize extensions
 Session(app)
@@ -266,11 +337,61 @@ limiter = Limiter(
 # Exempt localhost from all rate limits (health checks, internal requests)
 limiter.request_filter(_is_localhost_exempt)
 
-# Simple authentication settings
+
+@app.before_request
+def require_oidc_reader():
+    """Require Microsoft sign-in for the entire app when OIDC mode is enabled."""
+    if AUTH_TYPE != 'oidc':
+        return None
+
+    if is_authenticated() and session.get('oidc_session_version') == OIDC_SESSION_VERSION:
+        return None
+
+    if is_authenticated():
+        session.clear()
+
+    public_endpoints = {
+        'login',
+        'oidc_callback',
+        'serve_custom_favicon',
+        'serve_custom_logo',
+        'serve_static',
+        'static',
+    }
+    if request.endpoint in public_endpoints or request.path == '/favicon.ico':
+        return None
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Authentication required'}), 401
+
+    desired_path = sanitize_next_path(request.path)
+    params = {'next': desired_path} if desired_path else {}
+    return redirect(url_for('login', **params))
+
+# Authentication settings
+AUTH_TYPE = os.environ.get('AUTH_TYPE', 'simple').strip().lower()
+if AUTH_TYPE not in {'simple', 'oidc'}:
+    raise RuntimeError("AUTH_TYPE must be either 'simple' or 'oidc'")
+OIDC_SESSION_VERSION = 3
+
+OIDC_CONFIG = OidcConfig(
+    tenant_id=os.environ.get('OIDC_TENANT_ID', '').strip(),
+    client_id=os.environ.get('OIDC_CLIENT_ID', '').strip(),
+    client_secret=os.environ.get('OIDC_CLIENT_SECRET', '').strip(),
+    reader_group_id=os.environ.get('OIDC_READER_GROUP_ID', '').strip(),
+    privileged_group_id=os.environ.get('OIDC_PRIVILEGED_GROUP_ID', '').strip(),
+    admin_group_id=os.environ.get('OIDC_ADMIN_GROUP_ID', '').strip(),
+)
+if AUTH_TYPE == 'oidc' and not all(vars(OIDC_CONFIG).values()):
+    raise RuntimeError(
+        'OIDC authentication requires OIDC_TENANT_ID, OIDC_CLIENT_ID, '
+        'OIDC_CLIENT_SECRET, OIDC_READER_GROUP_ID, OIDC_PRIVILEGED_GROUP_ID, '
+        'and OIDC_ADMIN_GROUP_ID'
+    )
+
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
-if not ADMIN_PASSWORD:
+if AUTH_TYPE == 'simple' and not ADMIN_PASSWORD:
     raise RuntimeError('ADMIN_PASSWORD environment variable must be set to a strong value')
-if ADMIN_PASSWORD in {'admin123', 'your-admin-password-here'}:
+if AUTH_TYPE == 'simple' and ADMIN_PASSWORD in {'admin123', 'your-admin-password-here'}:
     raise RuntimeError('ADMIN_PASSWORD must not use the default placeholder value')
 
 # Security headers
@@ -301,16 +422,6 @@ GRAPH_CAPABILITIES_FILE = str(app_config.GRAPH_CAPABILITIES_FILE)
 DIRTY_DATA_FILE = str(app_config.DIRTY_DATA_FILE)
 MISSING_HIRE_DATE_FILE = str(app_config.MISSING_HIRE_DATE_FILE)
 DATA_UPDATE_STATUS_FILE = os.path.join(DATA_DIR, 'data_update_status.json')
-
-# Always delete the capabilities file on startup — it is regenerated on the
-# next sync via JWT-decode.  This ensures no stale data from previous probe
-# implementations (API-call based) persists across restarts.
-try:
-    if os.path.exists(GRAPH_CAPABILITIES_FILE):
-        os.remove(GRAPH_CAPABILITIES_FILE)
-        logger.info("Removed graph_capabilities.json on startup; will regenerate on next sync.")
-except Exception as _cap_startup_err:
-    logger.warning("Could not remove graph_capabilities.json on startup: %s", _cap_startup_err)
 
 logger.info(f"DATA_DIR set to: {DATA_DIR}")
 
@@ -383,6 +494,15 @@ def get_template(template_name):
 def login():
     next_page = sanitize_next_path(request.args.get('next', ''))
 
+    if AUTH_TYPE == 'oidc':
+        if is_authenticated():
+            return redirect(f'/{next_page}' if next_page else '/')
+        redirect_uri = os.environ.get('OIDC_REDIRECT_URI') or url_for('oidc_callback', _external=True)
+        flow = begin_login(OIDC_CONFIG, redirect_uri)
+        session['oidc_flow'] = flow
+        session['oidc_next'] = next_page
+        return redirect(flow['auth_uri'])
+
     if request.method == 'POST':
         try:
             payload = request.get_json(silent=True)
@@ -401,6 +521,7 @@ def login():
             if password == ADMIN_PASSWORD:
                 session['authenticated'] = True
                 session['username'] = 'admin'
+                session['role'] = ROLE_ADMIN
                 logger.info("Successful login")
                 return jsonify({
                     'success': True,
@@ -424,6 +545,56 @@ def login():
         favicon_path=favicon_path
     )
 
+
+@app.route('/auth/callback')
+def oidc_callback():
+    if AUTH_TYPE != 'oidc':
+        return redirect(url_for('login'))
+
+    flow = session.pop('oidc_flow', None)
+    if not flow:
+        return redirect(url_for('login'))
+
+    try:
+        result = complete_login(OIDC_CONFIG, flow, request.args.to_dict())
+        access_token = result.get('access_token')
+        if not access_token:
+            logger.warning('OIDC login failed: %s', result.get('error_description', 'unknown error'))
+            return 'Microsoft sign-in failed', 401
+
+        user, group_ids = fetch_user_and_groups(
+            access_token,
+            {
+                OIDC_CONFIG.reader_group_id,
+                OIDC_CONFIG.privileged_group_id,
+                OIDC_CONFIG.admin_group_id,
+            },
+        )
+        role = resolve_role(OIDC_CONFIG, group_ids)
+        if role is None:
+            username = (
+                user.get('userPrincipalName') or user.get('mail') or user.get('displayName') or 'user'
+            )
+            logger.warning('OIDC login denied for unassigned user %s', username)
+            session.clear()
+            return 'You are not assigned to this application', 403
+
+        session['authenticated'] = True
+        session['role'] = role
+        session['oidc_session_version'] = OIDC_SESSION_VERSION
+        session['oidc_user_id'] = str(user.get('id') or '')
+        session['oidc_user_email'] = str(user.get('mail') or user.get('userPrincipalName') or '')
+        session['username'] = (
+            user.get('userPrincipalName') or user.get('mail') or user.get('displayName') or 'user'
+        )
+        logger.info('OIDC login successful for %s with role %s', session['username'], role)
+        next_page = sanitize_next_path(session.pop('oidc_next', ''))
+        return redirect(f'/{next_page}' if next_page else '/')
+    except (ValueError, KeyError, requests.RequestException) as error:
+        logger.warning('OIDC callback failed: %s', error)
+        session.clear()
+        return 'Microsoft sign-in failed', 401
+
 @app.route('/logout', methods=['POST'])
 def logout():
     session.clear()
@@ -442,12 +613,10 @@ def index():
     return render_template_string(template_content)
 
 @app.route('/configure')
+@privileged_login_required
 def configure():
-    if not session.get('authenticated'):
-        # Redirect to login preserving the intended destination
-        desired_path = sanitize_next_path(request.path)
-        params = {'next': desired_path} if desired_path else {}
-        return redirect(url_for('login', **params))
+    if not has_role(ROLE_ADMIN):
+        return 'Forbidden', 403
     
     template_content = get_template('configure.html')
     settings = load_settings()
@@ -464,12 +633,16 @@ def configure():
         chart_title=chart_title,
         logo_path=logo_path,
         favicon_image_path=favicon_path,
+        auth_type=AUTH_TYPE,
+        oidc_reader_group_id=OIDC_CONFIG.reader_group_id,
+        oidc_privileged_group_id=OIDC_CONFIG.privileged_group_id,
+        oidc_admin_group_id=OIDC_CONFIG.admin_group_id,
         _=translate_placeholder
     )
 
 
 @app.route('/reports')
-@login_required
+@require_page_permission('reports')
 def reports():
     template_content = get_template('reports.html')
     settings = load_settings()
@@ -828,8 +1001,10 @@ def handle_settings():
     
     elif request.method == 'POST':
         # POST requires authentication
-        if not session.get('authenticated'):
+        if not is_authenticated():
             return jsonify({'error': 'Authentication required'}), 401
+        if not has_role(ROLE_ADMIN):
+            return jsonify({'error': 'Insufficient permissions'}), 403
             
         try:
             # Simply update settings without validation
@@ -850,7 +1025,7 @@ def handle_settings():
 
 
 @app.route('/api/metadata/options')
-@require_auth
+@require_app_permission('reports')
 def get_metadata_options():
     employees = get_employee_list_for_metadata()
     job_titles = collect_unique_field_values(employees, 'title')
@@ -869,7 +1044,7 @@ def get_metadata_options():
 
 
 @app.route('/api/graph-capabilities')
-@require_auth
+@require_app_permission('reports')
 def get_graph_capabilities():
     """Return the Graph API capability flags detected during the last sync."""
     if not os.path.exists(GRAPH_CAPABILITIES_FILE):
@@ -1429,7 +1604,7 @@ def export_xlsx():
         hide_no_title = settings.get('hideNoTitle', True)
         ignored_departments = parse_ignored_departments(settings)
         export_column_settings = settings.get('exportXlsxColumns', {}) or {}
-        is_admin = bool(session.get('authenticated'))
+        can_access_restricted_columns = has_app_permission('restrictedXlsx')
 
         column_definitions = [
             ('name', 'Name', lambda node, manager: node.get('name', '')),
@@ -1452,9 +1627,9 @@ def export_xlsx():
             normalized_admin = mode.replace('_', '').replace('-', '')
             if mode == 'hide':
                 return False
-            if mode == 'admin' and not is_admin:
+            if mode == 'admin' and not can_access_restricted_columns:
                 return False
-            if normalized_admin in {'showadminonly', 'adminonly'} and not is_admin:
+            if normalized_admin in {'showadminonly', 'adminonly'} and not can_access_restricted_columns:
                 return False
             return True
 
@@ -1582,7 +1757,7 @@ def _get_disabled_records_from_request(*, force_refresh=False, apply_filters=Tru
 
 
 @app.route('/api/reports/missing-manager')
-@require_auth
+@require_app_permission('reports')
 def get_missing_manager_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
@@ -1610,7 +1785,7 @@ def get_missing_manager_report():
 
 
 @app.route('/api/reports/missing-manager/export')
-@require_auth
+@require_app_permission('reports')
 def export_missing_manager_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -1691,7 +1866,7 @@ def export_missing_manager_report():
 
 
 @app.route('/api/reports/missing-photo')
-@require_auth
+@require_app_permission('reports')
 def get_missing_photo_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
@@ -1719,7 +1894,7 @@ def get_missing_photo_report():
 
 
 @app.route('/api/reports/missing-photo/export')
-@require_auth
+@require_app_permission('reports')
 def export_missing_photo_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -1787,7 +1962,7 @@ def export_missing_photo_report():
 
 
 @app.route('/api/reports/missing-hire-date')
-@require_auth
+@require_app_permission('reports')
 def get_missing_hire_date_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
@@ -1815,7 +1990,7 @@ def get_missing_hire_date_report():
 
 
 @app.route('/api/reports/missing-hire-date/export')
-@require_auth
+@require_app_permission('reports')
 def export_missing_hire_date_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -1883,7 +2058,7 @@ def export_missing_hire_date_report():
 
 
 @app.route('/api/reports/dirty-data')
-@require_auth
+@require_app_permission('reports')
 def get_dirty_data_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
@@ -1923,7 +2098,7 @@ def get_dirty_data_report():
 
 
 @app.route('/api/reports/dirty-data/export')
-@require_auth
+@require_app_permission('reports')
 def export_dirty_data_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -2004,7 +2179,7 @@ def export_dirty_data_report():
 
 
 @app.route('/api/reports/disabled-users')
-@require_auth
+@require_app_permission('reports')
 def get_disabled_users_report():
     try:
         refresh = request.args.get('refresh', 'false').lower() == 'true'
@@ -2029,7 +2204,7 @@ def get_disabled_users_report():
 
 
 @app.route('/api/reports/disabled-users/export')
-@require_auth
+@require_app_permission('reports')
 def export_disabled_users_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -2106,7 +2281,7 @@ def export_disabled_users_report():
 
 
 @app.route('/api/reports/disabled-this-year')
-@require_auth
+@require_app_permission('reports')
 def get_recently_disabled_report():
     try:
         refresh = request.args.get('refresh', 'false').lower() == 'true'
@@ -2154,7 +2329,7 @@ def get_recently_disabled_report():
 
 
 @app.route('/api/reports/disabled-this-year/export')
-@require_auth
+@require_app_permission('reports')
 def export_recently_disabled_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -2247,7 +2422,7 @@ def export_recently_disabled_report():
 
 
 @app.route('/api/reports/hired-this-year')
-@require_auth
+@require_app_permission('reports')
 def get_recently_hired_report():
     try:
         refresh = request.args.get('refresh', 'false').lower() == 'true'
@@ -2271,7 +2446,7 @@ def get_recently_hired_report():
 
 
 @app.route('/api/reports/hired-this-year/export')
-@require_auth
+@require_app_permission('reports')
 def export_recently_hired_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -2451,7 +2626,7 @@ def _apply_scope_filter(records, scope):
 
 
 @app.route('/api/reports/last-logins')
-@require_auth
+@require_app_permission('reports')
 def get_last_logins_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
@@ -2546,7 +2721,7 @@ def get_last_logins_report():
 
 
 @app.route('/api/reports/last-logins/export')
-@require_auth
+@require_app_permission('reports')
 def export_last_logins_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -2690,7 +2865,7 @@ def export_last_logins_report():
 
 
 @app.route('/api/reports/disabled-licensed')
-@require_auth
+@require_app_permission('reports')
 def get_disabled_licensed_report():
     try:
         refresh = request.args.get('refresh', 'false').lower() == 'true'
@@ -2727,7 +2902,7 @@ def get_disabled_licensed_report():
 
 
 @app.route('/api/reports/disabled-licensed/export')
-@require_auth
+@require_app_permission('reports')
 def export_disabled_licensed_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -2803,7 +2978,7 @@ def export_disabled_licensed_report():
 
 
 @app.route('/api/reports/filtered-users')
-@require_auth
+@require_app_permission('reports')
 def get_filtered_users_report():
     try:
         refresh = _parse_bool_arg(request.args.get('refresh'), default=False)
@@ -2869,7 +3044,7 @@ def get_filtered_users_report():
 
 
 @app.route('/api/reports/filtered-users/export')
-@require_auth
+@require_app_permission('reports')
 def export_filtered_users_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -2998,7 +3173,7 @@ def export_filtered_users_report():
 
 
 @app.route('/api/reports/filtered-licensed')
-@require_auth
+@require_app_permission('reports')
 def get_filtered_licensed_report():
     try:
         refresh = request.args.get('refresh', 'false').lower() == 'true'
@@ -3018,7 +3193,7 @@ def get_filtered_licensed_report():
 
 
 @app.route('/api/reports/filtered-licensed/export')
-@require_auth
+@require_app_permission('reports')
 def export_filtered_licensed_report():
     if not Workbook:
         return jsonify({'error': 'XLSX export not available - openpyxl not installed'}), 500
@@ -3096,11 +3271,28 @@ def export_filtered_licensed_report():
 
 @app.route('/api/auth-check')
 def auth_check():
-    """Simple endpoint to check if user is authenticated"""
-    if session.get('authenticated'):
-        return jsonify({'authenticated': True})
-    else:
+    """Return the caller's authentication role and UI capabilities."""
+    if not is_authenticated():
         return jsonify({'authenticated': False}), 401
+
+    role = current_role()
+    payload = {
+        'authenticated': True,
+        'role': role,
+        'canAccessReports': has_app_permission('reports'),
+        'canSync': has_app_permission('sync'),
+        'canAccessRestrictedXlsx': has_app_permission('restrictedXlsx'),
+        'canAdminister': has_role(ROLE_ADMIN),
+        'authType': AUTH_TYPE,
+    }
+    if AUTH_TYPE == 'oidc':
+        payload['user'] = {
+            'id': session.get('oidc_user_id', ''),
+            'email': session.get('oidc_user_email', ''),
+        }
+    response = jsonify(payload)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 # ---------------------------------------------------------------------------
 # User Scanner API routes
@@ -3156,7 +3348,7 @@ def _load_all_scannable_users():
 
 
 @app.route('/api/user-scanner/users')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_users():
     """Search all non-guest users (incl. disabled/filtered) for the scanner."""
     settings = load_settings()
@@ -3183,7 +3375,7 @@ def user_scanner_users():
 
 
 @app.route('/api/user-scanner/status')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_status():
     """Return installation / enablement status for the user-scanner tool."""
     settings = load_settings()
@@ -3198,7 +3390,7 @@ def user_scanner_status():
 
 
 @app.route('/api/user-scanner/check-update')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_check_update():
     """Check PyPI for a newer version and optionally auto-upgrade."""
     info = user_scanner_service.check_for_update()
@@ -3206,7 +3398,7 @@ def user_scanner_check_update():
 
 
 @app.route('/api/user-scanner/update', methods=['POST'])
-@require_auth
+@require_app_permission('reports')
 def user_scanner_update():
     """Upgrade user-scanner to the latest PyPI release."""
     success = user_scanner_service.install()   # install() uses --upgrade
@@ -3217,7 +3409,7 @@ def user_scanner_update():
 
 
 @app.route('/api/user-scanner/install', methods=['POST'])
-@require_auth
+@require_app_permission('reports')
 def user_scanner_install():
     """Download / upgrade user-scanner from PyPI."""
     success = user_scanner_service.install()
@@ -3228,7 +3420,7 @@ def user_scanner_install():
 
 
 @app.route('/api/user-scanner/sites')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_sites():
     """Return the list of all site names the scanner can check."""
     if not user_scanner_service.is_installed():
@@ -3242,7 +3434,7 @@ def user_scanner_sites():
 
 
 @app.route('/api/user-scanner/loud-sites')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_loud_sites():
     """Return the list of site names that are considered loud."""
     if not user_scanner_service.is_installed():
@@ -3256,7 +3448,7 @@ def user_scanner_loud_sites():
 
 
 @app.route('/api/user-scanner/categories')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_categories():
     """Return the list of scanner category names."""
     if not user_scanner_service.is_installed():
@@ -3270,7 +3462,7 @@ def user_scanner_categories():
 
 
 @app.route('/api/user-scanner/scan', methods=['POST'])
-@require_auth
+@require_app_permission('reports')
 def user_scanner_scan():
     """Run an on-demand scan for a single user (email and/or username)."""
     settings = load_settings()
@@ -3416,7 +3608,7 @@ _reset_stale_scan_state()
 
 
 @app.route('/api/user-scanner/full-scan', methods=['POST'])
-@require_auth
+@require_app_permission('reports')
 def user_scanner_full_scan():
     """Run a full org scan in a background thread.  Optionally email results."""
     settings = load_settings()
@@ -3611,7 +3803,7 @@ def user_scanner_full_scan():
 
 
 @app.route('/api/user-scanner/full-scan/status')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_full_scan_status():
     """Return the current state of the background full-scan."""
     with _full_scan_lock:
@@ -3628,7 +3820,7 @@ def user_scanner_full_scan_status():
 
 
 @app.route('/api/user-scanner/full-scan/stop', methods=['POST'])
-@require_auth
+@require_app_permission('reports')
 def user_scanner_full_scan_stop():
     """Signal the running full-scan to stop after the current employee."""
     with _full_scan_lock:
@@ -3640,14 +3832,14 @@ def user_scanner_full_scan_stop():
 
 
 @app.route('/api/user-scanner/full-scan/history')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_full_scan_history():
     """Return metadata for the last N scan runs."""
     return jsonify(user_scanner_service.load_scan_history())
 
 
 @app.route('/api/user-scanner/full-scan/history', methods=['DELETE'])
-@require_auth
+@require_app_permission('reports')
 def user_scanner_clear_scan_history():
     """Delete all scan history entries and XLSX files."""
     removed = user_scanner_service.clear_scan_history()
@@ -3655,7 +3847,7 @@ def user_scanner_clear_scan_history():
 
 
 @app.route('/api/user-scanner/full-scan/download/<scan_id>')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_full_scan_download(scan_id):
     """Serve the XLSX file for a given scan run."""
     xlsx_path = user_scanner_service.get_xlsx_path(scan_id)
@@ -3670,7 +3862,7 @@ def user_scanner_full_scan_download(scan_id):
 
 
 @app.route('/api/user-scanner/full-scan/results')
-@require_auth
+@require_app_permission('reports')
 def user_scanner_full_scan_results():
     """Return cached full-scan results."""
     cached = user_scanner_service.load_cached_full_scan()
@@ -3840,7 +4032,7 @@ def get_employee(employee_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/update-now', methods=['POST'])
-@require_auth
+@require_app_permission('sync')
 @limiter.limit(RATE_LIMIT_REFRESH)
 def trigger_update():
     try:
@@ -3977,7 +4169,7 @@ def debug_search():
 
 
 @app.route('/api/force-update', methods=['POST'])
-@require_auth
+@require_app_permission('sync')
 @limiter.limit(RATE_LIMIT_REFRESH)
 def force_update():
     """Force an immediate update and wait for completion"""

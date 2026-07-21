@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from simple_org_chart.config import (
@@ -21,8 +22,11 @@ from simple_org_chart.config import (
 class TestConfigPaths:
     """Verify that config-level path constants are consistent."""
 
-    def test_data_dir_under_base(self):
-        assert DATA_DIR.parent == BASE_DIR
+    def test_data_dir_uses_configured_path(self):
+        expected = Path(
+            os.environ.get("SIMPLE_ORG_CHART_DATA_DIR", BASE_DIR / "data")
+        ).resolve()
+        assert DATA_DIR == expected
 
     def test_static_dir_under_base(self):
         assert STATIC_DIR.parent == BASE_DIR

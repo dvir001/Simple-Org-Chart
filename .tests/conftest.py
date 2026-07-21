@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -19,6 +20,14 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Set required env vars BEFORE any app module import triggers app_main
 os.environ.setdefault("ADMIN_PASSWORD", "test-password-for-ci-only")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
+
+_TEST_RUNTIME_DIR = Path(tempfile.mkdtemp(prefix="simple-org-chart-tests-"))
+os.environ["SIMPLE_ORG_CHART_DATA_DIR"] = str(_TEST_RUNTIME_DIR / "data")
+os.environ["SESSION_FILE_DIR"] = str(_TEST_RUNTIME_DIR / "flask_session")
+
+
+def pytest_sessionfinish(session, exitstatus):
+    shutil.rmtree(_TEST_RUNTIME_DIR, ignore_errors=True)
 
 
 @pytest.fixture()

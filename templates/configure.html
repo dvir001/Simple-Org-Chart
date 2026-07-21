@@ -360,17 +360,66 @@
 
             <h2 class="section-heading" data-i18n="configure.sections.export.title">📄 Export to XLSX Options</h2>
 
+            {% if auth_type == 'oidc' %}
+            <h2 class="section-heading" data-i18n="configure.sections.oidcAccess.title">OIDC Access</h2>
+
+            <div class="config-group">
+                <div class="config-item">
+                    <label class="config-label" data-i18n="configure.oidcAccess.groups.label">Configured security groups</label>
+                    <div class="config-description" data-i18n="configure.oidcAccess.groups.description">Group object IDs are configured through environment variables and cannot be changed here.</div>
+                    <div class="config-controls config-controls--spaced">
+                        <label for="oidcReaderGroupId" data-i18n="configure.oidcAccess.groups.reader">Reader group</label>
+                        <input type="text" id="oidcReaderGroupId" value="{{ oidc_reader_group_id }}" readonly>
+                    </div>
+                    <div class="config-controls config-controls--spaced">
+                        <label for="oidcPrivilegedGroupId" data-i18n="configure.oidcAccess.groups.privileged">Privileged group</label>
+                        <input type="text" id="oidcPrivilegedGroupId" value="{{ oidc_privileged_group_id }}" readonly>
+                    </div>
+                    <div class="config-controls config-controls--spaced">
+                        <label for="oidcAdminGroupId" data-i18n="configure.oidcAccess.groups.admin">Admin group</label>
+                        <input type="text" id="oidcAdminGroupId" value="{{ oidc_admin_group_id }}" readonly>
+                    </div>
+                </div>
+
+                <div class="config-item">
+                    <label class="config-label" data-i18n="configure.oidcAccess.permissions.label">Privileged group permissions</label>
+                    <div class="config-description" data-i18n="configure.oidcAccess.permissions.description">Choose which elevated capabilities are granted to the privileged group. Admin group members always have all capabilities.</div>
+                    <div class="config-controls config-controls--spaced">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="oidcPermissionReports">
+                            <span class="slider"></span>
+                        </label>
+                        <span data-i18n="configure.oidcAccess.permissions.reports">Reports and report exports</span>
+                    </div>
+                    <div class="config-controls config-controls--spaced">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="oidcPermissionSync">
+                            <span class="slider"></span>
+                        </label>
+                        <span data-i18n="configure.oidcAccess.permissions.sync">Manual data sync</span>
+                    </div>
+                    <div class="config-controls config-controls--spaced">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="oidcPermissionRestrictedXlsx">
+                            <span class="slider"></span>
+                        </label>
+                        <span data-i18n="configure.oidcAccess.permissions.restrictedXlsx">Restricted XLSX columns</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="config-group">
                 <div class="config-item">
                     <label class="config-label" data-i18n="configure.export.columnVisibility.label">Column Visibility</label>
-                    <div class="config-description" data-i18n="configure.export.columnVisibility.description">Choose which fields appear in XLSX exports. “Show Admin Only” keeps the column hidden for regular viewers but includes it when an administrator exports.</div>
+                    <div class="config-description" data-i18n="configure.export.columnVisibility.description">Choose which fields appear in XLSX exports. Restricted columns require the restricted XLSX permission.</div>
                     <div class="export-columns-grid">
                         <div class="column-setting">
                             <span class="column-label" data-i18n="configure.export.columns.name">Name</span>
                             <select id="exportColumnName" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -378,7 +427,7 @@
                             <select id="exportColumnTitle" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -386,7 +435,7 @@
                             <select id="exportColumnDepartment" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -394,7 +443,7 @@
                             <select id="exportColumnEmail" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -402,7 +451,7 @@
                             <select id="exportColumnPhone" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -410,7 +459,7 @@
                             <select id="exportColumnBusinessPhone" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -418,7 +467,7 @@
                             <select id="exportColumnHireDate" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -426,7 +475,7 @@
                             <select id="exportColumnCountry" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -434,7 +483,7 @@
                             <select id="exportColumnState" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -442,7 +491,7 @@
                             <select id="exportColumnCity" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -450,7 +499,7 @@
                             <select id="exportColumnOffice" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                         <div class="column-setting">
@@ -458,7 +507,7 @@
                             <select id="exportColumnManager" class="column-select">
                                 <option value="show" data-i18n="configure.export.options.show">Show</option>
                                 <option value="hide" data-i18n="configure.export.options.hide">Hide</option>
-                                <option value="admin" data-i18n="configure.export.options.admin">Show Admin Only</option>
+                                <option value="admin" data-i18n="configure.export.options.admin">Restricted</option>
                             </select>
                         </div>
                     </div>
@@ -605,7 +654,7 @@
 
             <div class="action-buttons">
                 <button class="btn btn-primary" type="button" data-config-action="save-all" data-i18n="configure.buttons.saveAll">Save All Settings</button>
-                <button class="btn btn-warning" type="button" data-config-action="logout" data-i18n="configure.buttons.logout">Logout</button>
+                {% if auth_type != 'oidc' %}<button class="btn btn-warning" type="button" data-config-action="logout" data-i18n="configure.buttons.logout">Logout</button>{% endif %}
             </div>
 
             <div id="statusMessage" class="status-message"></div>
