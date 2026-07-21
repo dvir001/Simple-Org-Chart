@@ -405,7 +405,7 @@ def scan_user(
         )
     except Exception as exc:
         logger.error("Email scan failed for %s: %s", email, exc)
-        payload["email_error"] = str(exc)
+        payload["email_error"] = "Email scan failed"
 
     return payload
 
