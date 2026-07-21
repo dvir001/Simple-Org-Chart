@@ -6,7 +6,6 @@ from flask_session import Session
 from cachelib.file import FileSystemCache
 import atexit
 import contextlib
-from urllib.parse import urlparse
 try:
     import fcntl as _fcntl
 except ImportError:
@@ -497,9 +496,7 @@ def login():
 
     if AUTH_TYPE == 'oidc':
         if is_authenticated():
-            target = f'/{next_page}' if next_page else '/'
-            parsed_target = urlparse(target.replace("\\", "/"))
-            return redirect(parsed_target.path or '/')
+            return redirect('/')
         redirect_uri = os.environ.get('OIDC_REDIRECT_URI') or url_for('oidc_callback', _external=True)
         flow = begin_login(OIDC_CONFIG, redirect_uri)
         session['oidc_flow'] = flow
