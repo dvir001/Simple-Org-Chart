@@ -12,7 +12,7 @@ marshmallow==4.3.0
 msal==1.32.3
 openpyxl==3.1.5
 Pillow==12.3.0
-playwright==1.61.0
+playwright==1.62.0
 idna==3.18
 itsdangerous==2.2.0
 Jinja2==3.1.6
