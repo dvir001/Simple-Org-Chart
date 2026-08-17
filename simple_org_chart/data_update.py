@@ -621,8 +621,8 @@ def update_employee_data(source: str = 'unknown') -> None:
             logger.error(f"Failed to write recently disabled employees report cache: {report_error}")
         success = True
     except Exception as e:
-        error_message = str(e)
         logger.error(f"Error updating employee data: {e}")
+        error_message = 'Data update failed due to an internal error.'
     finally:
         if success:
             mark_data_update_finished(success=True, source=source)
