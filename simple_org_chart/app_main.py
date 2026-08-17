@@ -3788,7 +3788,7 @@ def user_scanner_full_scan():
             with _full_scan_lock:
                 st = _read_scan_state()
                 st['running'] = False
-                st['error'] = str(exc)
+                st['error'] = 'An internal error occurred during the scan.'
                 _write_scan_state(st)
 
     worker = threading.Thread(target=_background_full_scan, daemon=True)
@@ -4050,7 +4050,7 @@ def trigger_update():
         return jsonify({'message': 'Update started'}), 200
     except Exception as e:
         logger.error(f"Error triggering update: {e}")
-        mark_data_update_finished(success=False, error=str(e), source='manual')
+        mark_data_update_finished(success=False, error='An internal error occurred.', source='manual')
         return jsonify({'error': 'Update failed'}), 500
 
 @app.route('/api/clear-data', methods=['POST'])
@@ -4102,7 +4102,7 @@ def clear_cached_data():
         worker.start()
     except Exception as e:
         logger.error(f"Error triggering update after clearing data: {e}")
-        mark_data_update_finished(success=False, error=str(e), source='manual')
+        mark_data_update_finished(success=False, error='An internal error occurred.', source='manual')
         return jsonify({'cleared': removed, 'error': 'Sync failed to start'}), 500
 
     return jsonify({'cleared': removed, 'message': 'Data cleared; fresh sync started'}), 200
