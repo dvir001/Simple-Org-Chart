@@ -994,7 +994,12 @@ def handle_settings():
             logger.warning("Failed to compute data last updated timestamp: %s", timestamp_error)
 
         settings['dataLastUpdatedAt'] = data_last_updated
-        settings['dataUpdateStatus'] = load_data_update_status()
+        data_update_status = load_data_update_status()
+        if isinstance(data_update_status, dict) and data_update_status.get('error'):
+            sanitized_status = dict(data_update_status)
+            sanitized_status['error'] = 'An internal error occurred during data update.'
+            data_update_status = sanitized_status
+        settings['dataUpdateStatus'] = data_update_status
         settings['presenceRefreshSeconds'] = PRESENCE_REFRESH_SECONDS
 
         return jsonify(settings)
