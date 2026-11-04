@@ -1,5 +1,5 @@
-# Use Ubuntu 22.04 with Python 3.10 for better Playwright support
-FROM ubuntu:22.04
+# Use Ubuntu 24.04 with Python 3.12 for Pillow 13 and Playwright support
+FROM ubuntu:24.04
 
 # Set working directory
 WORKDIR /app
@@ -12,11 +12,12 @@ ENV FLASK_ENV=production
 ENV APP_PORT=5000
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python 3.10 and system dependencies
+# Install Python 3.12 and system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3.10-venv \
+    python3 \
+    python3-venv \
     python3-pip \
     gcc \
     curl \
@@ -25,9 +26,8 @@ RUN apt-get update && apt-get install -y \
     && groupadd --system app \
     && useradd --system --gid app --create-home app
 
-# Create symlinks for python/pip
-RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
-    ln -sf /usr/bin/python3.10 /usr/bin/python3
+# Create an isolated environment for application dependencies
+RUN python3 -m venv /opt/venv
 
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
