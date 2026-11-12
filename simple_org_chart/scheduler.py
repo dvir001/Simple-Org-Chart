@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 import threading
-import time
 from datetime import datetime, timedelta, time as dt_time, timezone
 from typing import Callable, Optional
 
@@ -24,6 +23,7 @@ logger = logging.getLogger(__name__)
 _scheduler_running = False
 _scheduler_lock = threading.Lock()
 _scheduler_thread: Optional[threading.Thread] = None
+_stop_event: Optional[threading.Event] = None
 _update_callback: Optional[Callable[[], None]] = None
 _lock_file_handle = None  # File handle for cross-process lock
 
@@ -82,7 +82,22 @@ def _ensure_callback() -> Callable[[], None]:
     return _update_callback
 
 
-def _schedule_loop() -> None:
+def _plan_next_run(settings: dict) -> Optional[datetime]:
+    """Return the next daily run in UTC, or None when automatic updates are off."""
+    if not settings.get("autoUpdateEnabled", True):
+        logger.info("Automatic updates are disabled; skipping daily schedule")
+        return None
+    update_time = _parse_time_string(settings.get("updateTime"))
+    next_run_utc = _compute_next_run(update_time, timezone.utc)
+    logger.info(
+        "Scheduled daily updates for %s UTC; next run at %s",
+        update_time.strftime("%H:%M"),
+        next_run_utc.strftime("%Y-%m-%d %H:%M UTC"),
+    )
+    return next_run_utc
+
+
+def _schedule_loop(stop_event: threading.Event) -> None:
     global _scheduler_running
 
     try:
@@ -93,60 +108,45 @@ def _schedule_loop() -> None:
         return
 
     schedule.clear()
-    settings = load_settings()
 
     run_initial = os.environ.get("RUN_INITIAL_UPDATE", "auto").lower()
-    if run_initial == "true":
-        logger.info("Running initial employee data update on startup (RUN_INITIAL_UPDATE=true)...")
-        update_callback(source='startup')
-    elif run_initial == "auto":
-        # Only run initial update if no cached data exists
-        from simple_org_chart.config import DATA_FILE
-        if not os.path.exists(DATA_FILE):
-            logger.info("No cached data found; running initial employee data update...")
-            update_callback(source='startup-no-cache')
+    try:
+        if run_initial == "true":
+            logger.info("Running initial employee data update on startup (RUN_INITIAL_UPDATE=true)...")
+            update_callback(source='startup')
+        elif run_initial == "auto":
+            # Only run initial update if no cached data exists
+            from simple_org_chart.config import DATA_FILE
+            if not os.path.exists(DATA_FILE):
+                logger.info("No cached data found; running initial employee data update...")
+                update_callback(source='startup-no-cache')
+            else:
+                logger.info("Cached data exists; skipping initial update (set RUN_INITIAL_UPDATE=true to force)")
         else:
-            logger.info("Cached data exists; skipping initial update (set RUN_INITIAL_UPDATE=true to force)")
-    else:
-        logger.info("Initial update skipped (RUN_INITIAL_UPDATE=%s)", run_initial)
+            logger.info("Initial update skipped (RUN_INITIAL_UPDATE=%s)", run_initial)
+    except Exception as exc:  # noqa: BLE001 - a failed startup sync must not stop the daily schedule
+        logger.exception("Initial update callback failed: %s", exc)
 
-    update_time = _parse_time_string(settings.get("updateTime"))
-    tz = timezone.utc
-    next_run_utc: Optional[datetime]
-    if settings.get("autoUpdateEnabled", True):
-        next_run_utc = _compute_next_run(update_time, tz)
-        logger.info(
-            "Scheduled daily updates for %s UTC; next run at %s",
-            update_time.strftime("%H:%M"),
-            next_run_utc.strftime("%Y-%m-%d %H:%M UTC"),
-        )
-    else:
-        next_run_utc = None
-        logger.info("Automatic updates are disabled; skipping daily schedule")
+    schedule_key = None
+    next_run_utc: Optional[datetime] = None
 
-    while _scheduler_running:
+    while not stop_event.is_set():
+        # Settings may be saved by a different worker process, so re-read them every tick
+        settings = load_settings()
+        current_key = (settings.get("updateTime"), bool(settings.get("autoUpdateEnabled", True)))
+        if current_key != schedule_key:
+            schedule_key = current_key
+            next_run_utc = _plan_next_run(settings)
+
         if next_run_utc is not None and datetime.now(timezone.utc) >= next_run_utc:
             logger.info("Executing scheduled update...")
             try:
                 update_callback(source='scheduled')
             except Exception as exc:  # noqa: BLE001 - log and continue running loop
                 logger.exception("Scheduled update callback failed: %s", exc)
+            next_run_utc = _plan_next_run(settings)
 
-            settings = load_settings()
-            update_time = _parse_time_string(settings.get("updateTime"))
-            tz = timezone.utc
-
-            if settings.get("autoUpdateEnabled", True):
-                next_run_utc = _compute_next_run(update_time, tz)
-                logger.info(
-                    "Next scheduled update at %s UTC",
-                    next_run_utc.strftime("%Y-%m-%d %H:%M"),
-                )
-            else:
-                next_run_utc = None
-                logger.info("Automatic updates disabled; halting further scheduling")
-
-        time.sleep(30)
+        stop_event.wait(30)
 
 
 def _acquire_scheduler_lock() -> bool:
@@ -184,7 +184,7 @@ def _release_scheduler_lock() -> None:
 
 def start_scheduler() -> None:
     """Start the background scheduler thread if it is not already running."""
-    global _scheduler_running, _scheduler_thread
+    global _scheduler_running, _scheduler_thread, _stop_event
 
     with _scheduler_lock:
         if _scheduler_running:
@@ -196,7 +196,9 @@ def start_scheduler() -> None:
             return
         
         _scheduler_running = True
-        _scheduler_thread = threading.Thread(target=_schedule_loop, daemon=True)
+        # Each loop gets its own stop signal, so a stopped loop can never be revived by a restart
+        _stop_event = threading.Event()
+        _scheduler_thread = threading.Thread(target=_schedule_loop, args=(_stop_event,), daemon=True)
         _scheduler_thread.start()
         logger.info("Scheduler started")
 
@@ -209,22 +211,15 @@ def stop_scheduler() -> None:
         if not _scheduler_running:
             return
         _scheduler_running = False
+        if _stop_event is not None:
+            _stop_event.set()
         _release_scheduler_lock()
         logger.info("Scheduler stopped")
-
-
-def restart_scheduler() -> None:
-    """Restart the scheduler, reloading settings and timings."""
-    stop_scheduler()
-    time.sleep(2)
-    schedule.clear()
-    start_scheduler()
 
 
 __all__ = [
     "configure_scheduler",
     "is_scheduler_running",
-    "restart_scheduler",
     "start_scheduler",
     "stop_scheduler",
 ]

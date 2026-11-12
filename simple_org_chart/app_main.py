@@ -133,7 +133,6 @@ from simple_org_chart.reports import (
 from simple_org_chart.scheduler import (
     configure_scheduler,
     is_scheduler_running,
-    restart_scheduler,
     start_scheduler,
     stop_scheduler,
 )
@@ -518,7 +517,9 @@ def login():
 
             logger.info(f"Login attempt from {get_remote_address()} - IP address authentication check")
 
-            if password == ADMIN_PASSWORD:
+            if isinstance(password, str) and secrets.compare_digest(
+                password.encode('utf-8'), ADMIN_PASSWORD.encode('utf-8')
+            ):
                 session['authenticated'] = True
                 session['username'] = 'admin'
                 session['role'] = ROLE_ADMIN
@@ -1018,9 +1019,6 @@ def handle_settings():
             current_settings.update(new_settings)
             
             if save_settings(current_settings):
-                if ('updateTime' in new_settings or 'autoUpdateEnabled' in new_settings):
-                    threading.Thread(target=restart_scheduler).start()
-                
                 return jsonify({'success': True})
             else:
                 return jsonify({'error': 'Failed to save settings'}), 500
@@ -1359,8 +1357,6 @@ def reset_all_settings():
         save_settings(DEFAULT_SETTINGS)
         save_email_config(DEFAULT_EMAIL_CONFIG)
         
-        threading.Thread(target=restart_scheduler).start()
-        
         return jsonify({'success': True})
     except Exception as e:
         logger.error(f"Error resetting all settings: {e}")
@@ -1438,8 +1434,6 @@ def import_settings():
         email_ok = save_email_config(email_data)
 
     if settings_ok and email_ok:
-        if 'updateTime' in settings_data or 'autoUpdateEnabled' in settings_data:
-            threading.Thread(target=restart_scheduler, daemon=True).start()
         return jsonify({'success': True, 'settings': load_settings()})
 
     errors = []

@@ -10,7 +10,7 @@ SimpleOrgChart is a Flask application backed by Azure Active Directory (Entra ID
 
 - Hardened security defaults: strict Content Security Policy, sanitized redirects, login isolation, and placeholder-secret protection.
 - Modular front end: no inline scripts or styles; shared CSS variables power `configure`, `reports`, and org chart experiences.
-- Daily automation: background scheduler refreshes Azure AD data (20:00 local time) and persists JSON caches under `data/`.
+- Daily automation: background scheduler refreshes Azure AD data once a day (20:00 UTC by default, configurable under `/configure`) and persists JSON caches under `data/`.
 - Admin reporting: missing managers, filtered users, last-login inactivity, missing profile pictures, data quality issues, and recently hired users—each with one-click XLSX export.
 - Export tooling: SVG/PNG/PDF org chart capture and server-backed XLSX generation for the current chart tree.
 - Deployment ready: ships with Docker Compose and a Gunicorn configuration (`deploy/gunicorn.conf.py`) for containerized hosting.
@@ -22,7 +22,38 @@ SimpleOrgChart is a Flask application backed by Azure Active Directory (Entra ID
 | Flask backend (`simple_org_chart/` package) | Serves templates/static assets, authenticates admin endpoints, manages schedulers, and stores cached Graph API responses.
 | Static front end (`static/*.js`) | Renders the D3 org chart, configuration UI, and reports dashboard using cached JSON.
 | Data cache (`data/*.json`) | Holds employee hierarchies, report snapshots, and last login activity to reduce Graph API calls.
-| Scheduler | Nightly job (20:00) refreshes employee data; manual refresh endpoints and CLI helpers are available.
+| Scheduler | Daily job (20:00 UTC by default) refreshes employee data; the **Sync** button triggers a refresh on demand.
+
+## Quick Start
+
+You need Docker and an Entra ID (Azure AD) app registration. The app runs from the published image `ghcr.io/dvir001/db-auto-org-chart`; there is nothing to clone or build.
+
+1. **Register the app in Entra ID** and note the tenant ID, client ID, and client secret — see [Azure AD Setup](#azure-ad-setup).
+2. **Download the two files you need** into an empty folder:
+   ```bash
+   curl -O https://raw.githubusercontent.com/dvir001/Simple-Org-Chart/main/docker-compose.yml
+   curl -o .env https://raw.githubusercontent.com/dvir001/Simple-Org-Chart/main/.env.template
+   ```
+3. **Fill in the five required values** in `.env` (details in [Configure Environment Variables](#configure-environment-variables)):
+   ```dotenv
+   AZURE_TENANT_ID=<directory (tenant) ID>
+   AZURE_CLIENT_ID=<application (client) ID>
+   AZURE_CLIENT_SECRET=<client secret value>
+   ADMIN_PASSWORD=<a strong password of your choice>
+   SECRET_KEY=<output of the command below>
+   ```
+   ```bash
+   python -c "import secrets; print(secrets.token_hex(32))"
+   ```
+   Also remove or adjust the sample `CORS_ALLOWED_ORIGINS` line if you do not need cross-origin access.
+4. **Start the container** (this pulls the published image):
+   ```bash
+   docker compose up -d
+   ```
+5. **Open** `http://localhost:5000`. The first start downloads your directory from Microsoft Graph, which can take a few minutes for large tenants; follow progress with `docker compose logs -f`.
+6. **Sign in as administrator** at `http://localhost:5000/login` with `ADMIN_PASSWORD` to reach **Configure** and **Reports**.
+
+If something does not work, see [Troubleshooting](#troubleshooting).
 
 ## Prerequisites
 
@@ -45,17 +76,20 @@ SimpleOrgChart is a Flask application backed by Azure Active Directory (Entra ID
 
 3. **Create a Client Secret**
    - Certificates & secrets ➜ **New client secret**.
+   - Copy the secret **Value** (not the Secret ID) immediately; it is shown only once → `AZURE_CLIENT_SECRET`
 
 4. **Capture Identifiers**
    - Application (client) ID → `AZURE_CLIENT_ID`
    - Directory (tenant) ID → `AZURE_TENANT_ID`
 
+Only `User.Read.All` is strictly required. The other permissions each unlock the feature noted beside them and can be added later; run a sync after granting a new permission.
+
 ## Configure Environment Variables
 
-Copy the template and fill in your secrets.
+Create `.env` from the template (the Quick Start download already does this) and fill in your secrets.
 
 ```bash
-cp .env.template .env
+curl -o .env https://raw.githubusercontent.com/dvir001/Simple-Org-Chart/main/.env.template
 # edit .env with tenant/client IDs, secret, admin password, etc.
 ```
 
@@ -64,8 +98,14 @@ cp .env.template .env
 - `AZURE_TENANT_ID` – Directory (tenant) ID.
 - `AZURE_CLIENT_ID` – Application (client) ID.
 - `AZURE_CLIENT_SECRET` – Client secret value.
-- `ADMIN_PASSWORD` – Protects `/configure` and `/reports`.
-- `SECRET_KEY` – 64+ character random string for Flask sessions.
+- `ADMIN_PASSWORD` – Administrator password for `/configure` and `/reports`. Required when `AUTH_TYPE=simple` (the default); the app refuses to start if it is missing or left at the template placeholder.
+- `SECRET_KEY` – 64+ character random string for Flask sessions. If omitted, a random key is generated at every start and all users are signed out on each restart.
+
+Generate a strong secret key:
+
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
 
 ### Optional Microsoft Entra Sign-In
 
@@ -109,17 +149,12 @@ Existing XLSX column settings stored as `admin` are retained for compatibility b
 
 With `AUTH_TYPE=simple`, the existing public chart and `ADMIN_PASSWORD` administrator flow remain unchanged. `ADMIN_PASSWORD` is not required with `AUTH_TYPE=oidc`.
 
-Generate a strong secret key:
-
-```bash
-python -c "import secrets; print(secrets.token_hex(32))"
-```
-
 **Optional values**
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `APP_PORT` | `5000` | Port the application listens on. |
+| `GUNICORN_TIMEOUT` | `600` | Worker timeout in seconds. Increase if PNG generation times out on very large charts. |
 | `CORS_ALLOWED_ORIGINS` | *(none)* | Comma-separated list of allowed cross-origin hosts. |
 | `RUN_INITIAL_UPDATE` | `auto` | Set to `true` to force data refresh at startup, `false` to skip. |
 | `SESSION_TYPE` | `filesystem` | Flask session backend type. |
@@ -155,7 +190,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 | `SMTP_PASSWORD` | *(none)* | SMTP password or app-specific password. |
 | `SMTP_FROM_ADDRESS` | *(none)* | From address for sent emails (must be authorized by SMTP server). |
 | `SMTP_ENCRYPTION` | `TLS` | Encryption protocol: `TLS` (STARTTLS for port 587), `SSL` (SSL/TLS for port 465), or `None`. |
-| `APP_BASE_URL` | `http://localhost:5000` | Base URL for generating PNG screenshots (required for PNG email attachments). |
+| `APP_BASE_URL` | `http://localhost:5000` | URL the app uses to reach **itself** when rendering PNG email attachments. Must use the port the app listens on (`APP_PORT`), not an external reverse-proxy address. |
 
 ## Running the Application
 
@@ -169,6 +204,30 @@ docker compose up -d
 - Default port: `APP_PORT` (defaults to `5000`). Override it in `.env` to change container and host bindings.
 - Persistent data resides in the `./data` and `./config` bind-mounted directories. Remove their contents to rebuild caches from scratch.
 - Local execution outside Docker is not supported; use the provided container workflow for development and production.
+
+Common operations:
+
+| Task | Command |
+| --- | --- |
+| Follow logs | `docker compose logs -f` |
+| Apply `.env` changes | `docker compose up -d` (recreates the container) |
+| Update to the latest image | `docker compose pull && docker compose up -d` |
+| Stop | `docker compose down` |
+
+### Building from source (contributors only)
+
+Not needed to run the app. If you are changing the code, clone the repository; `docker-compose-dev.yml` builds the image from your working copy instead of pulling it, and publishes it on host port `5002`:
+
+```bash
+docker compose -f docker-compose-dev.yml up -d --build
+```
+
+Run the test suite with:
+
+```bash
+pip install -r requirements.txt pytest
+python -m pytest .tests/
+```
 
 ## Key Features
 
@@ -199,9 +258,7 @@ SimpleOrgChart can send scheduled email reports with organization chart data as 
 
 1. Configure SMTP environment variables in `.env` (see SMTP Email Configuration section above)
 2. Ensure all required SMTP settings are provided: server, port, username, password, and from address
-3. Set `APP_BASE_URL` in `.env` to the **internal** URL where the app listens:
-   - **Docker**: `http://localhost` (port 80 inside container, regardless of external port mapping)
-   - **Non-Docker**: `http://localhost:5000` (or whatever port you configured)
+3. Set `APP_BASE_URL` in `.env` to the URL where the app can reach itself: `http://localhost:<APP_PORT>`, which is `http://localhost:5000` unless you changed `APP_PORT`. Inside Docker this is the port the app listens on in the container, regardless of how the port is published on the host.
 4. **(Docker users)** PNG screenshots are automatically supported - Playwright is included in the Docker image
 5. **(Non-Docker users)** For PNG chart screenshots, install Playwright:
    ```bash
@@ -226,11 +283,11 @@ SimpleOrgChart can send scheduled email reports with organization chart data as 
 
 ### How It Works
 
-- Email reports are triggered automatically after successful data synchronization
-- The scheduler checks if an email should be sent based on the configured frequency
-- For **daily** reports: Emails are sent on the specified day of the week if at least 24 hours have passed since the last email
-- For **weekly** reports: Emails are sent on the specified day of the week if at least 7 days have passed
-- For **monthly** reports: Emails are sent on the first or last day of the month if at least 28 days have passed
+- Email reports are checked after each **scheduled** data synchronization (manual syncs never send them)
+- The check is calendar-based, and at most one email is sent per period:
+- For **daily** reports: one email per day
+- For **weekly** reports: one email per week, on the configured day of the week
+- For **monthly** reports: one email per month, on the first or last day of the month
 
 Email reports support two attachment types:
 
@@ -350,8 +407,21 @@ Organization scans use file-based state (`data/full_scan_state.json`) and a canc
 - `data/user_scanner_history.json` – Last five scan run metadata entries.
 - `data/user_scanner_exports/` – Downloaded XLSX workbooks for completed scans.
 
-If a cache is missing or stale, hit **Refresh Data** on the reports page or start the app with `RUN_INITIAL_UPDATE=true`.
+If a cache is missing or stale, click **Sync** in the page header or start the app with `RUN_INITIAL_UPDATE=true`.
+
+## Troubleshooting
+
+| Symptom | Likely cause and fix |
+| --- | --- |
+| Container exits immediately with `ADMIN_PASSWORD ... must be set` or `must not use the default placeholder value` | `ADMIN_PASSWORD` is missing from `.env` or still set to the template placeholder. Set a real password and run `docker compose up -d`. |
+| Chart stays empty; logs show `Missing Azure AD credentials` or `Access token retrieval failed` | One of `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` is wrong, the secret expired, or the secret ID was pasted instead of its value. |
+| Sync runs but returns no users or fails with 403 | Admin consent was not granted for the Graph **application** permissions (delegated permissions are not enough). |
+| Report filters are greyed out | The permission named in the tooltip is not granted. Grant it, then click **Sync**. |
+| Everyone is signed out after each restart | `SECRET_KEY` is not set. |
+| `.env` changes have no effect | `docker compose restart` does not re-read `.env`; use `docker compose up -d`. |
+| PNG attachment missing from email reports | `APP_BASE_URL` does not point at `http://localhost:<APP_PORT>`, or the chart takes longer than `GUNICORN_TIMEOUT` to render. |
+| Cannot write caches / permission errors on Linux | The container fixes ownership of `./data` and `./config` on start; make sure both are bind-mounted as in `docker-compose.yml`. |
 
 ## Contributing
 
-Issues and pull requests are welcome. Please document new locale strings in `static/locales/en-US.json`, update report caches when introducing routes, and include manual validation steps if automated tests are not available.
+Issues and pull requests are welcome. Please document new locale strings in `static/locales/en-US.json`, update report caches when introducing routes, run `python -m pytest .tests/`, and include manual validation steps for anything the automated tests do not cover.

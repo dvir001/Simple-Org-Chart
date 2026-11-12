@@ -1039,10 +1039,6 @@ const VERTICAL_NODE_SPACING = nodeWidth + 8;
 const HORIZONTAL_NODE_SPACING = nodeWidth + 26;
 const VERTICAL_MULTILINE_SPACING = nodeWidth + 10;
 const HORIZONTAL_MULTILINE_SPACING = nodeWidth + 36;
-const VERTICAL_COMPACT_HORIZONTAL = nodeWidth + 11;
-const HORIZONTAL_COMPACT_HORIZONTAL = nodeWidth + 40;
-const VERTICAL_COMPACT_VERTICAL = levelHeight + 6;
-const HORIZONTAL_COMPACT_VERTICAL = HORIZONTAL_LEVEL_HEIGHT + 20;
 
 // Zoom tracking and helpers
 let userAdjustedZoom = false;
@@ -3075,54 +3071,6 @@ function update(source) {
         })
         .remove();
 
-    // Render bus-style connectors for multi-line parents
-    function buildBusPath(parent) {
-        const children = (parent.children || []).slice().sort((a, b) => a.x - b.x);
-        if (!children.length) return '';
-        const rowsMap = new Map();
-        children.forEach(ch => {
-            const key = currentLayout === 'vertical' ? Math.round(ch.y) : Math.round(ch.x);
-            if (!rowsMap.has(key)) rowsMap.set(key, []);
-            rowsMap.get(key).push(ch);
-        });
-        const rows = Array.from(rowsMap.entries()).sort((a, b) => a[0] - b[0]).map(e => e[1]);
-        let d = '';
-        if (currentLayout === 'vertical') {
-            const spineYs = rows.map(r => Math.min(...r.map(ch => ch.y - nodeHeight / 2)) - 12);
-            const topSpineY = Math.min(...spineYs);
-            const bottomSpineY = Math.max(...spineYs);
-            d += `M ${parent.x} ${parent.y + nodeHeight/2} L ${parent.x} ${bottomSpineY}`;
-            rows.forEach((row, i) => {
-                const spineY = spineYs[i];
-                const xs = row.map(ch => ch.x);
-                const left = Math.min(...xs);
-                const right = Math.max(...xs);
-                d += ` M ${left} ${spineY} L ${right} ${spineY}`;
-                row.forEach(ch => {
-                    const childTop = ch.y - nodeHeight/2;
-                    d += ` M ${ch.x} ${spineY} L ${ch.x} ${childTop}`;
-                });
-            });
-        } else {
-            const spineXs = rows.map(r => Math.min(...r.map(ch => ch.x - nodeWidth / 2)) - 12);
-            const leftMostSpineX = Math.min(...spineXs);
-            const rightMostSpineX = Math.max(...spineXs);
-            d += `M ${parent.x + nodeWidth/2} ${parent.y} L ${rightMostSpineX} ${parent.y}`;
-            rows.forEach((row, i) => {
-                const spineX = spineXs[i];
-                const ys = row.map(ch => ch.y);
-                const top = Math.min(...ys);
-                const bottom = Math.max(...ys);
-                d += ` M ${spineX} ${top} L ${spineX} ${bottom}`;
-                row.forEach(ch => {
-                    const childLeft = ch.x - nodeWidth/2;
-                    d += ` M ${spineX} ${ch.y} L ${childLeft} ${ch.y}`;
-                });
-            });
-        }
-        return d;
-    }
-
     const bus = linkLayer.selectAll('path.bus-group')
         .data(mlParents, d => d.data.id);
     bus.enter()
@@ -3565,7 +3513,8 @@ function applyMultiLineChildrenLayout(nodes) {
     }
 
 
-    nodes.forEach(parent => {
+    // Deepest parents first, so nested groups are final before an outer group measures them
+    nodes.slice().sort((a, b) => b.depth - a.depth).forEach(parent => {
         const kids = parent.children || [];
         if (!kids.length) return;
         if (kids.length < threshold) return;
@@ -3587,33 +3536,38 @@ function applyMultiLineChildrenLayout(nodes) {
             ? (appSettings.multiLineHorizontalRowOffset ?? Math.min(HORIZONTAL_LEVEL_HEIGHT * 0.10, nodeWidth * 0.15))
             : 0;
 
-        orderedKids.forEach((child, idx) => {
-            const col = idx % columns;
-            const row = Math.floor(idx / columns);
+        const vertical = currentLayout === 'vertical';
+        const slotGap = hSpacing - (vertical ? nodeWidth : nodeHeight);
+        const baseStep = vSpacing + horizontalBaseOffset;
+        // Room taken by expanded subtrees in earlier rows; pushes later rows clear of them
+        let rowExtra = 0;
 
-            let targetX, targetY;
-            if (currentLayout === 'vertical') {
-                // Center based on actual items in this row
-                let itemsInRow = (row < rows - 1) ? columns : (n - (rows - 1) * columns);
-                if (itemsInRow <= 0) itemsInRow = columns;
-                const rowWidth = (itemsInRow - 1) * hSpacing;
-                const colInRow = col % itemsInRow;
-                targetX = parent.x - rowWidth / 2 + colInRow * hSpacing;
-                targetY = parent.y + (row + 1) * vSpacing;
-            } else {
-                let itemsInRow = (row < rows - 1) ? columns : (n - (rows - 1) * columns);
-                if (itemsInRow <= 0) itemsInRow = columns;
-                const rowWidth = (itemsInRow - 1) * hSpacing;
-                const colInRow = col % itemsInRow;
-                const baseStep = vSpacing + horizontalBaseOffset;
-                targetX = parent.x + (row + 1) * baseStep + row * horizontalRowOffset;
-                targetY = parent.y - rowWidth / 2 + colInRow * hSpacing;
-            }
+        for (let row = 0; row < rows; row++) {
+            // Each slot spans the child's whole expanded subtree, not just its card
+            const slots = orderedKids.slice(row * columns, (row + 1) * columns).map(child => {
+                const b = getSubtreeBounds(child);
+                return vertical
+                    ? { child, before: child.x - b.minX, after: b.maxX - child.x, depth: b.maxY - (child.y + nodeHeight / 2) }
+                    : { child, before: child.y - b.minY, after: b.maxY - child.y, depth: b.maxX - (child.x + nodeWidth / 2) };
+            });
+            const rowSpan = slots.reduce((sum, s) => sum + s.before + s.after, 0) + slotGap * (slots.length - 1);
+            // Center based on actual items in this row
+            let cursor = (vertical ? parent.x : parent.y) - rowSpan / 2;
 
-            const dx = targetX - child.x;
-            const dy = targetY - child.y;
-            shiftSubtree(child, dx, dy);
-        });
+            slots.forEach(s => {
+                const along = cursor + s.before;
+                const targetX = vertical
+                    ? along
+                    : parent.x + (row + 1) * baseStep + row * horizontalRowOffset + rowExtra;
+                const targetY = vertical
+                    ? parent.y + (row + 1) * vSpacing + rowExtra
+                    : along;
+                shiftSubtree(s.child, targetX - s.child.x, targetY - s.child.y);
+                cursor += s.before + s.after + slotGap;
+            });
+
+            rowExtra += Math.max(0, ...slots.map(s => s.depth));
+        }
 
         // Keep compaction logic light for stability
     });
@@ -3639,6 +3593,8 @@ function applyMultiLineChildrenLayout(nodes) {
     ancestors.forEach(parent => {
         const kids = parent.children || [];
         if (kids.length < 2) return;
+        // A multi-lined group already reserves room for its subtrees; repacking would flatten its grid
+        if (kids.length >= threshold) return;
         // Build intervals for each child's subtree as fixed blocks
         const intervals = kids.map(child => {
             const b = getSubtreeBounds(child);
@@ -3685,6 +3641,66 @@ function applyMultiLineChildrenLayout(nodes) {
             if (Math.abs(deltaParent) > 0.1) shiftSubtree(parent, 0, deltaParent);
         }
     });
+}
+
+// Bus-style connector for a multi-lined group: one trunk feeding a spine per row
+function buildBusPath(parent) {
+    const children = (parent.children || []).slice().sort((a, b) => a.x - b.x);
+    if (!children.length) return '';
+    const vertical = currentLayout === 'vertical';
+    const rowsMap = new Map();
+    children.forEach(ch => {
+        const key = vertical ? Math.round(ch.y) : Math.round(ch.x);
+        if (!rowsMap.has(key)) rowsMap.set(key, []);
+        rowsMap.get(key).push(ch);
+    });
+    const rows = Array.from(rowsMap.entries()).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+    // A centre trunk would cut through the reports of expanded members, so run it along the group's edge instead
+    const sideTrunk = children.some(ch => ch.children && ch.children.length);
+    const groupNodes = parent.descendants();
+    let d = '';
+    if (vertical) {
+        const spineYs = rows.map(r => Math.min(...r.map(ch => ch.y - nodeHeight / 2)) - 12);
+        const topSpineY = Math.min(...spineYs);
+        const bottomSpineY = Math.max(...spineYs);
+        const trunkX = sideTrunk
+            ? Math.min(...groupNodes.map(n => n.x)) - nodeWidth / 2 - 5
+            : parent.x;
+        d += `M ${parent.x} ${parent.y + nodeHeight/2} L ${parent.x} ${topSpineY}`;
+        d += ` M ${trunkX} ${topSpineY} L ${trunkX} ${bottomSpineY}`;
+        rows.forEach((row, i) => {
+            const spineY = spineYs[i];
+            const xs = row.map(ch => ch.x);
+            const left = Math.min(...xs, trunkX);
+            const right = Math.max(...xs, trunkX);
+            d += ` M ${left} ${spineY} L ${right} ${spineY}`;
+            row.forEach(ch => {
+                const childTop = ch.y - nodeHeight/2;
+                d += ` M ${ch.x} ${spineY} L ${ch.x} ${childTop}`;
+            });
+        });
+    } else {
+        const spineXs = rows.map(r => Math.min(...r.map(ch => ch.x - nodeWidth / 2)) - 12);
+        const leftMostSpineX = Math.min(...spineXs);
+        const rightMostSpineX = Math.max(...spineXs);
+        const trunkY = sideTrunk
+            ? Math.min(...groupNodes.map(n => n.y)) - nodeHeight / 2 - 12
+            : parent.y;
+        d += `M ${parent.x + nodeWidth/2} ${parent.y} L ${leftMostSpineX} ${parent.y}`;
+        d += ` M ${leftMostSpineX} ${trunkY} L ${rightMostSpineX} ${trunkY}`;
+        rows.forEach((row, i) => {
+            const spineX = spineXs[i];
+            const ys = row.map(ch => ch.y);
+            const top = Math.min(...ys, trunkY);
+            const bottom = Math.max(...ys, trunkY);
+            d += ` M ${spineX} ${top} L ${spineX} ${bottom}`;
+            row.forEach(ch => {
+                const childLeft = ch.x - nodeWidth/2;
+                d += ` M ${spineX} ${ch.y} L ${childLeft} ${ch.y}`;
+            });
+        });
+    }
+    return d;
 }
 
 function diagonal(s, d) {
@@ -3858,30 +3874,6 @@ function zoomOut() {
     };
     transition.on('end', checkZoomLevel);
     transition.on('interrupt', checkZoomLevel);
-}
-
-function getBounds(printRoot) {
-    const treeLayout = createTreeLayout();
-    const treeData = treeLayout(printRoot);
-    const nodes = treeData.descendants();
-    applyMultiLineChildrenLayout(nodes);
-    const minX = d3.min(nodes, d => d.x) - nodeWidth / 2 - 20;
-    const maxX = d3.max(nodes, d => d.x) + nodeWidth / 2 + 20;
-    const minY = d3.min(nodes, d => d.y) - nodeHeight / 2 - 20;
-    const maxY = d3.max(nodes, d => d.y) + nodeHeight / 2 + 50;
-    return { minX, maxX, minY, maxY };
-}
-
-function buildExpandedData(node) {
-    const copy = { data: node.data, depth: node.depth };
-    const allKids = [];
-    if (node.children) allKids.push(...node.children);
-    if (node._children) allKids.push(...node._children);
-    if (allKids.length) {
-        copy.children = allKids.map(child => buildExpandedData(child));
-    }
-    copy.hasCollapsedChildren = !!(node._children && node._children.length);
-    return copy;
 }
 
 function printChart() {
@@ -4418,51 +4410,6 @@ async function createExportSVG(exportFullChart = false) {
     });
 
     // Draw bus connectors
-    function buildBusPath(parent) {
-        const children = (parent.children || []).slice().sort((a, b) => a.x - b.x);
-        if (!children.length) return '';
-        const rowsMap = new Map();
-        children.forEach(ch => {
-            const key = currentLayout === 'vertical' ? Math.round(ch.y) : Math.round(ch.x);
-            if (!rowsMap.has(key)) rowsMap.set(key, []);
-            rowsMap.get(key).push(ch);
-        });
-        const rows = Array.from(rowsMap.entries()).sort((a, b) => a[0] - b[0]).map(e => e[1]);
-        let d = '';
-        if (currentLayout === 'vertical') {
-            const spineYs = rows.map(r => Math.min(...r.map(ch => ch.y - nodeHeight / 2)) - 12);
-            const bottomSpineY = Math.max(...spineYs);
-            d += `M ${parent.x} ${parent.y + nodeHeight/2} L ${parent.x} ${bottomSpineY}`;
-            rows.forEach((row, i) => {
-                const spineY = spineYs[i];
-                const xs = row.map(ch => ch.x);
-                const left = Math.min(...xs);
-                const right = Math.max(...xs);
-                d += ` M ${left} ${spineY} L ${right} ${spineY}`;
-                row.forEach(ch => {
-                    const childTop = ch.y - nodeHeight/2;
-                    d += ` M ${ch.x} ${spineY} L ${ch.x} ${childTop}`;
-                });
-            });
-        } else {
-            const spineXs = rows.map(r => Math.min(...r.map(ch => ch.x - nodeWidth / 2)) - 12);
-            const rightMostSpineX = Math.max(...spineXs);
-            d += `M ${parent.x + nodeWidth/2} ${parent.y} L ${rightMostSpineX} ${parent.y}`;
-            rows.forEach((row, i) => {
-                const spineX = spineXs[i];
-                const ys = row.map(ch => ch.y);
-                const top = Math.min(...ys);
-                const bottom = Math.max(...ys);
-                d += ` M ${spineX} ${top} L ${spineX} ${bottom}`;
-                row.forEach(ch => {
-                    const childLeft = ch.x - nodeWidth/2;
-                    d += ` M ${spineX} ${ch.y} L ${childLeft} ${ch.y}`;
-                });
-            });
-        }
-        return d;
-    }
-
     mlParents.forEach(parent => {
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('class', 'link');
@@ -4656,51 +4603,6 @@ async function createExportSVG(exportFullChart = false) {
     g.appendChild(nodesGroup);
     exportSvg.appendChild(g);
     return exportSvg;
-}
-
-function applyCompactLayout(nodes) {
-    const threshold = appSettings.compactLayoutThreshold || 20;
-    nodes.forEach(node => {
-        const childCount = (node.children || node._children || []).length;
-
-        if (childCount >= threshold) {
-            node.data.hasCompactChildren = true; 
-            
-            const children = node.children;
-            if (children) {
-                const columns = Math.ceil(Math.sqrt(children.length));
-                
-                const horizontalSpacing = currentLayout === 'horizontal'
-                    ? HORIZONTAL_COMPACT_HORIZONTAL
-                    : VERTICAL_COMPACT_HORIZONTAL;
-                const verticalSpacing = currentLayout === 'horizontal'
-                    ? HORIZONTAL_COMPACT_VERTICAL
-                    : VERTICAL_COMPACT_VERTICAL;
-
-                const totalWidth = (columns - 1) * horizontalSpacing;
-
-                children.forEach((child, i) => {
-                    child.data.isCompact = true;
-                    const col = i % columns;
-                    const row = Math.floor(i / columns);
-
-                    if (currentLayout === 'vertical') {
-                        child.y = node.y + (row + 1) * verticalSpacing;
-                        child.x = node.x - totalWidth / 2 + col * horizontalSpacing;
-                    } else { // horizontal
-                        child.x = node.x + (row + 1) * verticalSpacing;
-                        child.y = node.y - totalWidth / 2 + col * horizontalSpacing;
-                    }
-                });
-            }
-        } else if (node.data.hasCompactChildren) {
-            delete node.data.hasCompactChildren;
-            const allChildren = (node.children || []).concat(node._children || []);
-            allChildren.forEach(child => {
-                delete child.data.isCompact;
-            });
-        }
-    });
 }
 
 // Employee detail functions
