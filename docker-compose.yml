@@ -1,6 +1,6 @@
 services:
   simple-org-chart:
-    image: ghcr.io/dvir001/db-auto-org-chart:latest
+    image: ghcr.io/dvir001/simple-org-chart:latest
     container_name: simple-org-chart
     restart: unless-stopped
     ports:
