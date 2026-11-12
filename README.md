@@ -26,7 +26,7 @@ SimpleOrgChart is a Flask application backed by Azure Active Directory (Entra ID
 
 ## Quick Start
 
-You need Docker and an Entra ID (Azure AD) app registration. The app runs from the published image `ghcr.io/dvir001/db-auto-org-chart`; there is nothing to clone or build.
+You need Docker and an Entra ID (Azure AD) app registration. The app runs from the published image `ghcr.io/dvir001/simple-org-chart:latest`; there is nothing to clone or build.
 
 1. **Register the app in Entra ID** and note the tenant ID, client ID, and client secret — see [Azure AD Setup](#azure-ad-setup).
 2. **Download the two files you need** into an empty folder:
